@@ -39,64 +39,31 @@ pub fn read_definition_csv(text: &String) -> Result<HashMap<Rgb<u8>, u64>> {
     return Ok(out);
 }
 
-fn get_province_list(text: &str, key: &str) -> Result<Vec<u64>> {
-    return Ok(text
-        .lines()
-        .skip_while(|line| line.trim() != format!("{key} = {{"))
-        .skip(1)
-        .take_while(|line| line.trim() != "}")
-        .map(|line| match line.split_once('#') {
-            Some((valid, _)) => valid,
-            None => line,
-        })
-        .flat_map(|line| line.split_ascii_whitespace())
-        .map(|p| p.parse::<u64>())
-        .collect::<Result<Vec<u64>, _>>()?);
-}
-
-pub fn read_wasteland_provinces(text: &str) -> Result<Vec<u64>> {
-    return get_province_list(text, "impassable");
-}
-
-pub fn read_water_provinces(text: &str) -> Result<Vec<u64>> {
-    return Ok(get_province_list(text, "sea_starts")?
-        .into_iter()
-        .chain(get_province_list(text, "lakes")?)
-        .collect());
-}
-
 pub struct FlagImages {
-    pub(crate) tags: HashMap<String, usize>,
-    pub(crate) images: Vec<image::RgbaImage>,
+    tags: HashMap<String, usize>,
+    images: image::RgbaImage,
 }
 impl FlagImages {
-    pub fn read_flagfiles_txt(text: &str) -> Result<HashMap<String, usize>> {
+    fn read_flagfiles_txt(text: &str) -> HashMap<String, usize> {
         return text
             .split_ascii_whitespace()
-            .skip(1)
             .enumerate()
-            .map(|(index, item)| Some((item.strip_suffix(".tga")?.to_string(), index)))
-            .collect::<Option<_>>()
-            .ok_or(anyhow!("Flagfiles.txt was invalid"));
+            .map(|(i, tag)| (tag.to_string(), i))
+            .collect();
     }
 
-    pub fn load_from_filesystem() -> Result<FlagImages> {
-        let tags =
-            FlagImages::read_flagfiles_txt(&read_cp1252("../resources/vanilla/flagfiles.txt")?)?;
-        let img_count = tags.len().div_ceil(256);
-        let images: Vec<image::RgbaImage> = (0..img_count)
-            .map(|num| format!("../resources/vanilla/flagfiles_{}.tga", num))
-            .map(|filepath| Ok(image::open(filepath)?.into_rgba8()))
-            .collect::<Result<_>>()?;
-        return Ok(FlagImages { tags, images });
+    pub fn new(flagfiles_txt: &str, flagfiles_png: image::RgbaImage) -> FlagImages {
+        return FlagImages {
+            tags: FlagImages::read_flagfiles_txt(&flagfiles_txt),
+            images: flagfiles_png,
+        };
     }
 
     pub fn get_normal_flag(&self, tag: &str) -> Option<image::SubImage<&image::RgbaImage>> {
         let index = *self.tags.get(tag)?;
-        let img = self.images.get(index / 256)?;
 
-        let x = 128 * ((index as u32 % 256) % 16);
-        let y = 128 * ((index as u32 % 256) / 16);
-        return Some(img.view(x, y, 128, 128));
+        let x = 128 * (index as u32 % 16);
+        let y = 128 * (index as u32 / 16);
+        return Some(self.images.view(x, y, 128, 128));
     }
 }

@@ -1,0 +1,9 @@
+[package]
+name = "tools"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+encoding_rs = "0.8.34"
+encoding_rs_io = "0.1.7"
+image = "0.25.1"

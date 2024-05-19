@@ -4,9 +4,7 @@ use ab_glyph::FontRef;
 use bad_parser::SaveGame;
 use base64::Engine;
 use image::{Rgb, RgbImage, RgbaImage};
-use map_parsers::{
-    from_cp1252, read_definition_csv, read_wasteland_provinces, read_water_provinces, FlagImages,
-};
+use map_parsers::{from_cp1252, read_definition_csv, FlagImages};
 use stats_image::StatsImageIconAssets;
 use wasm_bindgen::prelude::*;
 
@@ -143,28 +141,32 @@ impl AllAssets {
         let csv_file_text = client
             .get_with_encoding(&format!("{base_url}/resources/vanilla/definition.csv"))
             .await?;
-        let wasteland_text = client
-            .get_with_encoding(&format!("{base_url}/resources/vanilla/climate.txt"))
-            .await?;
-        let water_text = client
-            .get_with_encoding(&format!("{base_url}/resources/vanilla/default.map"))
-            .await?;
+        let wasteland = client
+            .get_with_encoding(&format!("{base_url}/resources/vanilla/wasteland.txt"))
+            .await?
+            .split_ascii_whitespace()
+            .map(|p| p.parse::<u64>())
+            .collect::<Result<Vec<u64>, _>>()
+            .map_err(map_error)?;
+        let water = client
+            .get_with_encoding(&format!("{base_url}/resources/vanilla/water.txt"))
+            .await?
+            .split_ascii_whitespace()
+            .map(|p| p.parse::<u64>())
+            .collect::<Result<Vec<u64>, _>>()
+            .map_err(map_error)?;
 
         let flagfiles_txt = client
             .get_with_encoding(&format!("{base_url}/resources/vanilla/flagfiles.txt"))
             .await?;
-        let flagfiles_tags = FlagImages::read_flagfiles_txt(&flagfiles_txt).map_err(map_error)?;
-        let flags_count = flagfiles_tags.len().div_ceil(256);
-        let mut flags_imgs: Vec<RgbaImage> = Vec::new();
-        for file_num in 0..flags_count {
-            let filepath = format!("{base_url}/resources/vanilla/flagfiles_{}.tga", file_num);
-            let flag_image = client.get_image(&filepath, image::ImageFormat::Tga).await?;
-            flags_imgs.push(flag_image.to_rgba8());
-        }
-        let flags = FlagImages {
-            tags: flagfiles_tags,
-            images: flags_imgs,
-        };
+        let flagfiles_png = client
+            .get_image(
+                &format!("{base_url}/resources/vanilla/flagfiles.png"),
+                image::ImageFormat::Png,
+            )
+            .await?
+            .to_rgba8();
+        let flags = FlagImages::new(&flagfiles_txt, flagfiles_png);
 
         let base_template = client
             .get_image(
@@ -194,8 +196,8 @@ impl AllAssets {
                 white_peace,
             },
             map_definitions: read_definition_csv(&csv_file_text).map_err(map_error)?,
-            wasteland: read_wasteland_provinces(&wasteland_text).map_err(map_error)?,
-            water: read_water_provinces(&water_text).map_err(map_error)?,
+            wasteland,
+            water,
             flags,
             base_template,
             base_map,

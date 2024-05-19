@@ -113,7 +113,6 @@
                      */
                     /** @type {SaveGame} */
                     const save = parse_eu4_save(text);
-                    console.log(save.player_tags);
 
                     function remove_from_players_table(tag) {
                         save.player_tags.delete(tag);
@@ -187,7 +186,6 @@
                     select_players_view.hidden = false;
 
                     continue_button.onclick = async () => {
-                        console.log(save.player_tags);
                         continue_button.onclick = null;
                         select_players_view.hidden = true;
                         loading_view.hidden = false;
