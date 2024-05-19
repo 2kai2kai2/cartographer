@@ -1,0 +1,46 @@
+<html>
+    <head>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    </head>
+    <body>
+        <input type="file" id="file-selector" accept=".eu4" />
+        <img id="img" />
+        <script type="module">
+            import init, {
+                parse_eu4_save,
+                render_stats_image,
+            } from "./pkg/rs.js";
+
+            /** @type {HTMLInputElement} */
+            const selector = document.getElementById("file-selector");
+
+            function download(base64) {
+                /** @type {HTMLAnchorElement} */
+                const download = document.getElementById("download");
+                download.href = `data:image/png;base64,${base64}`;
+                download.download = "Image.png";
+                download.hidden = false;
+            }
+
+            async function run() {
+                await init();
+                selector.addEventListener("change", async (ev) => {
+                    if (!selector.files?.length) {
+                        return;
+                    }
+
+                    selector.hidden = true;
+                    const text = await selector.files[0].text();
+                    const save = parse_eu4_save(text);
+                    console.log(save);
+                    const img_b64 = await render_stats_image(save);
+
+                    const img = document.getElementById("img");
+                    img.src = `data:image/png;base64,${img_b64}`;
+                });
+            }
+
+            run();
+        </script>
+    </body>
+</html>
