@@ -1,6 +1,6 @@
 @font-face {
     font-family: Garamond;
-    src: url(/resources/GARA.TTF);
+    src: url(./resources/GARA.TTF);
 }
 
 body {

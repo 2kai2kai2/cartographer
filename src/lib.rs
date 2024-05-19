@@ -81,83 +81,83 @@ impl AllAssets {
         let client = Fetcher::new();
         let window =
             web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
-        let origin = window.location().origin()?;
+        let base_url = window.location().origin()? + &window.location().pathname()?;
 
         let army = client
             .get_image(
-                &format!("{origin}/resources/army.png"),
+                &format!("{base_url}/resources/army.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let navy = client
             .get_image(
-                &format!("{origin}/resources/navy.png"),
+                &format!("{base_url}/resources/navy.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let development = client
             .get_image(
-                &format!("{origin}/resources/development.png"),
+                &format!("{base_url}/resources/development.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let income = client
             .get_image(
-                &format!("{origin}/resources/income.png"),
+                &format!("{base_url}/resources/income.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let attacker = client
             .get_image(
-                &format!("{origin}/resources/bodycount_attacker_button.png"),
+                &format!("{base_url}/resources/bodycount_attacker_button.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let defender = client
             .get_image(
-                &format!("{origin}/resources/bodycount_defender_button.png"),
+                &format!("{base_url}/resources/bodycount_defender_button.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let star = client
             .get_image(
-                &format!("{origin}/resources/star.png"),
+                &format!("{base_url}/resources/star.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
         let white_peace = client
             .get_image(
-                &format!("{origin}/resources/icon_peace.png"),
+                &format!("{base_url}/resources/icon_peace.png"),
                 image::ImageFormat::Png,
             )
             .await?
             .to_rgba8();
 
         let csv_file_text = client
-            .get_with_encoding(&format!("{origin}/resources/vanilla/definition.csv"))
+            .get_with_encoding(&format!("{base_url}/resources/vanilla/definition.csv"))
             .await?;
         let wasteland_text = client
-            .get_with_encoding(&format!("{origin}/resources/vanilla/climate.txt"))
+            .get_with_encoding(&format!("{base_url}/resources/vanilla/climate.txt"))
             .await?;
         let water_text = client
-            .get_with_encoding(&format!("{origin}/resources/vanilla/default.map"))
+            .get_with_encoding(&format!("{base_url}/resources/vanilla/default.map"))
             .await?;
 
         let flagfiles_txt = client
-            .get_with_encoding(&format!("{origin}/resources/vanilla/flagfiles.txt"))
+            .get_with_encoding(&format!("{base_url}/resources/vanilla/flagfiles.txt"))
             .await?;
         let flagfiles_tags = FlagImages::read_flagfiles_txt(&flagfiles_txt).map_err(map_error)?;
         let flags_count = flagfiles_tags.len().div_ceil(256);
         let mut flags_imgs: Vec<RgbaImage> = Vec::new();
         for file_num in 0..flags_count {
-            let filepath = format!("{origin}/resources/vanilla/flagfiles_{}.tga", file_num);
+            let filepath = format!("{base_url}/resources/vanilla/flagfiles_{}.tga", file_num);
             let flag_image = client.get_image(&filepath, image::ImageFormat::Tga).await?;
             flags_imgs.push(flag_image.to_rgba8());
         }
@@ -168,7 +168,7 @@ impl AllAssets {
 
         let base_template = client
             .get_image(
-                &format!("{origin}/resources/finalTemplate.png"),
+                &format!("{base_url}/resources/finalTemplate.png"),
                 image::ImageFormat::Png,
             )
             .await?
@@ -176,7 +176,7 @@ impl AllAssets {
 
         let base_map = client
             .get_image(
-                &format!("{origin}/resources/vanilla/provinces.png"),
+                &format!("{base_url}/resources/vanilla/provinces.png"),
                 image::ImageFormat::Png,
             )
             .await?
