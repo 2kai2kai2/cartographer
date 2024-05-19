@@ -1,0 +1,48 @@
+@font-face {
+    font-family: Garamond;
+    src: url(/resources/GARA.TTF);
+}
+
+body {
+    overflow: clip;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+* {
+    font-family: Garamond, Georgia, "Times New Roman", Times, serif;
+}
+
+dialog {
+    position: fixed;
+    margin: auto;
+
+    &[open] {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4em;
+    }
+
+    & > div {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 0.5em;
+    }
+}
+
+#img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.remove-player-button {
+    cursor: pointer;
+    color: red;
+}
