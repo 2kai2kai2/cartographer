@@ -18,6 +18,7 @@ Cargo.lock
 
 #Build
 *.zip
+*.tar
 
 #Shortcuts
 save games.lnk

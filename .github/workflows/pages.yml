@@ -1,0 +1,35 @@
+name: Deploy Github Pages
+
+permissions:
+    id-token: write
+    pages: write
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup rust
+        run: |
+          rustup update
+          rustup default
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Build WASM
+        run: wasm-pack build --target web
+      - name: Creating artifact
+        run: tar -cvf artifact.tar pkg/ resources/ index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "github-pages"
+          path: "artifact.tar"
+          retention-days: 1
+          if-no-files-found: error
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
