@@ -40,20 +40,6 @@ pub fn generate_map_colors_config(
         .collect();
 }
 
-pub fn make_base_map_inplace(
-    bitmap: &mut RgbImage,
-    color_map: &HashMap<Rgb<u8>, Rgb<u8>>,
-) -> Result<()> {
-    for pixel in bitmap.pixels_mut() {
-        let Some(color) = color_map.get(&pixel) else {
-            return Err(anyhow!("Unknown color!"));
-        };
-        *pixel = *color;
-    }
-
-    return Ok(());
-}
-
 pub fn make_base_map(bitmap: &RgbImage, color_map: &HashMap<Rgb<u8>, Rgb<u8>>) -> RgbImage {
     return imageproc::map::map_colors(bitmap, |color| {
         color_map.get(&color).unwrap_or(&Rgb::black()).clone()

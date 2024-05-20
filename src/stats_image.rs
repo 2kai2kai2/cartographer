@@ -24,7 +24,7 @@ pub fn army_display(army: f64) -> String {
     }
 }
 
-/** Assumes whitespace is only a single space between words */
+/// Assumes whitespace is only a single space between words
 pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut line = String::new();
@@ -236,6 +236,7 @@ pub fn make_final_image(
         a.war_scale(&player_tags)
             .partial_cmp(&b.war_scale(&player_tags))
             .unwrap()
+            .reverse()
     });
 
     for (i, w) in player_wars.iter().take(4).enumerate() {
