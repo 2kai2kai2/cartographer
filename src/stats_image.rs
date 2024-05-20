@@ -8,6 +8,7 @@ use imageproc::definitions::HasWhite;
 use crate::{
     bad_parser::{Nation, SaveGame, WarResult},
     map_parsers::FlagImages,
+    Fetcher,
 };
 use imageproc::drawing;
 
@@ -47,48 +48,74 @@ pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<St
     return out;
 }
 
-pub struct StatsImageIconAssets {
-    pub army: RgbaImage,
-    pub navy: RgbaImage,
-    pub development: RgbaImage,
-    pub income: RgbaImage,
-    pub attacker: RgbaImage,
-    pub defender: RgbaImage,
-    pub star: RgbaImage,
-    pub white_peace: RgbaImage,
+pub struct StatsImageDefaultAssets {
+    pub(crate) army: RgbaImage,
+    pub(crate) navy: RgbaImage,
+    pub(crate) development: RgbaImage,
+    pub(crate) income: RgbaImage,
+    pub(crate) attacker: RgbaImage,
+    pub(crate) defender: RgbaImage,
+    pub(crate) star: RgbaImage,
+    pub(crate) white_peace: RgbaImage,
+    pub(crate) base_template: RgbaImage,
 }
-impl StatsImageIconAssets {
-    pub fn load_from_filesystem() -> image::ImageResult<StatsImageIconAssets> {
-        return Ok(StatsImageIconAssets {
-            army: image::open("../resources/army.png")?.to_rgba8(),
-            navy: image::open("../resources/navy.png")?.to_rgba8(),
-            development: image::open("../resources/development.png")?.to_rgba8(),
-            income: image::open("../resources/income.png")?.to_rgba8(),
-            attacker: image::open("../resources/bodycount_attacker_button.png")?.to_rgba8(),
-            defender: image::open("../resources/bodycount_defender_button.png")?.to_rgba8(),
-            star: image::open("../resources/star.png")?.to_rgba8(),
-            white_peace: image::open("../resources/icon_peace.png")?.to_rgba8(),
+impl StatsImageDefaultAssets {
+    /// `dir_url` should be, for example, `"{}/resources"`
+    pub async fn load(dir_url: &str) -> anyhow::Result<StatsImageDefaultAssets> {
+        let client = Fetcher::new();
+
+        let url_army_png = format!("{dir_url}/army.png");
+        let url_navy_png = format!("{dir_url}/navy.png");
+        let url_development_png = format!("{dir_url}/development.png");
+        let url_income_png = format!("{dir_url}/income.png");
+        let url_bodycount_attacker_button_png = format!("{dir_url}/bodycount_attacker_button.png");
+        let url_bodycount_defender_button_png = format!("{dir_url}/bodycount_defender_button.png");
+        let url_star_png = format!("{dir_url}/star.png");
+        let url_icon_peace_png = format!("{dir_url}/icon_peace.png");
+        let url_final_template_png = format!("{dir_url}/finalTemplate.png");
+        let (army, navy, development, income, attacker, defender, star, white_peace, base_template) =
+            futures::try_join!(
+                client.get_image(&url_army_png, image::ImageFormat::Png),
+                client.get_image(&url_navy_png, image::ImageFormat::Png),
+                client.get_image(&url_development_png, image::ImageFormat::Png),
+                client.get_image(&url_income_png, image::ImageFormat::Png),
+                client.get_image(&url_bodycount_attacker_button_png, image::ImageFormat::Png),
+                client.get_image(&url_bodycount_defender_button_png, image::ImageFormat::Png),
+                client.get_image(&url_star_png, image::ImageFormat::Png),
+                client.get_image(&url_icon_peace_png, image::ImageFormat::Png),
+                client.get_image(&url_final_template_png, image::ImageFormat::Png),
+            )?;
+
+        return Ok(StatsImageDefaultAssets {
+            army: army.to_rgba8(),
+            navy: navy.to_rgba8(),
+            development: development.to_rgba8(),
+            income: income.to_rgba8(),
+            attacker: attacker.to_rgba8(),
+            defender: defender.to_rgba8(),
+            star: star.to_rgba8(),
+            white_peace: white_peace.to_rgba8(),
+            base_template: base_template.to_rgba8(),
         });
     }
 }
 
 pub fn make_final_image(
-    base_image: &RgbaImage,
     map_image: &RgbaImage,
     flag_images: &FlagImages,
     font: &impl Font,
-    icon_assets: &StatsImageIconAssets,
+    default_assets: &StatsImageDefaultAssets,
     save: &SaveGame,
 ) -> Result<RgbaImage> {
     const BASE_SIZE: (u32, u32) = (5632, 3168);
     const MAP_SIZE: (u32, u32) = (5632, 2048);
-    if base_image.dimensions() != BASE_SIZE {
+    if default_assets.base_template.dimensions() != BASE_SIZE {
         return Err(anyhow!("Base image had the incorrect dimensions"));
     }
     if map_image.dimensions() != MAP_SIZE {
         return Err(anyhow!("Map image had the incorrect dimensions"));
     }
-    let mut out = base_image.clone();
+    let mut out = default_assets.base_template.clone();
 
     out.copy_from(map_image, 0, BASE_SIZE.1 - MAP_SIZE.1)?;
 
@@ -128,7 +155,7 @@ pub fn make_final_image(
         );
 
         // x+760: Army
-        out.copy_from(&icon_assets.army, x as u32 + 760, y as u32)?;
+        out.copy_from(&default_assets.army, x as u32 + 760, y as u32)?;
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
@@ -140,7 +167,7 @@ pub fn make_final_image(
         );
 
         // x+1100: Navy
-        out.copy_from(&icon_assets.navy, x as u32 + 1100, y as u32)?;
+        out.copy_from(&default_assets.navy, x as u32 + 1100, y as u32)?;
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
@@ -152,7 +179,7 @@ pub fn make_final_image(
         );
 
         // x+1440: Dev
-        out.copy_from(&icon_assets.development, x as u32 + 1440, y as u32)?;
+        out.copy_from(&default_assets.development, x as u32 + 1440, y as u32)?;
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
@@ -168,9 +195,9 @@ pub fn make_final_image(
         const EXPENSE_COLOR: Rgba<u8> = Rgba([247, 16, 16, 255]);
         let cashflow = nation.total_income - nation.total_expense;
         let (cashflow_color, income_img) = if cashflow >= 0.0 {
-            (INCOME_COLOR, icon_assets.income.view(0, 0, 128, 128))
+            (INCOME_COLOR, default_assets.income.view(0, 0, 128, 128))
         } else {
-            (EXPENSE_COLOR, icon_assets.income.view(128, 0, 128, 128))
+            (EXPENSE_COLOR, default_assets.income.view(128, 0, 128, 128))
         };
         out.copy_from(&*income_img, x as u32 + 1780, y as u32)?;
         drawing::draw_text_mut(
@@ -234,7 +261,7 @@ pub fn make_final_image(
 
         image::imageops::overlay(
             &mut out,
-            &icon_assets.attacker,
+            &default_assets.attacker,
             x as i64 + 290 - 12 - 32,
             y as i64 + 156,
         );
@@ -268,7 +295,7 @@ pub fn make_final_image(
 
         image::imageops::overlay(
             &mut out,
-            &icon_assets.defender,
+            &default_assets.defender,
             x as i64 + 12 + 585,
             y as i64 + 156,
         );
@@ -316,7 +343,7 @@ pub fn make_final_image(
             Some(WarResult::WhitePeace) => {
                 image::imageops::overlay(
                     &mut out,
-                    &icon_assets.white_peace,
+                    &default_assets.white_peace,
                     x as i64 + 437 - 32,
                     y as i64 + 140,
                 );
@@ -324,7 +351,7 @@ pub fn make_final_image(
             Some(WarResult::AttackerVictory) => {
                 image::imageops::overlay(
                     &mut out,
-                    &icon_assets.star,
+                    &default_assets.star,
                     x as i64 + 290,
                     y as i64 + 148,
                 );
@@ -332,7 +359,7 @@ pub fn make_final_image(
             Some(WarResult::DefenderVictory) => {
                 image::imageops::overlay(
                     &mut out,
-                    &icon_assets.star,
+                    &default_assets.star,
                     x as i64 + 12 + 585 - 48,
                     y as i64 + 148,
                 );

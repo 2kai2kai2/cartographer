@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Result};
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use image::{GenericImageView, Rgb};
-use std::{collections::HashMap, fs::File, io::Read};
+use image::{GenericImageView, Rgb, RgbImage};
+use std::{collections::HashMap, io::Read};
+
+use crate::Fetcher;
 
 pub fn from_cp1252<T: Read>(buffer: T) -> Result<String, std::io::Error> {
     let mut text = "".to_string();
@@ -11,10 +13,6 @@ pub fn from_cp1252<T: Read>(buffer: T) -> Result<String, std::io::Error> {
         .build(buffer)
         .read_to_string(&mut text)?;
     return Ok(text);
-}
-
-pub fn read_cp1252(path: &str) -> Result<String, std::io::Error> {
-    return from_cp1252(File::open(path)?);
 }
 
 pub fn read_definition_csv(text: &String) -> Result<HashMap<Rgb<u8>, u64>> {
@@ -65,5 +63,48 @@ impl FlagImages {
         let x = 128 * (index as u32 % 16);
         let y = 128 * (index as u32 / 16);
         return Some(self.images.view(x, y, 128, 128));
+    }
+}
+
+pub struct MapAssets {
+    pub(crate) map_definitions: HashMap<Rgb<u8>, u64>,
+    pub(crate) wasteland: Vec<u64>,
+    pub(crate) water: Vec<u64>,
+    pub(crate) flags: FlagImages,
+    pub(crate) base_map: RgbImage,
+}
+impl MapAssets {
+    /// `dir_url` should be, for example, `"{}/resources/vanilla"`
+    pub async fn load(dir_url: &str) -> anyhow::Result<MapAssets> {
+        let url_definition_csv = format!("{dir_url}/definition.csv");
+        let url_wasteland_txt = format!("{dir_url}/wasteland.txt");
+        let url_water_txt = format!("{dir_url}/water.txt");
+        let url_flagfiles_txt = format!("{dir_url}/flagfiles.txt");
+        let url_flagfiles_png = format!("{dir_url}/flagfiles.png");
+        let url_provinces_png = format!("{dir_url}/provinces.png");
+
+        let client = Fetcher::new();
+        let (csv_file_text, wasteland, water, flagfiles_txt, flagfiles_png, base_map) = futures::try_join!(
+            client.get_with_encoding(&url_definition_csv),
+            client.get_with_encoding(&url_wasteland_txt),
+            client.get_with_encoding(&url_water_txt),
+            client.get_with_encoding(&url_flagfiles_txt),
+            client.get_image(&url_flagfiles_png, image::ImageFormat::Png),
+            client.get_image(&url_provinces_png, image::ImageFormat::Png)
+        )?;
+
+        return Ok(MapAssets {
+            map_definitions: read_definition_csv(&csv_file_text)?,
+            wasteland: wasteland
+                .split_ascii_whitespace()
+                .map(str::parse::<u64>)
+                .collect::<Result<_, _>>()?,
+            water: water
+                .split_ascii_whitespace()
+                .map(str::parse::<u64>)
+                .collect::<Result<_, _>>()?,
+            flags: FlagImages::new(&flagfiles_txt, flagfiles_png.to_rgba8()),
+            base_map: base_map.to_rgb8(),
+        });
     }
 }
