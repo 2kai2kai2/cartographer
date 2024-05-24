@@ -21,11 +21,37 @@ macro_rules! log {
     }
 }
 
+fn decompress_eu4txt(array: &[u8]) -> anyhow::Result<String> {
+    let mut cursor = Cursor::new(array);
+    let mut unzipper = zip::read::ZipArchive::new(&mut cursor)?;
+
+    let unzipped_meta = unzipper.by_name("meta")?;
+    let meta = from_cp1252(unzipped_meta)?;
+
+    let unzipped_gamestate = unzipper.by_name("gamestate")?;
+    let gamestate = from_cp1252(unzipped_gamestate)?;
+    return Ok(meta + "\n" + &gamestate);
+}
+
+/// Should take in a `UInt8Array`
 #[wasm_bindgen]
-pub fn parse_eu4_save(text: &str) -> Result<JsValue, JsValue> {
-    return SaveGame::bad_parser(text)
-        .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
-        .map_err(map_error);
+pub fn parse_eu4_save(array: &[u8]) -> Result<JsValue, JsValue> {
+    if array.starts_with("EU4txt".as_bytes()) {
+        log!("Detected uncompressed save file");
+        let text = from_cp1252(array).map_err(map_error)?;
+
+        return SaveGame::bad_parser(&text)
+            .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
+            .map_err(map_error);
+    } else if array.starts_with("PK\x03\x04".as_bytes()) {
+        log!("Detected compressed file");
+        let text = decompress_eu4txt(array).map_err(map_error)?;
+
+        return SaveGame::bad_parser(&text)
+            .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
+            .map_err(map_error);
+    }
+    return Err(JsError::new("Could not determine the EU4 save format").into());
 }
 
 fn map_error<E: ToString>(err: E) -> JsValue {

@@ -6,7 +6,7 @@
     <body>
         <div id="file-selector-view">
             <input type="file" id="file-selector" accept=".eu4" />
-            <p>Upload an uncompressed .eu4 save file</p>
+            <p>Upload any non-ironman .eu4 save file</p>
         </div>
         <div id="loading-view" hidden>
             <p>Loading...</p>
@@ -95,7 +95,9 @@
                     file_selector_view.hidden = true;
                     loading_view.hidden = false;
 
-                    const text = await file_selector.files[0].text();
+                    const array = new Uint8Array(
+                        await file_selector.files[0].arrayBuffer()
+                    );
                     /**
                      * @typedef {Object} SaveGame
                      * @property {Map<string, unknown>} all_nations tag: nation
@@ -112,7 +114,7 @@
                      * @property {unknown} game_mod
                      */
                     /** @type {SaveGame} */
-                    const save = parse_eu4_save(text);
+                    const save = parse_eu4_save(array);
 
                     function remove_from_players_table(tag) {
                         save.player_tags.delete(tag);

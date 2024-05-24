@@ -9,7 +9,6 @@ pub enum Mod {
     Vanilla,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Nation {
     pub tag: String,
