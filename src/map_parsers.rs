@@ -68,7 +68,7 @@ impl FlagImages {
 
 pub struct MapAssets {
     pub(crate) map_definitions: HashMap<Rgb<u8>, u64>,
-    pub(crate) wasteland: Vec<u64>,
+    pub(crate) wasteland: HashMap<u64, Vec<u64>>,
     pub(crate) water: Vec<u64>,
     pub(crate) flags: FlagImages,
     pub(crate) base_map: RgbImage,
@@ -96,8 +96,15 @@ impl MapAssets {
         return Ok(MapAssets {
             map_definitions: read_definition_csv(&csv_file_text)?,
             wasteland: wasteland
-                .split_ascii_whitespace()
-                .map(str::parse::<u64>)
+                .lines()
+                .map(|line| -> anyhow::Result<(u64, Vec<u64>)> {
+                    let mut parts = line.split(';').map(str::parse::<u64>);
+                    let Some(Ok(first)) = parts.next() else {
+                        return Err(anyhow!("Wasteland definition row is missing a first item"));
+                    };
+
+                    return Ok((first, parts.collect::<Result<_, _>>()?));
+                })
                 .collect::<Result<_, _>>()?,
             water: water
                 .split_ascii_whitespace()

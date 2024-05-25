@@ -5,14 +5,32 @@ use anyhow::{anyhow, Result};
 use image::{Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
 
+/// Finds the tag (if any) that owns the majority of the provinces in the vector.
+fn majority_owner(provinces: &Vec<u64>, save: &SaveGame) -> Option<String> {
+    let mut owners: Vec<(String, usize)> = Vec::new();
+    for id in provinces {
+        let Some(owner) = save.provinces.get(id) else {
+            continue;
+        };
+        if let Some((_, count)) = owners.iter_mut().find(|(tag, _)| tag == owner) {
+            *count += 1;
+        } else {
+            owners.push((owner.to_string(), 1));
+        }
+    }
+    return owners
+        .into_iter()
+        .find(|(_, count)| *count > provinces.len() / 2)
+        .map(|(tag, _)| tag);
+}
+
 const WASTELAND_COLOR: Rgb<u8> = Rgb([94, 94, 94]);
 const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
 const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
 pub fn generate_map_colors_config(
     definition_csv: &HashMap<Rgb<u8>, u64>,
     water_provinces: &Vec<u64>,
-    wasteland_provinces: &Vec<u64>,
-    //wasteland_owners: &HashMap<u64, Option<String>>,
+    wasteland_owners: &HashMap<u64, Vec<u64>>,
     save: &SaveGame,
 ) -> Result<HashMap<Rgb<u8>, Rgb<u8>>> {
     return definition_csv
@@ -24,8 +42,10 @@ pub fn generate_map_colors_config(
                     def_color.clone(),
                     if water_provinces.contains(prov_id) {
                         WATER_COLOR
-                    } else if wasteland_provinces.contains(prov_id) {
-                        WASTELAND_COLOR
+                    } else if let Some(prov) = wasteland_owners.get(prov_id) {
+                        majority_owner(prov, save)
+                            .and_then(|owner| save.all_nations.get(&owner))
+                            .map_or(WASTELAND_COLOR, |nation| Rgb(nation.map_color))
                     } else {
                         UNCLAIMED_COLOR
                     },
