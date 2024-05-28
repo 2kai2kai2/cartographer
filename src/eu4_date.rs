@@ -65,7 +65,7 @@ impl Display for Month {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
 pub struct EU4Date {
     pub year: u64,
     pub month: Month,

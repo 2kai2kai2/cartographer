@@ -13,6 +13,7 @@ mod bad_parser;
 mod eu4_date;
 mod eu4_map;
 mod map_parsers;
+mod raw_parser;
 mod stats_image;
 
 macro_rules! log {
