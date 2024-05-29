@@ -34,7 +34,37 @@ impl<'a> From<RawEU4Scalar<'a>> for EU4Scalar {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RawEU4Scalar<'a>(&'a str);
+pub struct RawEU4Scalar<'a>(pub &'a str);
+impl<'a> RawEU4Scalar<'a> {
+    pub fn as_int(&self) -> Option<i64> {
+        return self.0.parse().ok();
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        return self.0.parse().ok();
+    }
+
+    pub fn as_date(&self) -> Option<EU4Date> {
+        return self.0.parse().ok();
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        return match self.0 {
+            "yes" => Some(true),
+            "no" => Some(false),
+            _ => None,
+        };
+    }
+
+    pub fn as_string(&self) -> String {
+        return self
+            .0
+            .strip_prefix('"')
+            .and_then(|v| v.strip_suffix('"'))
+            .unwrap_or(self.0)
+            .to_string();
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RawEU4ObjectItem<'a> {
@@ -127,6 +157,75 @@ impl<'a> RawEU4Object<'a> {
             .find(|(k, _)| k.0 == key)
             .map(|(_, v)| v);
     }
+
+    pub fn get_first_obj(&self, key: &str) -> Option<&RawEU4Object<'a>> {
+        return self.iter_all_KVs().find_map(|(k, v)| {
+            if k.0 != key {
+                None
+            } else if let RawEU4Value::Object(obj) = v {
+                Some(obj)
+            } else {
+                None
+            }
+        });
+    }
+
+    pub fn get_first_scalar(&self, key: &str) -> Option<&RawEU4Scalar<'a>> {
+        return self.iter_all_KVs().find_map(|(k, v)| {
+            if k.0 != key {
+                None
+            } else if let RawEU4Value::Scalar(scalar) = v {
+                Some(scalar)
+            } else {
+                None
+            }
+        });
+    }
+    pub fn get_first_as_int(&self, key: &str) -> Option<i64> {
+        return self.get_first(key)?.as_scalar()?.as_int();
+    }
+    pub fn get_first_as_float(&self, key: &str) -> Option<f64> {
+        return self.get_first(key)?.as_scalar()?.as_float();
+    }
+    pub fn get_first_as_date(&self, key: &str) -> Option<EU4Date> {
+        return self.get_first(key)?.as_scalar()?.as_date();
+    }
+    pub fn get_first_as_bool(&self, key: &str) -> Option<bool> {
+        return self.get_first(key)?.as_scalar()?.as_bool();
+    }
+    pub fn get_first_as_string(&self, key: &str) -> Option<String> {
+        return Some(self.get_first(key)?.as_scalar()?.as_string());
+    }
+
+    pub fn get_first_at_path<const N: usize>(&self, path: [&str; N]) -> Option<&RawEU4Value<'a>> {
+        let mut obj = self;
+        for key in path.into_iter().take(N - 1) {
+            obj = obj.get_first_obj(key)?;
+        }
+        return obj.get_first(path.last()?);
+    }
+
+    pub fn get_first_scalar_at_path<const N: usize>(
+        &self,
+        path: [&str; N],
+    ) -> Option<&RawEU4Scalar<'a>> {
+        let mut obj = self;
+        for key in path.into_iter().take(N - 1) {
+            obj = obj.get_first_obj(key)?;
+        }
+        return obj.get_first_scalar(path.last()?);
+    }
+
+    pub fn get_first_object_at_path<const N: usize>(
+        &self,
+        path: [&str; N],
+    ) -> Option<&RawEU4Object<'a>> {
+        let mut obj = self;
+        for key in path.into_iter().take(N - 1) {
+            obj = obj.get_first_obj(key)?;
+        }
+        return obj.get_first_obj(path.last()?);
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -172,6 +271,22 @@ impl<'a> RawEU4Value<'a> {
                 return Some((rest, RawEU4Value::Scalar(RawEU4Scalar(part))));
             }
         };
+    }
+
+    pub fn as_scalar<'b>(&'b self) -> Option<&'b RawEU4Scalar<'a>> {
+        if let RawEU4Value::Scalar(scalar) = self {
+            return Some(scalar);
+        } else {
+            return None;
+        }
+    }
+
+    pub fn as_object<'b>(&'b self) -> Option<&'b RawEU4Object<'a>> {
+        if let RawEU4Value::Object(object) = self {
+            return Some(object);
+        } else {
+            return None;
+        }
     }
 }
 
@@ -358,25 +473,5 @@ mod tests {
             RawEU4Object::parse_object_inner("a{b}"),
             RawEU4Object::parse_object_inner("a={b}"),
         );
-    }
-
-    #[test]
-    pub fn parse_meta() {
-        let text =
-            from_cp1252(File::open("/Users/oritak/Downloads/mp_Portugal1567_05_11.eu4").unwrap())
-                .unwrap();
-        let start = std::time::Instant::now();
-        for _ in 0..20 {
-            RawEU4Object::parse_object_inner(&text).unwrap();
-        }
-        let end = std::time::Instant::now();
-        println!("Average new {:?}", end.duration_since(start) / 20);
-
-        let start = std::time::Instant::now();
-        for _ in 0..20 {
-            crate::bad_parser::SaveGame::bad_parser(&text).unwrap();
-        }
-        let end = std::time::Instant::now();
-        println!("Average bad {:?}", end.duration_since(start) / 20);
     }
 }
