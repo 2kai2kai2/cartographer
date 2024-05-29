@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{cmp::min, collections::HashMap, num::ParseFloatError};
+use std::{cmp::min, collections::HashMap, num::ParseIntError};
 
-use crate::eu4_date::EU4Date;
+use crate::{
+    eu4_date::EU4Date,
+    raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
+};
 use anyhow::{anyhow, Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -9,12 +12,26 @@ pub enum Mod {
     Vanilla,
 }
 
+impl<'a> RawEU4Object<'a> {
+    pub fn as_color(&self) -> Option<[u8; 3]> {
+        return self
+            .iter_values()
+            .map(|item| {
+                item.as_scalar()
+                    .and_then(|scalar| Some(scalar.as_int()? as u8))
+            })
+            .collect::<Option<Vec<_>>>()?
+            .try_into()
+            .ok();
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Nation {
     pub tag: String,
     pub other_tags: Vec<String>,
     pub development: usize,
-    pub prestige: i32,
+    pub prestige: f64,
     pub stability: i8,
     pub army: f64,
     pub navy: usize,
@@ -30,12 +47,131 @@ pub struct Nation {
     pub map_color: [u8; 3],
     pub nation_color: [u8; 3],
 }
+impl Nation {
+    pub fn from_parsed_obj(tag: String, obj: &RawEU4Object) -> Result<Nation> {
+        let colors = obj
+            .get_first_obj("colors")
+            .ok_or(anyhow!("Found no colors for a country"))?;
+        let map_color: [u8; 3] = colors
+            .get_first_obj("map_color")
+            .ok_or(anyhow!("no 'map_color' obj"))?
+            .as_color()
+            .ok_or(anyhow!("Invalid map color length"))?;
+        let nation_color: [u8; 3] = colors
+            .get_first_obj("country_color")
+            .ok_or(anyhow!("no 'country_color' obj"))?
+            .as_color()
+            .ok_or(anyhow!("Invalid country color length"))?;
+
+        // == FINANCIALS ==
+        let treasury = obj
+            .get_first_as_float("treasury")
+            .ok_or(anyhow!("no float 'treasury'"))?;
+        let debt = obj
+            .iter_all_KVs()
+            .filter_map(|kv| match kv {
+                (RawEU4Scalar("loan"), RawEU4Value::Object(loan)) => {
+                    loan.get_first_as_float("amount")
+                }
+                _ => None,
+            })
+            .sum();
+        let total_income = obj
+            .get_first_scalar_at_path(["ledger", "lastmonthincome"])
+            .and_then(RawEU4Scalar::as_float)
+            .unwrap_or(0.0);
+        let total_expense = obj
+            .get_first_scalar_at_path(["ledger", "lastmonthexpense"])
+            .and_then(RawEU4Scalar::as_float)
+            .unwrap_or(0.0);
+
+        // == MILITARY ==
+        let army: f64 = obj
+            .iter_all_KVs()
+            .filter_map(|kv| match kv {
+                (RawEU4Scalar("army"), RawEU4Value::Object(army_obj)) => Some(army_obj),
+                _ => None,
+            })
+            .flat_map(|army| {
+                army.iter_all_KVs().filter_map(|kv| match kv {
+                    (RawEU4Scalar("regiment"), RawEU4Value::Object(regiment_obj)) => {
+                        Some(regiment_obj.get_first_as_float("strength").unwrap_or(1.0) * 1000.0)
+                    }
+                    _ => None,
+                })
+            })
+            .sum();
+        let navy: usize = obj
+            .iter_all_KVs()
+            .filter_map(|kv| match kv {
+                (RawEU4Scalar("navy"), RawEU4Value::Object(army_obj)) => Some(army_obj),
+                _ => None,
+            })
+            .map(|navy| {
+                navy.iter_all_KVs()
+                    .filter(|(k, _)| **k == RawEU4Scalar("ship"))
+                    .count()
+            })
+            .sum();
+
+        return Ok(Nation {
+            tag,
+            other_tags: obj
+                .iter_all_KVs()
+                .filter_map(|pair| match pair {
+                    (RawEU4Scalar("previous_country_tags"), RawEU4Value::Scalar(other_tag)) => {
+                        Some(other_tag.as_string())
+                    }
+                    _ => None,
+                })
+                .collect(),
+            development: obj
+                .get_first_as_float("raw_development")
+                .unwrap_or_default() as usize,
+            prestige: obj
+                .get_first_as_float("prestige")
+                .ok_or(anyhow!("no float 'prestige"))?,
+            stability: obj
+                .get_first_as_float("stability")
+                .ok_or(anyhow!("no float 'stability'"))? as i8,
+            army,
+            navy,
+            debt,
+            treasury,
+            total_income,
+            total_expense,
+            score_place: obj
+                .get_first_as_int("score_place")
+                .ok_or(anyhow!("No int 'score_place'"))? as usize,
+            capital_id: obj
+                .get_first_as_int("capital")
+                .ok_or(anyhow!("No int 'capital'"))? as usize,
+            overlord: obj.get_first_as_string("overlord"),
+            allies: obj.get_first_obj("allies").map_or(vec![], |allies| {
+                allies
+                    .iter_values()
+                    .filter_map(RawEU4Value::as_scalar)
+                    .map(RawEU4Scalar::as_string)
+                    .collect()
+            }),
+            subjects: obj.get_first_obj("subjects").map_or(vec![], |subjects| {
+                subjects
+                    .iter_values()
+                    .filter_map(RawEU4Value::as_scalar)
+                    .map(RawEU4Scalar::as_string)
+                    .collect()
+            }),
+            map_color,
+            nation_color,
+        });
+    }
+}
 
 struct NationPartial {
     tag: String,
     other_tags: Vec<String>,
     development: Option<usize>,
-    prestige: Option<i32>,
+    prestige: Option<f64>,
     stability: Option<i8>,
     army: f64,
     navy: usize,
@@ -114,8 +250,8 @@ pub struct War {
     pub name: String,
     pub attackers: Vec<String>,
     pub defenders: Vec<String>,
-    pub attacker_losses: f64,
-    pub defender_losses: f64,
+    pub attacker_losses: i64,
+    pub defender_losses: i64,
     pub start_date: EU4Date,
     pub end_date: Option<EU4Date>,
     pub result: Option<WarResult>,
@@ -140,7 +276,7 @@ impl War {
     }
 
     /** An evaluation of how 'significant' the war probably is  */
-    pub fn war_scale(&self, player_tags: &Vec<String>) -> f64 {
+    pub fn war_scale(&self, player_tags: &Vec<String>) -> i64 {
         let player_attackers = self.player_attackers(player_tags).len();
         let player_defenders = self.player_defenders(player_tags).len();
         let casualties = self.attacker_losses + self.defender_losses;
@@ -148,7 +284,111 @@ impl War {
             return casualties;
         }
 
-        return casualties * min(player_attackers, player_defenders) as f64;
+        return casualties * min(player_attackers, player_defenders) as i64;
+    }
+
+    pub fn is_player_war(&self, player_tags: &Vec<String>) -> bool {
+        return self.attackers.iter().any(|a| player_tags.contains(a))
+            && self.defenders.iter().any(|d| player_tags.contains(d));
+    }
+
+    /// There are nonexistant wars in save files, so keep an option
+    pub fn from_parsed_obj(obj: &RawEU4Object) -> Result<Option<War>> {
+        let mut attackers: Vec<String> = Vec::new();
+        let mut defenders: Vec<String> = Vec::new();
+        let mut earliest_date: Option<EU4Date> = None;
+        let mut latest_date: Option<EU4Date> = None;
+        for (date, value) in obj
+            .get_first_obj("history")
+            .ok_or(anyhow!("No history in war"))?
+            .iter_all_KVs()
+            .filter_map(|(k, v)| {
+                Some((
+                    k.as_date()?,
+                    v.as_object().expect("date events should be objects"),
+                ))
+            })
+        {
+            for (event, value) in value.iter_all_KVs() {
+                match (event.0, value) {
+                    ("add_attacker", RawEU4Value::Scalar(value)) => {
+                        attackers.push(value.as_string());
+                        match earliest_date {
+                            None => earliest_date = Some(date),
+                            Some(prev_date) if date < prev_date => earliest_date = Some(date),
+                            _ => {}
+                        }
+                    }
+                    ("add_defender", RawEU4Value::Scalar(value)) => {
+                        defenders.push(value.as_string());
+                        match earliest_date {
+                            None => earliest_date = Some(date),
+                            Some(prev_date) if date < prev_date => earliest_date = Some(date),
+                            _ => {}
+                        }
+                    }
+                    ("rem_attacker", RawEU4Value::Scalar(_))
+                    | ("rem_defender", RawEU4Value::Scalar(_)) => match latest_date {
+                        None => latest_date = Some(date),
+                        Some(prev_date) if prev_date < date => latest_date = Some(date),
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+        }
+        let Some(start_date) = earliest_date else {
+            return Ok(None);
+        };
+
+        let mut attacker_losses: i64 = 0;
+        let mut defender_losses: i64 = 0;
+        for (key, value) in obj.iter_all_KVs() {
+            if key.0 != "participants" {
+                continue;
+            }
+            let RawEU4Value::Object(obj) = value else {
+                // this shouldn't happen?
+                continue;
+            };
+
+            let Some(tag) = obj.get_first_scalar("tag") else {
+                continue;
+            };
+            let Some(losses) = obj.get_first_object_at_path(["losses", "members"]) else {
+                continue;
+            };
+            let losses: i64 = losses
+                .iter_values()
+                .filter_map(RawEU4Value::as_scalar)
+                .filter_map(RawEU4Scalar::as_int)
+                .sum();
+            if attackers.contains(&tag.as_string()) {
+                attacker_losses += losses;
+            } else if defenders.contains(&tag.as_string()) {
+                defender_losses += losses;
+            }
+        }
+
+        let name = obj
+            .get_first_scalar("name")
+            .ok_or(anyhow!("No name in war"))?
+            .as_string();
+        return Ok(Some(War {
+            name: name.clone(),
+            attackers: attackers.clone(),
+            defenders: defenders.clone(),
+            attacker_losses,
+            defender_losses,
+            start_date,
+            end_date: latest_date,
+            result: match obj.get_first_scalar("outcome") {
+                Some(RawEU4Scalar("1")) => Some(WarResult::WhitePeace),
+                Some(RawEU4Scalar("2")) => Some(WarResult::AttackerVictory),
+                Some(RawEU4Scalar("3")) => Some(WarResult::DefenderVictory),
+                _ => None,
+            },
+        }));
     }
 }
 
@@ -157,8 +397,8 @@ struct WarPartial {
     name: String,
     attackers: Vec<String>,
     defenders: Vec<String>,
-    attacker_losses: f64,
-    defender_losses: f64,
+    attacker_losses: i64,
+    defender_losses: i64,
     start_date: Option<EU4Date>,
     end_date: Option<EU4Date>,
     result: Option<WarResult>,
@@ -169,8 +409,8 @@ impl WarPartial {
             name,
             attackers: Vec::new(),
             defenders: Vec::new(),
-            attacker_losses: 0.0,
-            defender_losses: 0.0,
+            attacker_losses: 0,
+            defender_losses: 0,
             start_date: None,
             end_date: None,
             result: None,
@@ -378,7 +618,7 @@ impl SaveGame {
                             "score_place" => {
                                 nation.score_place = Some(line_val.parse::<f64>()? as usize)
                             }
-                            "prestige" => nation.prestige = Some(line_val.parse::<f64>()? as i32),
+                            "prestige" => nation.prestige = Some(line_val.parse::<f64>()?),
                             "stability" => nation.stability = Some(line_val.parse::<f64>()? as i8),
                             "treasury" => nation.treasury = Some(line_val.parse::<f64>()?),
                             "overlord" => nation.overlord = Some(line_val.trim_matches('"').into()),
@@ -502,11 +742,11 @@ impl SaveGame {
                         .ok_or(Error::msg("OutOfOrder losses1"))?;
                     let tag = current_read_war_tag.ok_or(Error::msg("OutOfOrder losses2"))?;
 
-                    let total: f64 = line
+                    let total: i64 = line
                         .trim()
                         .split(' ')
-                        .map(|item| item.parse::<f64>())
-                        .collect::<Result<Vec<f64>, ParseFloatError>>()?
+                        .map(|item| item.parse::<i64>())
+                        .collect::<Result<Vec<i64>, ParseIntError>>()?
                         .iter()
                         .sum();
 
@@ -566,6 +806,97 @@ impl SaveGame {
             crusade,
             player_wars,
             game_mod,
+        });
+    }
+
+    pub fn new_parser(file_text: &str) -> Option<SaveGame> {
+        let (_, obj) = RawEU4Object::parse_object_inner(file_text).unwrap();
+
+        // TODO
+        let all_nations = obj
+            .get_first_obj("countries")
+            .unwrap()
+            .iter_all_KVs()
+            .filter_map(|kv| match kv {
+                (RawEU4Scalar(tag), RawEU4Value::Object(nation)) => Some((
+                    tag.to_string(),
+                    Nation::from_parsed_obj(tag.to_string(), nation).unwrap(),
+                )),
+                _ => None,
+            })
+            .collect();
+        let player_tags: Vec<&RawEU4Scalar> = obj
+            .get_first_obj("players_countries")?
+            .iter_values()
+            .map(RawEU4Value::as_scalar)
+            .collect::<Option<Vec<_>>>()
+            .unwrap();
+        let player_tags: HashMap<String, String> = player_tags
+            .chunks_exact(2)
+            .map(|v| match v {
+                [player, tag] => Some((tag.as_string(), player.as_string())),
+                _ => None,
+            })
+            .collect::<Option<HashMap<_, _>>>()
+            .unwrap();
+        let provinces: HashMap<u64, String> = obj
+            .get_first_obj("provinces")?
+            .iter_all_KVs()
+            .filter_map(|(k, v)| Some((k, v.as_object()?)))
+            .filter_map(|(k, v)| {
+                Some((
+                    k.as_int()?.abs() as u64,
+                    v.get_first_scalar("owner")?.as_string(),
+                ))
+            })
+            .collect();
+        let dlc: Vec<String> = obj
+            .get_first_obj("dlc_enabled")?
+            .iter_values()
+            .filter_map(|v| match v {
+                RawEU4Value::Scalar(scalar) => Some(scalar.as_string()),
+                _ => None,
+            })
+            .collect();
+        let great_powers = Vec::new();
+        let date = obj.get_first_scalar("date");
+
+        return Some(SaveGame {
+            all_nations,
+            player_tags,
+            provinces,
+            dlc,
+            great_powers,
+            date: date.unwrap().as_date().unwrap(),
+            multiplayer: obj
+                .get_first_scalar("multi_player")
+                .unwrap()
+                .as_bool()
+                .unwrap(),
+            age: obj
+                .get_first_scalar("current_age")
+                .map(RawEU4Scalar::as_string),
+            hre: obj
+                .get_first_scalar_at_path(["empire", "emperor"])
+                .map(RawEU4Scalar::as_string),
+            china: obj
+                .get_first_scalar_at_path(["celestial_empire", "emperor"])
+                .map(RawEU4Scalar::as_string),
+            crusade: None,
+            player_wars: obj
+                .iter_all_KVs()
+                .filter(|(k, _)| k.0 == "active_war" || k.0 == "previous_war")
+                .filter_map(|(_, v)| match v {
+                    RawEU4Value::Object(o) => Some(o),
+                    _ => None,
+                })
+                .map(War::from_parsed_obj)
+                .collect::<Result<Vec<_>>>()
+                .expect("oh no invalid wars?")
+                .into_iter()
+                .filter_map(|a| a)
+                .collect(),
+            game_mod: Mod::Vanilla,
         });
     }
 }

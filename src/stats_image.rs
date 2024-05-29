@@ -266,7 +266,7 @@ pub fn make_final_image(
             x as i64 + 290 - 12 - 32,
             y as i64 + 156,
         );
-        let attacker_losses_str = format!("Losses: {}", army_display(w.attacker_losses));
+        let attacker_losses_str = format!("Losses: {}", army_display(w.attacker_losses as f64));
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
@@ -300,7 +300,7 @@ pub fn make_final_image(
             x as i64 + 12 + 585,
             y as i64 + 156,
         );
-        let defender_losses_str = format!("Losses: {}", army_display(w.defender_losses));
+        let defender_losses_str = format!("Losses: {}", army_display(w.defender_losses as f64));
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),

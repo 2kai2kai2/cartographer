@@ -41,16 +41,16 @@ pub fn parse_eu4_save(array: &[u8]) -> Result<JsValue, JsValue> {
         log!("Detected uncompressed save file");
         let text = from_cp1252(array).map_err(map_error)?;
 
-        return SaveGame::bad_parser(&text)
+        return SaveGame::new_parser(&text)
             .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
-            .map_err(map_error);
+            .ok_or(js_sys::Error::new("Failed to parse save file").into());
     } else if array.starts_with("PK\x03\x04".as_bytes()) {
         log!("Detected compressed file");
         let text = decompress_eu4txt(array).map_err(map_error)?;
 
-        return SaveGame::bad_parser(&text)
+        return SaveGame::new_parser(&text)
             .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
-            .map_err(map_error);
+            .ok_or(js_sys::Error::new("Failed to parse save file").into());
     }
     return Err(JsError::new("Could not determine the EU4 save format").into());
 }
