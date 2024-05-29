@@ -1,19 +1,19 @@
 use std::io::Cursor;
 
 use ab_glyph::FontRef;
-use bad_parser::SaveGame;
 use base64::Engine;
 use map_parsers::from_cp1252;
+use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
 use wasm_bindgen::prelude::*;
 
 use crate::map_parsers::MapAssets;
 
-mod bad_parser;
 mod eu4_date;
 mod eu4_map;
 mod map_parsers;
 mod raw_parser;
+mod save_parser;
 mod stats_image;
 
 macro_rules! log {

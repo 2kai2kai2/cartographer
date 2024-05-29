@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::bad_parser::SaveGame;
+use crate::save_parser::SaveGame;
 use anyhow::{anyhow, Result};
 use image::{Rgb, RgbImage};
 use imageproc::definitions::HasBlack;

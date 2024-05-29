@@ -6,8 +6,8 @@ use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
 
 use crate::{
-    bad_parser::{Nation, SaveGame, WarResult},
     map_parsers::FlagImages,
+    save_parser::{Nation, SaveGame, WarResult},
     Fetcher,
 };
 use imageproc::drawing;

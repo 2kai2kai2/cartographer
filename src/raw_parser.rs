@@ -292,9 +292,7 @@ impl<'a> RawEU4Value<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-
-    use crate::{eu4_date::Month, map_parsers::from_cp1252};
+    use crate::eu4_date::Month;
 
     use super::*;
 
