@@ -9,10 +9,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::map_parsers::MapAssets;
 
-mod eu4_date;
 mod eu4_map;
 mod map_parsers;
-mod raw_parser;
 mod save_parser;
 mod stats_image;
 

@@ -1,29 +1,28 @@
+use imageproc::map;
 use serde::{Deserialize, Serialize};
 use std::{cmp::min, collections::HashMap};
 
-use crate::{
+use anyhow::{anyhow, Result};
+use eu4_parser_core::{
     eu4_date::EU4Date,
     raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
 };
-use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mod {
     Vanilla,
 }
 
-impl<'a> RawEU4Object<'a> {
-    pub fn as_color(&self) -> Option<[u8; 3]> {
-        return self
-            .iter_values()
-            .map(|item| {
-                item.as_scalar()
-                    .and_then(|scalar| Some(scalar.as_int()? as u8))
-            })
-            .collect::<Option<Vec<_>>>()?
-            .try_into()
-            .ok();
-    }
+fn eu4_obj_as_color<'a>(value: &RawEU4Object<'a>) -> Result<[u8; 3]> {
+    return value
+        .iter_values()
+        .map(|item| match item {
+            RawEU4Value::Scalar(scalar) => scalar.try_into().map_err(anyhow::Error::from),
+            _ => Err(anyhow!("Found non-scalar in")),
+        })
+        .collect::<Result<Vec<u8>>>()?
+        .try_into()
+        .or(Err(anyhow!("Object was wrong length for color")));
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,16 +51,14 @@ impl Nation {
         let colors = obj
             .get_first_obj("colors")
             .ok_or(anyhow!("Found no colors for a country"))?;
-        let map_color: [u8; 3] = colors
+        let map_color = colors
             .get_first_obj("map_color")
-            .ok_or(anyhow!("no 'map_color' obj"))?
-            .as_color()
-            .ok_or(anyhow!("Invalid map color length"))?;
-        let nation_color: [u8; 3] = colors
+            .ok_or(anyhow!("no 'map_color' obj"))?;
+        let map_color = eu4_obj_as_color(map_color)?;
+        let nation_color = colors
             .get_first_obj("country_color")
-            .ok_or(anyhow!("no 'country_color' obj"))?
-            .as_color()
-            .ok_or(anyhow!("Invalid country color length"))?;
+            .ok_or(anyhow!("no 'country_color' obj"))?;
+        let nation_color = eu4_obj_as_color(nation_color)?;
 
         // == FINANCIALS ==
         let treasury = obj

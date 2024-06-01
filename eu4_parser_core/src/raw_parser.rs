@@ -35,17 +35,63 @@ impl<'a> From<RawEU4Scalar<'a>> for EU4Scalar {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RawEU4Scalar<'a>(pub &'a str);
+macro_rules! implement_try_from_raw_eu4_scalar {
+    ($t:ty, $e:ty) => {
+        impl<'a> TryFrom<&RawEU4Scalar<'a>> for $t {
+            type Error = $e;
+
+            fn try_from(value: &RawEU4Scalar<'a>) -> Result<Self, Self::Error> {
+                return value.0.parse();
+            }
+        }
+    };
+}
+
+implement_try_from_raw_eu4_scalar!(u8, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(u16, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(u32, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(u64, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(u128, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(i8, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(i16, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(i32, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(i64, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(i128, std::num::ParseIntError);
+implement_try_from_raw_eu4_scalar!(f32, std::num::ParseFloatError);
+implement_try_from_raw_eu4_scalar!(f64, std::num::ParseFloatError);
+implement_try_from_raw_eu4_scalar!(EU4Date, anyhow::Error);
+impl<'a> TryFrom<RawEU4Scalar<'a>> for bool {
+    type Error = anyhow::Error;
+
+    fn try_from(value: RawEU4Scalar<'a>) -> Result<Self, Self::Error> {
+        return match value.0 {
+            "yes" => Ok(true),
+            "no" => Ok(false),
+            _ => Err(anyhow::anyhow!("Invalid boolean value")),
+        };
+    }
+}
+impl<'a> From<RawEU4Scalar<'a>> for &'a str {
+    fn from(value: RawEU4Scalar<'a>) -> Self {
+        return value
+            .0
+            .strip_prefix('"')
+            .and_then(|v| v.strip_suffix('"'))
+            .unwrap_or(value.0);
+    }
+}
+
 impl<'a> RawEU4Scalar<'a> {
     pub fn as_int(&self) -> Option<i64> {
-        return self.0.parse().ok();
+        return self.try_into().ok();
     }
 
     pub fn as_float(&self) -> Option<f64> {
-        return self.0.parse().ok();
+        return self.try_into().ok();
     }
 
     pub fn as_date(&self) -> Option<EU4Date> {
-        return self.0.parse().ok();
+        return self.try_into().ok();
     }
 
     pub fn as_bool(&self) -> Option<bool> {
@@ -130,23 +176,18 @@ impl<'a> RawEU4Object<'a> {
         }
     }
 
+    /// Iterates through all
     pub fn iter_values(&self) -> impl Iterator<Item = &RawEU4Value<'a>> {
-        return self.0.iter().filter_map(|v| {
-            if let RawEU4ObjectItem::Value(value) = v {
-                Some(value)
-            } else {
-                None
-            }
+        return self.0.iter().filter_map(|v| match v {
+            RawEU4ObjectItem::Value(value) => Some(value),
+            _ => None,
         });
     }
 
     pub fn iter_all_KVs(&self) -> impl Iterator<Item = (&RawEU4Scalar<'a>, &RawEU4Value<'a>)> {
-        return self.0.iter().filter_map(|item| {
-            if let RawEU4ObjectItem::KV(key, value) = item {
-                Some((key, value))
-            } else {
-                None
-            }
+        return self.0.iter().filter_map(|v| match v {
+            RawEU4ObjectItem::KV(key, value) => Some((key, value)),
+            _ => None,
         });
     }
 

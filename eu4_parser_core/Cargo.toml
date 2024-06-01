@@ -1,0 +1,10 @@
+[package]
+name = "eu4_parser_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+serde = { version = "1.0", features = ["derive"] }

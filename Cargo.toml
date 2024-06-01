@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["tools"]
+members = ["tools", "eu4_parser_core"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -29,6 +29,7 @@ base64 = "0.22.1"
 reqwest = "0.12.4"
 futures = "0.3.30"
 zip = { version = "2.0.0", default-features = false, features = ["deflate"] }
+eu4_parser_core = { path = "./eu4_parser_core" }
 
 [dependencies.web-sys]
 version = "0.3.69"
