@@ -113,12 +113,11 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
 
     log!("Generating map...");
     let color_map = eu4_map::generate_map_colors_config(
-        &map_assets.map_definitions,
+        map_assets.provinces_len,
         &map_assets.water,
         &map_assets.wasteland,
         &save,
-    )
-    .map_err(map_error)?;
+    );
     let base_map = eu4_map::make_base_map(&map_assets.base_map, &color_map);
 
     log!("Drawing borders...");

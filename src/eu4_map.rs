@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
 use crate::save_parser::SaveGame;
-use anyhow::{anyhow, Result};
-use image::{Rgb, RgbImage};
+use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
 
 /// Finds the tag (if any) that owns the majority of the provinces in the vector.
-fn majority_owner(provinces: &Vec<u64>, save: &SaveGame) -> Option<String> {
+pub fn majority_owner(provinces: &Vec<u64>, save: &SaveGame) -> Option<String> {
     let mut owners: Vec<(String, usize)> = Vec::new();
     for id in provinces {
         let Some(owner) = save.provinces.get(id) else {
@@ -27,42 +26,44 @@ fn majority_owner(provinces: &Vec<u64>, save: &SaveGame) -> Option<String> {
 const WASTELAND_COLOR: Rgb<u8> = Rgb([94, 94, 94]);
 const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
 const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
+/// Note that if we can't tell where a province belongs, it will show as unclaimed.
 pub fn generate_map_colors_config(
-    definition_csv: &HashMap<Rgb<u8>, u64>,
+    provinces_len: u64,
     water_provinces: &Vec<u64>,
-    wasteland_owners: &HashMap<u64, Vec<u64>>,
+    wasteland_neighbors: &HashMap<u64, Vec<u64>>,
     save: &SaveGame,
-) -> Result<HashMap<Rgb<u8>, Rgb<u8>>> {
-    return definition_csv
-        .iter()
-        .map(|(def_color, prov_id)| {
-            let owner_tag = save.provinces.get(prov_id);
-            let Some(owner_tag) = owner_tag else {
-                return Ok((
-                    def_color.clone(),
-                    if water_provinces.contains(prov_id) {
-                        WATER_COLOR
-                    } else if let Some(prov) = wasteland_owners.get(prov_id) {
-                        majority_owner(prov, save)
-                            .and_then(|owner| save.all_nations.get(&owner))
-                            .map_or(WASTELAND_COLOR, |nation| Rgb(nation.map_color))
-                    } else {
-                        UNCLAIMED_COLOR
-                    },
-                ));
-            };
-            let Some(owner) = save.all_nations.get(owner_tag) else {
-                return Err(anyhow!("oh no"));
-            };
+) -> HashMap<u16, Rgb<u8>> {
+    return (1..provinces_len)
+        .map(|id| {
+            if water_provinces.contains(&id) {
+                return (id as u16, WATER_COLOR);
+            } else if let Some(neighbors) = wasteland_neighbors.get(&id) {
+                return (
+                    id as u16,
+                    majority_owner(neighbors, save)
+                        .and_then(|owner| save.all_nations.get(&owner))
+                        .map_or(WASTELAND_COLOR, |nation| Rgb(nation.map_color)),
+                );
+            }
 
-            return Ok((def_color.clone(), Rgb(owner.map_color)));
+            let Some(owner) = save
+                .provinces
+                .get(&id)
+                .and_then(|tag| save.all_nations.get(tag))
+            else {
+                return (id as u16, UNCLAIMED_COLOR);
+            };
+            return (id as u16, Rgb(owner.map_color));
         })
         .collect();
 }
 
-pub fn make_base_map(bitmap: &RgbImage, color_map: &HashMap<Rgb<u8>, Rgb<u8>>) -> RgbImage {
+pub fn make_base_map(
+    bitmap: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    color_map: &HashMap<u16, Rgb<u8>>,
+) -> RgbImage {
     return imageproc::map::map_colors(bitmap, |color| {
-        color_map.get(&color).unwrap_or(&Rgb::black()).clone()
+        color_map.get(&color.0[0]).unwrap_or(&Rgb::black()).clone()
     });
 }
 
