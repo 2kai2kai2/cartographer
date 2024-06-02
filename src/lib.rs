@@ -13,6 +13,7 @@ mod eu4_map;
 mod map_parsers;
 mod save_parser;
 mod stats_image;
+mod map_history;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -112,7 +113,7 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
         FontRef::try_from_slice(include_bytes!("../resources/GARA.TTF")).map_err(map_error)?;
 
     log!("Generating map...");
-    let color_map = eu4_map::generate_map_colors_config(
+    let color_map = eu4_map::generate_save_map_colors_config(
         map_assets.provinces_len,
         &map_assets.water,
         &map_assets.wasteland,

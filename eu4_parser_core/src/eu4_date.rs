@@ -16,6 +16,7 @@ use std::{fmt::Display, str::FromStr};
     ToPrimitive,
     Serialize,
     Deserialize,
+    Hash,
 )]
 pub enum Month {
     JAN = 1,
@@ -33,13 +34,13 @@ pub enum Month {
 }
 
 impl Month {
-    pub fn length(&self) -> u8 {
+    pub const fn length(&self) -> u8 {
         return [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][*self as usize];
     }
-    pub fn month_num(&self) -> u8 {
+    pub const fn month_num(&self) -> u8 {
         return *self as u8;
     }
-    pub fn month_name(&self) -> &'static str {
+    pub const fn month_name(&self) -> &'static str {
         return match self {
             Month::JAN => "January",
             Month::FEB => "February",
@@ -55,6 +56,22 @@ impl Month {
             Month::DEC => "December",
         };
     }
+    pub const fn next(&self) -> Month {
+        return match self {
+            Month::JAN => Month::FEB,
+            Month::FEB => Month::MAR,
+            Month::MAR => Month::APR,
+            Month::APR => Month::MAY,
+            Month::MAY => Month::JUN,
+            Month::JUN => Month::JUL,
+            Month::JUL => Month::AUG,
+            Month::AUG => Month::SEP,
+            Month::SEP => Month::OCT,
+            Month::OCT => Month::NOV,
+            Month::NOV => Month::DEC,
+            Month::DEC => Month::JAN,
+        };
+    }
 }
 impl Display for Month {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,11 +82,44 @@ impl Display for Month {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize, Hash)]
 pub struct EU4Date {
     pub year: u64,
     pub month: Month,
     pub day: u8,
+}
+
+impl EU4Date {
+    pub fn tomorrow(&self) -> EU4Date {
+        if self.day < self.month.length() {
+            return EU4Date {
+                year: self.year,
+                month: self.month,
+                day: self.day + 1,
+            };
+        } else if self.month == Month::DEC {
+            return EU4Date {
+                year: self.year + 1,
+                month: Month::JAN,
+                day: 1,
+            };
+        } else {
+            return EU4Date {
+                year: self.year,
+                month: self.month.next(),
+                day: 1,
+            };
+        }
+    }
+    pub fn iter_range_inclusive(first: EU4Date, last: EU4Date) -> impl Iterator<Item = EU4Date> {
+        return std::iter::successors(Some(first), move |curr| {
+            if *curr >= last {
+                None
+            } else {
+                Some(curr.tomorrow())
+            }
+        });
+    }
 }
 
 impl FromStr for EU4Date {

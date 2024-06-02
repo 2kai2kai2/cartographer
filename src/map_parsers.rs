@@ -96,10 +96,10 @@ impl MapAssets {
     }
 
     pub fn new(
-        csv_file_text: String,
-        wasteland: String,
-        water: String,
-        flagfiles_txt: String,
+        csv_file_text: &str,
+        wasteland: &str,
+        water: &str,
+        flagfiles_txt: &str,
         flagfiles_png: RgbaImage,
         base_map: RgbImage,
     ) -> anyhow::Result<MapAssets> {
@@ -142,10 +142,10 @@ impl MapAssets {
         )?;
 
         return MapAssets::new(
-            csv_file_text,
-            wasteland,
-            water,
-            flagfiles_txt,
+            &csv_file_text,
+            &wasteland,
+            &water,
+            &flagfiles_txt,
             flagfiles_png.to_rgba8(),
             base_map.to_rgb8(),
         );

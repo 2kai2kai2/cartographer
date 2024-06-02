@@ -155,7 +155,7 @@ impl<'a> RawEU4ObjectItem<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RawEU4Object<'a>(Vec<RawEU4ObjectItem<'a>>);
+pub struct RawEU4Object<'a>(pub Vec<RawEU4ObjectItem<'a>>);
 impl<'a> RawEU4Object<'a> {
     /// Will end after a '}' (returns rest starting with the next character) or EOF
     pub fn parse_object_inner(input: &'a str) -> Option<(&'a str, RawEU4Object<'a>)> {

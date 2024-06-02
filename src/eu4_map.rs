@@ -5,13 +5,16 @@ use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
 
 /// Finds the tag (if any) that owns the majority of the provinces in the vector.
-pub fn majority_owner(provinces: &Vec<u64>, save: &SaveGame) -> Option<String> {
+pub fn majority_owner(
+    provinces: &Vec<u64>,
+    get_province_owner: impl Fn(u64) -> Option<String>,
+) -> Option<String> {
     let mut owners: Vec<(String, usize)> = Vec::new();
     for id in provinces {
-        let Some(owner) = save.provinces.get(id) else {
+        let Some(owner) = get_province_owner(*id) else {
             continue;
         };
-        if let Some((_, count)) = owners.iter_mut().find(|(tag, _)| tag == owner) {
+        if let Some((_, count)) = owners.iter_mut().find(|(tag, _)| *tag == owner) {
             *count += 1;
         } else {
             owners.push((owner.to_string(), 1));
@@ -26,12 +29,12 @@ pub fn majority_owner(provinces: &Vec<u64>, save: &SaveGame) -> Option<String> {
 const WASTELAND_COLOR: Rgb<u8> = Rgb([94, 94, 94]);
 const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
 const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
-/// Note that if we can't tell where a province belongs, it will show as unclaimed.
 pub fn generate_map_colors_config(
     provinces_len: u64,
     water_provinces: &Vec<u64>,
     wasteland_neighbors: &HashMap<u64, Vec<u64>>,
-    save: &SaveGame,
+    get_province_owner: impl Fn(u64) -> Option<String>,
+    get_tag_color: impl Fn(String) -> Option<Rgb<u8>>,
 ) -> HashMap<u16, Rgb<u8>> {
     return (1..provinces_len)
         .map(|id| {
@@ -40,22 +43,36 @@ pub fn generate_map_colors_config(
             } else if let Some(neighbors) = wasteland_neighbors.get(&id) {
                 return (
                     id as u16,
-                    majority_owner(neighbors, save)
-                        .and_then(|owner| save.all_nations.get(&owner))
-                        .map_or(WASTELAND_COLOR, |nation| Rgb(nation.map_color)),
+                    majority_owner(neighbors, &get_province_owner)
+                        .and_then(&get_tag_color)
+                        .unwrap_or(WASTELAND_COLOR),
                 );
             }
 
-            let Some(owner) = save
-                .provinces
-                .get(&id)
-                .and_then(|tag| save.all_nations.get(tag))
-            else {
-                return (id as u16, UNCLAIMED_COLOR);
-            };
-            return (id as u16, Rgb(owner.map_color));
+            return (
+                id as u16,
+                get_province_owner(id)
+                    .and_then(&get_tag_color)
+                    .unwrap_or(UNCLAIMED_COLOR),
+            );
         })
         .collect();
+}
+
+/// Note that if we can't tell where a province belongs, it will show as unclaimed.
+pub fn generate_save_map_colors_config(
+    provinces_len: u64,
+    water_provinces: &Vec<u64>,
+    wasteland_neighbors: &HashMap<u64, Vec<u64>>,
+    save: &SaveGame,
+) -> HashMap<u16, Rgb<u8>> {
+    return generate_map_colors_config(
+        provinces_len,
+        water_provinces,
+        wasteland_neighbors,
+        |id| save.provinces.get(&id).map(String::to_string),
+        |tag| save.all_nations.get(&tag).map(|owner| Rgb(owner.map_color)),
+    );
 }
 
 pub fn make_base_map(
