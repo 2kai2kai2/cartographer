@@ -26,35 +26,29 @@ pub fn majority_owner(
         .map(|(tag, _)| tag);
 }
 
-const WASTELAND_COLOR: Rgb<u8> = Rgb([94, 94, 94]);
-const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
-const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
+pub const WASTELAND_COLOR: Rgb<u8> = Rgb([94, 94, 94]);
+pub const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
+pub const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
 pub fn generate_map_colors_config(
     provinces_len: u64,
     water_provinces: &Vec<u64>,
     wasteland_neighbors: &HashMap<u64, Vec<u64>>,
     get_province_owner: impl Fn(u64) -> Option<String>,
     get_tag_color: impl Fn(String) -> Option<Rgb<u8>>,
-) -> HashMap<u16, Rgb<u8>> {
-    return (1..provinces_len)
+) -> Vec<Rgb<u8>> {
+    return (0..provinces_len)
         .map(|id| {
             if water_provinces.contains(&id) {
-                return (id as u16, WATER_COLOR);
+                return WATER_COLOR;
             } else if let Some(neighbors) = wasteland_neighbors.get(&id) {
-                return (
-                    id as u16,
-                    majority_owner(neighbors, &get_province_owner)
-                        .and_then(&get_tag_color)
-                        .unwrap_or(WASTELAND_COLOR),
-                );
+                return majority_owner(neighbors, &get_province_owner)
+                    .and_then(&get_tag_color)
+                    .unwrap_or(WASTELAND_COLOR);
             }
 
-            return (
-                id as u16,
-                get_province_owner(id)
-                    .and_then(&get_tag_color)
-                    .unwrap_or(UNCLAIMED_COLOR),
-            );
+            return get_province_owner(id)
+                .and_then(&get_tag_color)
+                .unwrap_or(UNCLAIMED_COLOR);
         })
         .collect();
 }
@@ -65,7 +59,7 @@ pub fn generate_save_map_colors_config(
     water_provinces: &Vec<u64>,
     wasteland_neighbors: &HashMap<u64, Vec<u64>>,
     save: &SaveGame,
-) -> HashMap<u16, Rgb<u8>> {
+) -> Vec<Rgb<u8>> {
     return generate_map_colors_config(
         provinces_len,
         water_provinces,
@@ -77,10 +71,13 @@ pub fn generate_save_map_colors_config(
 
 pub fn make_base_map(
     bitmap: &ImageBuffer<Luma<u16>, Vec<u16>>,
-    color_map: &HashMap<u16, Rgb<u8>>,
+    color_map: &Vec<Rgb<u8>>,
 ) -> RgbImage {
     return imageproc::map::map_colors(bitmap, |color| {
-        color_map.get(&color.0[0]).unwrap_or(&Rgb::black()).clone()
+        color_map
+            .get(color.0[0] as usize)
+            .unwrap_or(&Rgb::black())
+            .clone()
     });
 }
 

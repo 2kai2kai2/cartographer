@@ -7,7 +7,7 @@ use eu4_parser_core::{
 use image::Rgb;
 
 use crate::{
-    eu4_map::{generate_map_colors_config, make_base_map},
+    eu4_map::{generate_map_colors_config, make_base_map, UNCLAIMED_COLOR},
     map_parsers::MapAssets,
     save_parser::SaveGame,
 };
@@ -80,96 +80,80 @@ impl ProvinceHistoryEvent {
     }
 }
 
-pub fn make_map_frames(
-    assets: &MapAssets,
-    history: HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
-    save: &SaveGame,
-) -> Vec<image::Frame> {
-    struct ProvinceState {
-        owner: String,
-    }
+struct ProvinceState {
+    owner: String,
+}
 
-    let mut frames: Vec<image::Frame> = Vec::new();
-    let mut current_state: HashMap<u64, ProvinceState> = HashMap::new();
-
-    let start_date = EU4Date {
-        year: 1444,
-        month: eu4_parser_core::Month::NOV,
-        day: 11,
-    };
-    let end_date = EU4Date {
-        year: 1446,
-        month: eu4_parser_core::Month::DEC,
-        day: 1,
-    };
-
-    for date in EU4Date::iter_range_inclusive(start_date, end_date) {
-        let Some(today_events) = history.get(&date) else {
-            // increase the time of the previous frame
-            if let Some(prev_frame) = frames.pop() {
-                let delay = prev_frame.delay().numer_denom_ms();
-                frames.push(image::Frame::from_parts(
-                    prev_frame.buffer().clone(),
-                    prev_frame.left(),
-                    prev_frame.top(),
-                    image::Delay::from_numer_denom_ms(delay.0 + delay.1 * 1000, delay.1),
-                ))
+fn update_map_state(
+    current_state: &mut HashMap<u64, ProvinceState>,
+    events: &Vec<(u64, ProvinceHistoryEvent)>,
+) {
+    for (id, event) in events {
+        match event {
+            ProvinceHistoryEvent::Owner(owner) => {
+                current_state.insert(
+                    *id,
+                    ProvinceState {
+                        owner: owner.to_string(),
+                    },
+                );
             }
-            continue;
-        };
+            _ => {}
+        }
+    }
+}
 
-        for (id, event) in today_events {
+/// all I-frames, as in every frame has its data in full rather than diffed
+pub fn all_i_frame_color_maps<'a>(
+    assets: &'a MapAssets,
+    history: &'a HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
+    save: &'a SaveGame,
+    start_date: EU4Date,
+    end_date: EU4Date,
+) -> impl Iterator<Item = (EU4Date, Vec<Rgb<u8>>)> + 'a {
+    let tag_colors: HashMap<_, _> = save
+        .all_nations
+        .iter()
+        .map(|(tag, nation)| (tag, Rgb(nation.map_color)))
+        .collect();
+    let mut prev_map = generate_map_colors_config(
+        assets.provinces_len,
+        &assets.water,
+        &assets.wasteland,
+        |_| None,
+        |tag| tag_colors.get(&tag).map(Rgb::to_owned),
+    );
+
+    return EU4Date::iter_range_inclusive(start_date, end_date).map(move |date| {
+        let Some(events) = history.get(&date) else {
+            return (date, prev_map.clone());
+        };
+        for (id, event) in events {
             match event {
-                ProvinceHistoryEvent::Owner(owner) => {
-                    current_state.insert(
-                        *id,
-                        ProvinceState {
-                            owner: owner.to_string(),
-                        },
-                    );
+                ProvinceHistoryEvent::Owner(tag) => {
+                    prev_map[*id as usize] =
+                        tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
                 }
                 _ => {}
             }
         }
-
-        let tag_colors: HashMap<_, _> = save
-            .all_nations
-            .iter()
-            .map(|(tag, nation)| (tag, Rgb(nation.map_color)))
-            .collect();
-        let color_map = generate_map_colors_config(
-            assets.provinces_len,
-            &assets.water,
-            &assets.wasteland,
-            |id| {
-                current_state
-                    .get(&id)
-                    .map(|province| province.owner.to_string())
-            },
-            |tag| tag_colors.get(&tag).map(Rgb::clone),
-        );
-        let img = make_base_map(&assets.base_map, &color_map);
-        frames.push(image::Frame::from_parts(
-            image::DynamicImage::from(img).to_rgba8(),
-            0,
-            0,
-            image::Delay::from_numer_denom_ms(1000, 1),
-        ))
-    }
-
-    return frames;
+        return (date, prev_map.clone());
+    });
 }
 
 #[cfg(test)]
 mod tests {
-    use eu4_parser_core::raw_parser;
+    use eu4_parser_core::{raw_parser, EU4Date};
+    use image::GenericImage;
 
     use crate::{
+        eu4_map::make_base_map,
+        map_history::all_i_frame_color_maps,
         map_parsers::{from_cp1252, MapAssets},
         save_parser::SaveGame,
     };
 
-    use super::{make_map_frames, ProvinceHistoryEvent};
+    use super::ProvinceHistoryEvent;
 
     #[test]
     pub fn asdf() {
@@ -215,9 +199,55 @@ mod tests {
                 .as_millis()
         );
 
-        print!("Generating frames...");
+        let start_date = EU4Date {
+            year: 1444,
+            month: eu4_parser_core::Month::NOV,
+            day: 11,
+        };
+        let end_date = EU4Date {
+            year: 1450,
+            month: eu4_parser_core::Month::JAN,
+            day: 1,
+        };
+        print!("Generating color maps...");
         let start_time = std::time::Instant::now();
-        let frames = make_map_frames(&assets, combined_history, &save);
+        let color_maps =
+            all_i_frame_color_maps(&assets, &combined_history, &save, start_date, end_date);
+        println!(
+            " ({}ms.)",
+            std::time::Instant::now()
+                .duration_since(start_time)
+                .as_millis()
+        );
+
+        let mut img_out = image::RgbImage::new(5632, 2048 * 30);
+        for (i, (_, color_map)) in color_maps.step_by(10).take(30).enumerate() {
+            img_out
+                .copy_from(
+                    &make_base_map(&assets.base_map, &color_map),
+                    0,
+                    i as u32 * 2048,
+                )
+                .unwrap();
+        }
+        img_out.save("weeks.png").unwrap();
+
+        return;
+        /*print!("Generating frames...");
+        let start_time = std::time::Instant::now();
+        let frames: Vec<image::Frame> = color_maps
+            .iter()
+            .map(|(date, color_map)| {
+                image::Frame::from_parts(
+                    imageproc::map::map_colors(&make_base_map(&assets.base_map, color_map), |p| {
+                        p.to_rgba()
+                    }),
+                    0,
+                    0,
+                    image::Delay::from_numer_denom_ms(400, 1),
+                )
+            })
+            .collect();
         println!(
             " ({}ms.)",
             std::time::Instant::now()
@@ -235,6 +265,6 @@ mod tests {
             std::time::Instant::now()
                 .duration_since(start_time)
                 .as_millis()
-        );
+        );*/
     }
 }
