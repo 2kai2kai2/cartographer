@@ -1,0 +1,22 @@
+<html>
+    <head>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+        <link href="./main.css" rel="stylesheet" />
+    </head>
+    <body>
+        <canvas id="canvas" width="5632" height="2048" style="max-width: 100vw; max-height: 100vh;"></canvas>
+        <script type="module">
+            import init, {
+                do_webgl,
+            } from "./pkg/rs.js";
+
+            async function run() {
+                await init();
+                
+                do_webgl();
+            }
+
+            run();
+        </script>
+    </body>
+</html>

@@ -6,15 +6,18 @@ use map_parsers::from_cp1252;
 use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
 use wasm_bindgen::prelude::*;
+use webgl::webgl_draw_map;
 
 use crate::map_parsers::MapAssets;
 
 mod eu4_map;
+mod map_history;
 mod map_parsers;
 mod save_parser;
 mod stats_image;
-mod map_history;
+mod webgl;
 
+#[macro_export]
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -144,4 +147,21 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
     return Ok(JsValue::from_str(
         &base64::engine::general_purpose::STANDARD.encode(png_buffer),
     ));
+}
+
+#[wasm_bindgen]
+pub async fn do_webgl() -> Result<(), JsValue> {
+    let document = web_sys::window().unwrap().document().unwrap();
+    let canvas = document.get_element_by_id("canvas").unwrap();
+    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+    log!("Loading assets...");
+    let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
+    let base_url = window.location().origin()? + &window.location().pathname()?;
+    let url_map_assets = format!("{base_url}/../resources/vanilla");
+    let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
+
+    webgl_draw_map(canvas, &assets)?;
+
+    return Ok(());
 }
