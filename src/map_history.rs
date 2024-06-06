@@ -80,6 +80,23 @@ impl ProvinceHistoryEvent {
     }
 }
 
+pub fn make_combined_events(
+    save: &RawEU4Object,
+) -> HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>> {
+    let province_histories = save
+        .get_first_obj("provinces")
+        .unwrap()
+        .iter_all_KVs()
+        .filter_map(|(k, v)| {
+            Some((
+                k.as_int()?.abs() as u64,
+                ProvinceHistoryEvent::extract_events(v.as_object()?.get_first_obj("history")?),
+            ))
+        })
+        .collect();
+    return ProvinceHistoryEvent::combine_events(province_histories);
+}
+
 struct ProvinceState {
     owner: String,
 }
@@ -148,12 +165,10 @@ mod tests {
 
     use crate::{
         eu4_map::make_base_map,
-        map_history::all_i_frame_color_maps,
+        map_history::{all_i_frame_color_maps, make_combined_events},
         map_parsers::{from_cp1252, MapAssets},
         save_parser::SaveGame,
     };
-
-    use super::ProvinceHistoryEvent;
 
     #[test]
     pub fn asdf() {
@@ -164,20 +179,8 @@ mod tests {
         )
         .unwrap();
         let (_, raw_parsed) = raw_parser::RawEU4Object::parse_object_inner(&filetext).unwrap();
-        let save = SaveGame::new_parser(&filetext).unwrap();
-
-        let province_histories = raw_parsed
-            .get_first_obj("provinces")
-            .unwrap()
-            .iter_all_KVs()
-            .filter_map(|(k, v)| {
-                Some((
-                    k.as_int()?.abs() as u64,
-                    ProvinceHistoryEvent::extract_events(v.as_object()?.get_first_obj("history")?),
-                ))
-            })
-            .collect();
-        let combined_history = ProvinceHistoryEvent::combine_events(province_histories);
+        let save = SaveGame::new_parser(&raw_parsed).unwrap();
+        let history = make_combined_events(&raw_parsed);
 
         let assets = MapAssets::new(
             &from_cp1252(include_bytes!("../resources/vanilla/definition.csv").as_slice()).unwrap(),
@@ -211,8 +214,7 @@ mod tests {
         };
         print!("Generating color maps...");
         let start_time = std::time::Instant::now();
-        let color_maps =
-            all_i_frame_color_maps(&assets, &combined_history, &save, start_date, end_date);
+        let color_maps = all_i_frame_color_maps(&assets, &history, &save, start_date, end_date);
         println!(
             " ({}ms.)",
             std::time::Instant::now()

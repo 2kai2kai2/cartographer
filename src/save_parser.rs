@@ -355,11 +355,8 @@ impl SaveGame {
         });
     }
 
-    pub fn new_parser(file_text: &str) -> Option<SaveGame> {
-        let (_, obj) = RawEU4Object::parse_object_inner(file_text).unwrap();
-
-        // TODO
-        let all_nations = obj
+    pub fn new_parser(raw_save: &RawEU4Object) -> Option<SaveGame> {
+        let all_nations = raw_save
             .get_first_obj("countries")
             .unwrap()
             .iter_all_KVs()
@@ -371,7 +368,7 @@ impl SaveGame {
                 _ => None,
             })
             .collect();
-        let player_tags: Vec<&RawEU4Scalar> = obj
+        let player_tags: Vec<&RawEU4Scalar> = raw_save
             .get_first_obj("players_countries")?
             .iter_values()
             .map(RawEU4Value::as_scalar)
@@ -385,7 +382,7 @@ impl SaveGame {
             })
             .collect::<Option<HashMap<_, _>>>()
             .unwrap();
-        let provinces: HashMap<u64, String> = obj
+        let provinces: HashMap<u64, String> = raw_save
             .get_first_obj("provinces")?
             .iter_all_KVs()
             .filter_map(|(k, v)| Some((k, v.as_object()?)))
@@ -396,7 +393,7 @@ impl SaveGame {
                 ))
             })
             .collect();
-        let dlc: Vec<String> = obj
+        let dlc: Vec<String> = raw_save
             .get_first_obj("dlc_enabled")?
             .iter_values()
             .filter_map(|v| match v {
@@ -405,7 +402,7 @@ impl SaveGame {
             })
             .collect();
         let great_powers = Vec::new();
-        let date = obj.get_first_scalar("date");
+        let date = raw_save.get_first_scalar("date");
 
         return Some(SaveGame {
             all_nations,
@@ -414,22 +411,22 @@ impl SaveGame {
             dlc,
             great_powers,
             date: date.unwrap().as_date().unwrap(),
-            multiplayer: obj
+            multiplayer: raw_save
                 .get_first_scalar("multi_player")
                 .unwrap()
                 .as_bool()
                 .unwrap(),
-            age: obj
+            age: raw_save
                 .get_first_scalar("current_age")
                 .map(RawEU4Scalar::as_string),
-            hre: obj
+            hre: raw_save
                 .get_first_scalar_at_path(["empire", "emperor"])
                 .map(RawEU4Scalar::as_string),
-            china: obj
+            china: raw_save
                 .get_first_scalar_at_path(["celestial_empire", "emperor"])
                 .map(RawEU4Scalar::as_string),
             crusade: None,
-            player_wars: obj
+            player_wars: raw_save
                 .iter_all_KVs()
                 .filter(|(k, _)| k.0 == "active_war" || k.0 == "previous_war")
                 .filter_map(|(_, v)| match v {

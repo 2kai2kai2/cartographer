@@ -5,6 +5,7 @@
     </head>
     <body>
         <input type="file" id="file-selector" accept=".eu4" />
+        <button id="next-button">next</button>
         <canvas id="canvas" width="5632" height="2048" style="max-width: 100vw; max-height: 100vh;"></canvas>
         <script type="module">
             import init, {
@@ -13,6 +14,7 @@
 
             /** @type {HTMLInputElement} */
             const file_selector = document.getElementById("file-selector");
+            const next_button = document.getElementById("next-button");
 
             async function run() {
                 await init();
@@ -26,7 +28,10 @@
                         await file_selector.files[0].arrayBuffer()
                     );
 
-                    do_webgl(array);
+                    const next_callback = await do_webgl(array);
+                    console.log(next_callback);
+                    next_button.onclick = next_callback;
+                    setInterval(next_callback, 3);
                 });
                 
             }

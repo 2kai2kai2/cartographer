@@ -2,6 +2,8 @@ use std::io::Cursor;
 
 use ab_glyph::FontRef;
 use base64::Engine;
+use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
+use map_history::{all_i_frame_color_maps, make_combined_events};
 use map_parsers::from_cp1252;
 use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
@@ -39,22 +41,20 @@ fn decompress_eu4txt(array: &[u8]) -> anyhow::Result<String> {
 /// Should take in a `UInt8Array`
 #[wasm_bindgen]
 pub fn parse_eu4_save(array: &[u8]) -> Result<JsValue, JsValue> {
-    if array.starts_with("EU4txt".as_bytes()) {
+    let save = if array.starts_with("EU4txt".as_bytes()) {
         log!("Detected uncompressed save file");
-        let text = from_cp1252(array).map_err(map_error)?;
-
-        return SaveGame::new_parser(&text)
-            .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
-            .ok_or(js_sys::Error::new("Failed to parse save file").into());
+        from_cp1252(array).map_err(map_error)?
     } else if array.starts_with("PK\x03\x04".as_bytes()) {
         log!("Detected compressed file");
-        let text = decompress_eu4txt(array).map_err(map_error)?;
-
-        return SaveGame::new_parser(&text)
-            .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
-            .ok_or(js_sys::Error::new("Failed to parse save file").into());
-    }
-    return Err(JsError::new("Could not determine the EU4 save format").into());
+        decompress_eu4txt(array).map_err(map_error)?
+    } else {
+        return Err(JsError::new("Could not determine the EU4 save format").into());
+    };
+    let (_, save) = RawEU4Object::parse_object_inner(&save)
+        .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
+    return SaveGame::new_parser(&save)
+        .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
+        .ok_or(js_sys::Error::new("Failed to parse save file (at step 2)").into());
 }
 
 fn map_error<E: ToString>(err: E) -> JsValue {
@@ -150,21 +150,18 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn do_webgl(array: &[u8]) -> Result<(), JsValue> {
+pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
     let save = if array.starts_with("EU4txt".as_bytes()) {
         log!("Detected uncompressed save file");
-        let text = from_cp1252(array).map_err(map_error)?;
-
-        SaveGame::new_parser(&text)
+        from_cp1252(array).map_err(map_error)?
     } else if array.starts_with("PK\x03\x04".as_bytes()) {
         log!("Detected compressed file");
-        let text = decompress_eu4txt(array).map_err(map_error)?;
-
-        SaveGame::new_parser(&text)
+        decompress_eu4txt(array).map_err(map_error)?
     } else {
         return Err(JsError::new("Could not determine the EU4 save format").into());
-    }
-    .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file").into())?;
+    };
+    let (_, save) = RawEU4Object::parse_object_inner(&save)
+        .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
 
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
@@ -176,15 +173,26 @@ pub async fn do_webgl(array: &[u8]) -> Result<(), JsValue> {
     let url_map_assets = format!("{base_url}/../resources/vanilla");
     let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
 
-    let color_map = eu4_map::generate_save_map_colors_config(
-        assets.provinces_len,
-        &assets.water,
-        &assets.wasteland,
+    let history = make_combined_events(&save);
+    let save = SaveGame::new_parser(&save)
+        .ok_or::<JsValue>(JsError::new("Failed to parse save file (at step 2)").into())?;
+    let frames: Vec<_> = all_i_frame_color_maps(
+        &assets,
+        &history,
         &save,
-    );
+        EU4Date::new(1444, Month::NOV, 11).unwrap(),
+        save.date,
+    )
+    .collect();
+    let mut frames = frames.into_iter();
 
     let callback = webgl_draw_map(canvas, assets)?;
-    callback(&color_map);
-
-    return Ok(());
+    return Ok(Closure::new(move || {
+        let Some((date, color_map)) = frames.next() else {
+            return;
+        };
+        callback(&color_map);
+        log!("{date}");
+    })
+    .into_js_value());
 }

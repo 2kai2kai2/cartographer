@@ -90,6 +90,13 @@ pub struct EU4Date {
 }
 
 impl EU4Date {
+    pub const fn new(year: u64, month: Month, day: u8) -> Option<EU4Date> {
+        if day == 0 || day >= month.length() {
+            return None;
+        }
+        return Some(EU4Date { year, month, day });
+    }
+
     pub fn tomorrow(&self) -> EU4Date {
         if self.day < self.month.length() {
             return EU4Date {
