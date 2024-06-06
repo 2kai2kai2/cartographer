@@ -5,6 +5,7 @@ use eu4_parser_core::{
     EU4Date,
 };
 use image::Rgb;
+use imageproc::definitions::HasBlack;
 
 use crate::{
     eu4_map::{generate_map_colors_config, make_base_map, UNCLAIMED_COLOR},
@@ -99,6 +100,7 @@ pub fn make_combined_events(
 
 struct ProvinceState {
     owner: String,
+    controller: Option<String>,
 }
 
 fn update_map_state(
@@ -108,12 +110,22 @@ fn update_map_state(
     for (id, event) in events {
         match event {
             ProvinceHistoryEvent::Owner(owner) => {
-                current_state.insert(
-                    *id,
-                    ProvinceState {
+                current_state
+                    .entry(*id)
+                    .and_modify(|p| p.owner = owner.to_string())
+                    .or_insert(ProvinceState {
                         owner: owner.to_string(),
-                    },
-                );
+                        controller: None,
+                    });
+            }
+            ProvinceHistoryEvent::Controller(controller) => {
+                if let Some(p) = current_state.get_mut(id) {
+                    if controller == "---" {
+                        p.controller = None;
+                    } else {
+                        p.controller = Some(controller.to_string());
+                    }
+                }
             }
             _ => {}
         }
@@ -121,19 +133,29 @@ fn update_map_state(
 }
 
 /// all I-frames, as in every frame has its data in full rather than diffed
+/// 
+/// Returns `(date, owners, controllers)`
+/// If controllers is `[0, 0, 0]` then it is unowned (and shouldn't be shown)
 pub fn all_i_frame_color_maps<'a>(
     assets: &'a MapAssets,
     history: &'a HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
     save: &'a SaveGame,
     start_date: EU4Date,
     end_date: EU4Date,
-) -> impl Iterator<Item = (EU4Date, Vec<Rgb<u8>>)> + 'a {
+) -> impl Iterator<Item = (EU4Date, Vec<Rgb<u8>>, Vec<Rgb<u8>>)> + 'a {
     let tag_colors: HashMap<_, _> = save
         .all_nations
         .iter()
         .map(|(tag, nation)| (tag, Rgb(nation.map_color)))
         .collect();
-    let mut prev_map = generate_map_colors_config(
+    let mut prev_owners = generate_map_colors_config(
+        assets.provinces_len,
+        &assets.water,
+        &assets.wasteland,
+        |_| None,
+        |tag| tag_colors.get(&tag).map(Rgb::to_owned),
+    );
+    let mut prev_controllers: Vec<Rgb<u8>> = generate_map_colors_config(
         assets.provinces_len,
         &assets.water,
         &assets.wasteland,
@@ -143,18 +165,22 @@ pub fn all_i_frame_color_maps<'a>(
 
     return EU4Date::iter_range_inclusive(start_date, end_date).map(move |date| {
         let Some(events) = history.get(&date) else {
-            return (date, prev_map.clone());
+            return (date, prev_owners.clone(), prev_controllers.clone());
         };
         for (id, event) in events {
             match event {
                 ProvinceHistoryEvent::Owner(tag) => {
-                    prev_map[*id as usize] =
+                    prev_owners[*id as usize] =
                         tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
+                }
+                ProvinceHistoryEvent::Controller(tag) => {
+                    prev_controllers[*id as usize] =
+                        tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
                 }
                 _ => {}
             }
         }
-        return (date, prev_map.clone());
+        return (date, prev_owners.clone(), prev_controllers.clone());
     });
 }
 
@@ -223,7 +249,7 @@ mod tests {
         );
 
         let mut img_out = image::RgbImage::new(5632, 2048 * 30);
-        for (i, (_, color_map)) in color_maps.step_by(10).take(30).enumerate() {
+        for (i, (_, color_map, _controller_map)) in color_maps.step_by(10).take(30).enumerate() {
             img_out
                 .copy_from(
                     &make_base_map(&assets.base_map, &color_map),

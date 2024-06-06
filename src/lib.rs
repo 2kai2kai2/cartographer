@@ -22,7 +22,7 @@ mod webgl;
 #[macro_export]
 macro_rules! log {
     ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
+        web_sys::console::log_1(&format!( $( $t )* ).into())
     }
 }
 
@@ -187,12 +187,12 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
     let mut frames = frames.into_iter();
 
     let callback = webgl_draw_map(canvas, assets)?;
+    log!("Made callback");
     return Ok(Closure::new(move || {
-        let Some((date, color_map)) = frames.next() else {
+        let Some((date, color_map, controllers_map)) = frames.next() else {
             return;
         };
-        callback(&color_map);
-        log!("{date}");
+        callback(&color_map, &controllers_map);
     })
     .into_js_value());
 }

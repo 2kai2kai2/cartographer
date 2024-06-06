@@ -7,19 +7,20 @@ use crate::{log, map_parsers::MapAssets};
 const A_POSITION: &str = "a_position";
 const U_BASE_MAP: &str = "u_base_map";
 const U_PROVINCE_COLORS: &str = "u_province_colors";
+const U_CONTROLLER_COLORS: &str = "u_controller_colors";
 
 pub fn webgl_draw_map(
     canvas: HtmlCanvasElement,
     assets: MapAssets,
-) -> Result<impl Fn(&Vec<image::Rgb<u8>>) -> (), JsValue> {
+) -> Result<impl Fn(&Vec<image::Rgb<u8>>, &Vec<image::Rgb<u8>>) -> (), JsValue> {
     let gl = canvas
         .get_context("webgl2")?
         .unwrap()
         .dyn_into::<WebGl2RenderingContext>()?;
 
     let vertex_shader_code = r#"#version 300 es
-        in vec2 a_position;
-        out vec2 v_tex_position;
+        in highp vec2 a_position;
+        out highp vec2 v_tex_position;
         
         void main() {
             gl_Position = vec4(a_position, 0, 1);
@@ -28,18 +29,23 @@ pub fn webgl_draw_map(
 
     let fragment_shader_code = r#"#version 300 es
         precision mediump float;
-        in vec2 v_tex_position;
+        in highp vec2 v_tex_position;
         out vec4 out_color;
         uniform mediump usampler2D u_base_map;
         uniform mediump sampler2D u_province_colors;
-        
+        uniform mediump sampler2D u_controller_colors;
+
         void main() {
+            mediump ivec2 map_position = ivec2(v_tex_position.x * 5632.0, v_tex_position.y * 2048.0);
             mediump uvec4 province_id = texture(u_base_map, v_tex_position);
-            if (province_id == uvec4(0, 0, 0, 0)) {
-                out_color = vec4(0, 1, 0, 1);
+
+            mediump vec4 owner_color = texelFetch(u_province_colors, ivec2(int(province_id.x), 0), 0);
+            mediump vec4 controller_color = texelFetch(u_controller_colors, ivec2(int(province_id.x), 0), 0);
+
+            if ((map_position.x + map_position.y) % 5 == 0 && controller_color != vec4(0, 0, 0, 1)) { 
+                out_color = controller_color;
             } else {
-                out_color = texelFetch(u_province_colors, ivec2(int(province_id.x), 0), 0);
-                //out_color = vec4(float(province_id.x % 256u) / 255.0, 0, 0, 1);
+                out_color = owner_color;
             }
         }"#;
 
@@ -177,30 +183,80 @@ pub fn webgl_draw_map(
         .get_uniform_location(&program, U_PROVINCE_COLORS)
         .expect("Couldn't find u_province_colors");
     gl.uniform1i(Some(&u_province_colors), 1);
+    log!("Setup color palette");
 
-    return Ok(move |color_map: &Vec<image::Rgb<u8>>| {
-        let rs_color_map_array: Vec<u8> = color_map.iter().flat_map(|image::Rgb(x)| *x).collect();
-        gl.bind_texture(
-            WebGl2RenderingContext::TEXTURE_2D,
-            Some(&color_map_palette_texture),
-        );
+    // ==== SETUP CONTROLLER MAP ====
 
-        // upload the texture image to the texture handle
-        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0,
-            WebGl2RenderingContext::RGB as i32,
-            assets.provinces_len as i32,
-            1,
-            0,
-            WebGl2RenderingContext::RGB,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&rs_color_map_array),
-        )
-        .unwrap();
+    let controller_map_palette_texture = gl.create_texture().expect("Failed to create Texture.");
+    gl.active_texture(WebGl2RenderingContext::TEXTURE2);
 
-        gl.draw_arrays(WebGl2RenderingContext::TRIANGLE_STRIP, 0, 4);
-    });
+    gl.bind_texture(
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(&controller_map_palette_texture),
+    );
+
+    gl.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+    gl.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+
+    let u_controller_colors = gl
+        .get_uniform_location(&program, U_CONTROLLER_COLORS)
+        .expect("Couldn't find u_controller_colors");
+    gl.uniform1i(Some(&u_controller_colors), 2);
+    log!("Setup controller palette");
+
+    return Ok(
+        move |color_map: &Vec<image::Rgb<u8>>, controller_map: &Vec<image::Rgb<u8>>| {
+            let rs_color_map_array: Vec<u8> =
+                color_map.iter().flat_map(|image::Rgb(x)| *x).collect();
+            gl.bind_texture(
+                WebGl2RenderingContext::TEXTURE_2D,
+                Some(&color_map_palette_texture),
+            );
+
+            // upload the texture image to the texture handle
+            gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0,
+                WebGl2RenderingContext::RGB as i32,
+                assets.provinces_len as i32,
+                1,
+                0,
+                WebGl2RenderingContext::RGB,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                Some(&rs_color_map_array),
+            )
+            .unwrap();
+
+            let rs_controller_map_array: Vec<u8> =
+                controller_map.iter().flat_map(|image::Rgb(x)| *x).collect();
+            gl.bind_texture(
+                WebGl2RenderingContext::TEXTURE_2D,
+                Some(&controller_map_palette_texture),
+            );
+            gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0,
+                WebGl2RenderingContext::RGB as i32,
+                assets.provinces_len as i32,
+                1,
+                0,
+                WebGl2RenderingContext::RGB,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                Some(&rs_controller_map_array),
+            )
+            .unwrap();
+
+            gl.draw_arrays(WebGl2RenderingContext::TRIANGLE_STRIP, 0, 4);
+        },
+    );
 }
 
 pub fn compile_shader(
