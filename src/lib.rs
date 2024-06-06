@@ -150,7 +150,22 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn do_webgl() -> Result<(), JsValue> {
+pub async fn do_webgl(array: &[u8]) -> Result<(), JsValue> {
+    let save = if array.starts_with("EU4txt".as_bytes()) {
+        log!("Detected uncompressed save file");
+        let text = from_cp1252(array).map_err(map_error)?;
+
+        SaveGame::new_parser(&text)
+    } else if array.starts_with("PK\x03\x04".as_bytes()) {
+        log!("Detected compressed file");
+        let text = decompress_eu4txt(array).map_err(map_error)?;
+
+        SaveGame::new_parser(&text)
+    } else {
+        return Err(JsError::new("Could not determine the EU4 save format").into());
+    }
+    .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file").into())?;
+
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
@@ -161,7 +176,15 @@ pub async fn do_webgl() -> Result<(), JsValue> {
     let url_map_assets = format!("{base_url}/../resources/vanilla");
     let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
 
-    webgl_draw_map(canvas, &assets)?;
+    let color_map = eu4_map::generate_save_map_colors_config(
+        assets.provinces_len,
+        &assets.water,
+        &assets.wasteland,
+        &save,
+    );
+
+    let callback = webgl_draw_map(canvas, assets)?;
+    callback(&color_map);
 
     return Ok(());
 }

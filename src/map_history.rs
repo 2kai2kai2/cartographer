@@ -231,40 +231,5 @@ mod tests {
                 .unwrap();
         }
         img_out.save("weeks.png").unwrap();
-
-        return;
-        /*print!("Generating frames...");
-        let start_time = std::time::Instant::now();
-        let frames: Vec<image::Frame> = color_maps
-            .iter()
-            .map(|(date, color_map)| {
-                image::Frame::from_parts(
-                    imageproc::map::map_colors(&make_base_map(&assets.base_map, color_map), |p| {
-                        p.to_rgba()
-                    }),
-                    0,
-                    0,
-                    image::Delay::from_numer_denom_ms(400, 1),
-                )
-            })
-            .collect();
-        println!(
-            " ({}ms.)",
-            std::time::Instant::now()
-                .duration_since(start_time)
-                .as_millis()
-        );
-
-        print!("Writing frames...");
-        let start_time = std::time::Instant::now();
-        let mut image = std::fs::File::create("test.gif").unwrap();
-        let mut encoder = image::codecs::gif::GifEncoder::new(&mut image);
-        encoder.encode_frames(frames).unwrap();
-        println!(
-            " ({}ms.)",
-            std::time::Instant::now()
-                .duration_since(start_time)
-                .as_millis()
-        );*/
     }
 }

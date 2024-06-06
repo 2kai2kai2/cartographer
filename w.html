@@ -4,16 +4,31 @@
         <link href="./main.css" rel="stylesheet" />
     </head>
     <body>
+        <input type="file" id="file-selector" accept=".eu4" />
         <canvas id="canvas" width="5632" height="2048" style="max-width: 100vw; max-height: 100vh;"></canvas>
         <script type="module">
             import init, {
                 do_webgl,
             } from "./pkg/rs.js";
 
+            /** @type {HTMLInputElement} */
+            const file_selector = document.getElementById("file-selector");
+
             async function run() {
                 await init();
+
+                file_selector.addEventListener("change", async (ev) => {
+                    if (!file_selector.files?.length) {
+                        return;
+                    }
+
+                    const array = new Uint8Array(
+                        await file_selector.files[0].arrayBuffer()
+                    );
+
+                    do_webgl(array);
+                });
                 
-                do_webgl();
             }
 
             run();
