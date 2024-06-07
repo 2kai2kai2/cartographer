@@ -3,7 +3,7 @@ use std::io::Cursor;
 use ab_glyph::FontRef;
 use base64::Engine;
 use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
-use map_history::{all_i_frame_color_maps, make_combined_events};
+use map_history::all_i_frame_color_maps;
 use map_parsers::from_cp1252;
 use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
@@ -12,6 +12,7 @@ use webgl::webgl_draw_map;
 
 use crate::map_parsers::MapAssets;
 
+mod country_history;
 mod eu4_map;
 mod map_history;
 mod map_parsers;
@@ -173,12 +174,15 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
     let url_map_assets = format!("{base_url}/../resources/vanilla");
     let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
 
-    let history = make_combined_events(&save);
+    let province_history = map_history::make_combined_events(&save);
+    let country_history = country_history::make_combined_events(&save);
+    log!("{:?}", country_history);
     let save = SaveGame::new_parser(&save)
         .ok_or::<JsValue>(JsError::new("Failed to parse save file (at step 2)").into())?;
     let frames: Vec<_> = all_i_frame_color_maps(
         &assets,
-        &history,
+        &province_history,
+        &country_history,
         &save,
         EU4Date::new(1444, Month::NOV, 11).unwrap(),
         save.date,

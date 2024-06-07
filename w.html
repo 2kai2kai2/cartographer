@@ -3,9 +3,9 @@
         <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
         <link href="./main.css" rel="stylesheet" />
     </head>
-    <body>
+    <body style="overflow: scroll; width: 100vw; height: 100vh;">
         <input type="file" id="file-selector" accept=".eu4" />
-        <canvas id="canvas" width="5632" height="2048"></canvas>
+        <canvas id="canvas" width="5632" height="2048" style="border: solid 1px red;"></canvas>
         <script type="module">
             import init, {
                 do_webgl,
@@ -21,6 +21,7 @@
                     if (!file_selector.files?.length) {
                         return;
                     }
+                    file_selector.remove();
 
                     const array = new Uint8Array(
                         await file_selector.files[0].arrayBuffer()

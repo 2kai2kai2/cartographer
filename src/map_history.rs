@@ -8,7 +8,8 @@ use image::Rgb;
 use imageproc::definitions::HasBlack;
 
 use crate::{
-    eu4_map::{generate_map_colors_config, make_base_map, UNCLAIMED_COLOR},
+    country_history::CountryHistoryEvent,
+    eu4_map::{generate_map_colors_config, UNCLAIMED_COLOR},
     map_parsers::MapAssets,
     save_parser::SaveGame,
 };
@@ -16,6 +17,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProvinceHistoryEvent {
     Owner(String),
+    FakeOwner(String),
     Controller(String),
     Religion(String),
     AddCore(String),
@@ -38,6 +40,9 @@ impl ProvinceHistoryEvent {
                     .filter_map(move |(RawEU4Scalar(ev), val)| match (ev, val) {
                         (&"owner", RawEU4Value::Scalar(tag)) => {
                             Some((date, ProvinceHistoryEvent::Owner(tag.as_string())))
+                        }
+                        (&"fake_owner", RawEU4Value::Scalar(tag)) => {
+                            Some((date, ProvinceHistoryEvent::FakeOwner(tag.as_string())))
                         }
                         (&"controller", RawEU4Value::Object(controller_obj)) => Some((
                             date,
@@ -98,166 +103,105 @@ pub fn make_combined_events(
     return ProvinceHistoryEvent::combine_events(province_histories);
 }
 
-struct ProvinceState {
-    owner: String,
-    controller: Option<String>,
-}
-
-fn update_map_state(
-    current_state: &mut HashMap<u64, ProvinceState>,
-    events: &Vec<(u64, ProvinceHistoryEvent)>,
-) {
-    for (id, event) in events {
-        match event {
-            ProvinceHistoryEvent::Owner(owner) => {
-                current_state
-                    .entry(*id)
-                    .and_modify(|p| p.owner = owner.to_string())
-                    .or_insert(ProvinceState {
-                        owner: owner.to_string(),
-                        controller: None,
-                    });
-            }
-            ProvinceHistoryEvent::Controller(controller) => {
-                if let Some(p) = current_state.get_mut(id) {
-                    if controller == "---" {
-                        p.controller = None;
-                    } else {
-                        p.controller = Some(controller.to_string());
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 /// all I-frames, as in every frame has its data in full rather than diffed
-/// 
+///
 /// Returns `(date, owners, controllers)`
 /// If controllers is `[0, 0, 0]` then it is unowned (and shouldn't be shown)
 pub fn all_i_frame_color_maps<'a>(
     assets: &'a MapAssets,
-    history: &'a HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
+    province_history: &'a HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
+    country_history: &'a HashMap<EU4Date, Vec<(String, CountryHistoryEvent)>>,
     save: &'a SaveGame,
     start_date: EU4Date,
     end_date: EU4Date,
 ) -> impl Iterator<Item = (EU4Date, Vec<Rgb<u8>>, Vec<Rgb<u8>>)> + 'a {
-    let tag_colors: HashMap<_, _> = save
+    let mut tag_colors: HashMap<_, _> = save
         .all_nations
         .iter()
         .map(|(tag, nation)| (tag, Rgb(nation.map_color)))
         .collect();
-    let mut prev_owners = generate_map_colors_config(
-        assets.provinces_len,
-        &assets.water,
-        &assets.wasteland,
-        |_| None,
-        |tag| tag_colors.get(&tag).map(Rgb::to_owned),
-    );
-    let mut prev_controllers: Vec<Rgb<u8>> = generate_map_colors_config(
-        assets.provinces_len,
-        &assets.water,
-        &assets.wasteland,
-        |_| None,
-        |tag| tag_colors.get(&tag).map(Rgb::to_owned),
-    );
+    tag_colors.remove(&"---".to_string());
+    tag_colors.remove(&"REB".to_string());
 
-    return EU4Date::iter_range_inclusive(start_date, end_date).map(move |date| {
-        let Some(events) = history.get(&date) else {
-            return (date, prev_owners.clone(), prev_controllers.clone());
-        };
-        for (id, event) in events {
-            match event {
-                ProvinceHistoryEvent::Owner(tag) => {
-                    prev_owners[*id as usize] =
-                        tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
-                }
-                ProvinceHistoryEvent::Controller(tag) => {
-                    prev_controllers[*id as usize] =
-                        tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
-                }
-                _ => {}
+    let initial_owners = generate_map_colors_config(
+        assets.provinces_len,
+        &assets.water,
+        &assets.wasteland,
+        |_| None,
+        |tag| tag_colors.get(&tag).map(Rgb::to_owned),
+    );
+    let initial_controllers: Vec<Rgb<u8>> = generate_map_colors_config(
+        assets.provinces_len,
+        &assets.water,
+        &assets.wasteland,
+        |_| Some("".to_string()),
+        |_| Some(Rgb::black()),
+    );
+    return std::iter::successors(
+        Some((start_date, initial_owners, initial_controllers)),
+        move |(prev_date, prev_owners, prev_controllers)| {
+            let date = prev_date.tomorrow();
+            if date > end_date {
+                return None;
             }
-        }
-        return (date, prev_owners.clone(), prev_controllers.clone());
-    });
-}
 
-#[cfg(test)]
-mod tests {
-    use eu4_parser_core::{raw_parser, EU4Date};
-    use image::GenericImage;
-
-    use crate::{
-        eu4_map::make_base_map,
-        map_history::{all_i_frame_color_maps, make_combined_events},
-        map_parsers::{from_cp1252, MapAssets},
-        save_parser::SaveGame,
-    };
-
-    #[test]
-    pub fn asdf() {
-        print!("Loading...");
-        let start_time = std::time::Instant::now();
-        let filetext = from_cp1252(
-            include_bytes!("/Users/oritak/Downloads/mp_Portugal1567_05_11.eu4").as_slice(),
-        )
-        .unwrap();
-        let (_, raw_parsed) = raw_parser::RawEU4Object::parse_object_inner(&filetext).unwrap();
-        let save = SaveGame::new_parser(&raw_parsed).unwrap();
-        let history = make_combined_events(&raw_parsed);
-
-        let assets = MapAssets::new(
-            &from_cp1252(include_bytes!("../resources/vanilla/definition.csv").as_slice()).unwrap(),
-            &include_str!("../resources/vanilla/wasteland.txt"),
-            &include_str!("../resources/vanilla/water.txt"),
-            &include_str!("../resources/vanilla/flagfiles.txt"),
-            image::load_from_memory(include_bytes!("../resources/vanilla/flagfiles.png"))
-                .unwrap()
-                .into_rgba8(),
-            image::load_from_memory(include_bytes!("../resources/vanilla/provinces.png"))
-                .unwrap()
-                .into_rgb8(),
-        )
-        .unwrap();
-        println!(
-            " ({}ms.)",
-            std::time::Instant::now()
-                .duration_since(start_time)
-                .as_millis()
-        );
-
-        let start_date = EU4Date {
-            year: 1444,
-            month: eu4_parser_core::Month::NOV,
-            day: 11,
-        };
-        let end_date = EU4Date {
-            year: 1450,
-            month: eu4_parser_core::Month::JAN,
-            day: 1,
-        };
-        print!("Generating color maps...");
-        let start_time = std::time::Instant::now();
-        let color_maps = all_i_frame_color_maps(&assets, &history, &save, start_date, end_date);
-        println!(
-            " ({}ms.)",
-            std::time::Instant::now()
-                .duration_since(start_time)
-                .as_millis()
-        );
-
-        let mut img_out = image::RgbImage::new(5632, 2048 * 30);
-        for (i, (_, color_map, _controller_map)) in color_maps.step_by(10).take(30).enumerate() {
-            img_out
-                .copy_from(
-                    &make_base_map(&assets.base_map, &color_map),
-                    0,
-                    i as u32 * 2048,
-                )
-                .unwrap();
-        }
-        img_out.save("weeks.png").unwrap();
-    }
+            let mut owners = prev_owners.clone();
+            let mut controllers = prev_controllers.clone();
+            if let Some(events) = province_history.get(&date) {
+                let mut fake_owners: Vec<(u64, &String)> = Vec::new();
+                let mut set_controller: Vec<u64> = Vec::new();
+                for (id, event) in events {
+                    match event {
+                        ProvinceHistoryEvent::Owner(tag) => {
+                            owners[*id as usize] =
+                                tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
+                        }
+                        ProvinceHistoryEvent::FakeOwner(tag) => {
+                            fake_owners.push((*id, tag));
+                        }
+                        ProvinceHistoryEvent::Controller(tag) => {
+                            if fake_owners.contains(&(*id, tag)) || set_controller.contains(id) {
+                                // fake_owner seems to be something used to give cores/province history to formed tags
+                                // where the core needs to be older than the tag.
+                                // So, we need to ignore controller events with a simulataneous fake_owner since it's a lie.
+                                // It seems to always be after fake_owner.
+                                //
+                                // Similarly, when a country pre-tag-formation gains control of a province, it sometimes
+                                // has both the old and new tags. It seems the contemporary tag is always first.
+                                continue;
+                            }
+                            controllers[*id as usize] =
+                                tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
+                            set_controller.push(*id);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // country formations don't show an owner change event
+            if let Some(events) = country_history.get(&date) {
+                for (tag, event) in events {
+                    match event {
+                        CountryHistoryEvent::ChangedTagFrom(prev_tag) => {
+                            let Some(prev_color) = tag_colors.get(prev_tag) else {
+                                continue;
+                            };
+                            let Some(new_color) = tag_colors.get(tag) else {
+                                continue;
+                            };
+                            owners
+                                .iter_mut()
+                                .filter(|color| *color == prev_color)
+                                .for_each(|color| *color = new_color.clone());
+                            controllers
+                                .iter_mut()
+                                .filter(|color| *color == prev_color)
+                                .for_each(|color| *color = new_color.clone());
+                        }
+                    }
+                }
+            }
+            return Some((date, owners, controllers));
+        },
+    );
 }
