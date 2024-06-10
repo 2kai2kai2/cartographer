@@ -3,7 +3,7 @@ use std::io::Cursor;
 use ab_glyph::FontRef;
 use base64::Engine;
 use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
-use map_history::all_i_frame_color_maps;
+use map_history::ColorMapManager;
 use map_parsers::from_cp1252;
 use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
@@ -179,24 +179,30 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
     log!("{:?}", country_history);
     let save = SaveGame::new_parser(&save)
         .ok_or::<JsValue>(JsError::new("Failed to parse save file (at step 2)").into())?;
-    let frames: Vec<_> = all_i_frame_color_maps(
+    let history = ColorMapManager::new(
         &assets,
         &province_history,
         &country_history,
         &save,
         EU4Date::new(1444, Month::NOV, 11).unwrap(),
         save.date,
-    )
-    .collect();
-    let mut frames = frames.into_iter();
+    );
 
+    let mut current_date = history.start_date;
+    let mut current_frame = history
+        .get_date(&current_date)
+        .ok_or::<JsValue>(JsError::new("Could not get the map state at 1444.11.11").into())?;
     let callback = webgl_draw_map(canvas, assets)?;
     log!("Made callback");
+
     return Ok(Closure::new(move || {
-        let Some((date, color_map, controllers_map)) = frames.next() else {
+        if current_date > history.end_date {
             return;
-        };
-        callback(&color_map, &controllers_map);
+        }
+
+        history.apply_diffs(&current_date, &mut current_frame);
+        callback(&current_frame.0, &current_frame.1);
+        current_date = current_date.tomorrow();
     })
     .into_js_value());
 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use eu4_parser_core::{
     raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
-    EU4Date,
+    EU4Date, Month,
 };
 use image::Rgb;
 use imageproc::definitions::HasBlack;
@@ -103,58 +103,91 @@ pub fn make_combined_events(
     return ProvinceHistoryEvent::combine_events(province_histories);
 }
 
-/// all I-frames, as in every frame has its data in full rather than diffed
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum ColorMapEvent {
+    Owner(Rgb<u8>),
+    Controller(Rgb<u8>),
+}
+impl ColorMapEvent {
+    pub fn apply(target: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>), event: &(u64, ColorMapEvent)) {
+        match event {
+            (id, ColorMapEvent::Owner(color)) => target.0[*id as usize] = *color,
+            (id, ColorMapEvent::Controller(color)) => target.1[*id as usize] = *color,
+        }
+    }
+
+    pub fn apply_many(
+        target: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>),
+        events: &Vec<(u64, ColorMapEvent)>,
+    ) {
+        events
+            .into_iter()
+            .for_each(|event| ColorMapEvent::apply(target, event));
+    }
+}
+
+/// Contains a set of i-frames on a few dates, mostly JAN 1 (the full map of province colors)
 ///
-/// Returns `(date, owners, controllers)`
-/// If controllers is `[0, 0, 0]` then it is unowned (and shouldn't be shown)
-pub fn all_i_frame_color_maps<'a>(
-    assets: &'a MapAssets,
-    province_history: &'a HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
-    country_history: &'a HashMap<EU4Date, Vec<(String, CountryHistoryEvent)>>,
-    save: &'a SaveGame,
-    start_date: EU4Date,
-    end_date: EU4Date,
-) -> impl Iterator<Item = (EU4Date, Vec<Rgb<u8>>, Vec<Rgb<u8>>)> + 'a {
-    let mut tag_colors: HashMap<_, _> = save
-        .all_nations
-        .iter()
-        .map(|(tag, nation)| (tag, Rgb(nation.map_color)))
-        .collect();
-    tag_colors.remove(&"---".to_string());
-    tag_colors.remove(&"REB".to_string());
+/// And the diffs for every date that there are any (including the ones with i-frames)
+///
+/// If controller is `[0, 0, 0]` then controller is same as owner
+pub struct ColorMapManager {
+    pub start_date: EU4Date,
+    pub end_date: EU4Date,
+    pub diffs: HashMap<EU4Date, Vec<(u64, ColorMapEvent)>>,
+    pub i_frames: HashMap<EU4Date, (Vec<Rgb<u8>>, Vec<Rgb<u8>>)>,
+}
+impl ColorMapManager {
+    pub fn new(
+        assets: &MapAssets,
+        province_history: &HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
+        country_history: &HashMap<EU4Date, Vec<(String, CountryHistoryEvent)>>,
+        save: &SaveGame,
+        start_date: EU4Date,
+        end_date: EU4Date,
+    ) -> ColorMapManager {
+        let mut tag_colors: HashMap<_, _> = save
+            .all_nations
+            .iter()
+            .map(|(tag, nation)| (tag, Rgb(nation.map_color)))
+            .collect();
+        tag_colors.remove(&"---".to_string());
+        tag_colors.remove(&"REB".to_string());
 
-    let initial_owners = generate_map_colors_config(
-        assets.provinces_len,
-        &assets.water,
-        &assets.wasteland,
-        |_| None,
-        |tag| tag_colors.get(&tag).map(Rgb::to_owned),
-    );
-    let initial_controllers: Vec<Rgb<u8>> = generate_map_colors_config(
-        assets.provinces_len,
-        &assets.water,
-        &assets.wasteland,
-        |_| Some("".to_string()),
-        |_| Some(Rgb::black()),
-    );
-    return std::iter::successors(
-        Some((start_date, initial_owners, initial_controllers)),
-        move |(prev_date, prev_owners, prev_controllers)| {
-            let date = prev_date.tomorrow();
-            if date > end_date {
-                return None;
-            }
+        let mut owners = generate_map_colors_config(
+            assets.provinces_len,
+            &assets.water,
+            &assets.wasteland,
+            |_| None,
+            |tag| tag_colors.get(&tag).map(Rgb::to_owned),
+        );
+        let mut controllers: Vec<Rgb<u8>> = generate_map_colors_config(
+            assets.provinces_len,
+            &assets.water,
+            &assets.wasteland,
+            |_| Some("".to_string()),
+            |_| Some(Rgb::black()),
+        );
 
-            let mut owners = prev_owners.clone();
-            let mut controllers = prev_controllers.clone();
+        let mut out = ColorMapManager {
+            start_date,
+            end_date,
+            diffs: HashMap::new(),
+            i_frames: HashMap::new(),
+        };
+        out.i_frames
+            .insert(start_date, (owners.clone(), controllers.clone()));
+        for date in EU4Date::iter_range_inclusive(start_date, end_date) {
+            let mut diffs: Vec<(u64, ColorMapEvent)> = Vec::new();
             if let Some(events) = province_history.get(&date) {
                 let mut fake_owners: Vec<(u64, &String)> = Vec::new();
                 let mut set_controller: Vec<u64> = Vec::new();
                 for (id, event) in events {
                     match event {
                         ProvinceHistoryEvent::Owner(tag) => {
-                            owners[*id as usize] =
-                                tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
+                            let color = tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
+                            owners[*id as usize] = color;
+                            diffs.push((*id, ColorMapEvent::Owner(color)));
                         }
                         ProvinceHistoryEvent::FakeOwner(tag) => {
                             fake_owners.push((*id, tag));
@@ -170,8 +203,9 @@ pub fn all_i_frame_color_maps<'a>(
                                 // has both the old and new tags. It seems the contemporary tag is always first.
                                 continue;
                             }
-                            controllers[*id as usize] =
-                                tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
+                            let color = tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
+                            controllers[*id as usize] = color;
+                            diffs.push((*id, ColorMapEvent::Controller(color)));
                             set_controller.push(*id);
                         }
                         _ => {}
@@ -191,17 +225,58 @@ pub fn all_i_frame_color_maps<'a>(
                             };
                             owners
                                 .iter_mut()
-                                .filter(|color| *color == prev_color)
-                                .for_each(|color| *color = new_color.clone());
+                                .enumerate()
+                                .filter(|(_id, color)| *color == prev_color)
+                                .for_each(|(id, color)| {
+                                    *color = *new_color;
+                                    diffs.push((id as u64, ColorMapEvent::Owner(*new_color)));
+                                });
                             controllers
                                 .iter_mut()
-                                .filter(|color| *color == prev_color)
-                                .for_each(|color| *color = new_color.clone());
+                                .enumerate()
+                                .filter(|(_id, color)| *color == prev_color)
+                                .for_each(|(id, color)| {
+                                    *color = *new_color;
+                                    diffs.push((id as u64, ColorMapEvent::Controller(*new_color)));
+                                });
                         }
                     }
                 }
             }
-            return Some((date, owners, controllers));
-        },
-    );
+            if date.month == Month::JAN && date.day == 1 {
+                out.i_frames
+                    .insert(date, (owners.clone(), controllers.clone()));
+            }
+            if diffs.len() > 0 {
+                out.diffs.insert(date, diffs);
+            }
+        }
+        return out;
+    }
+
+    /// Gets the color maps for a specified date.
+    ///
+    /// Generally, diffs should be used, as this method can be slow.
+    ///
+    /// Returns the color maps for the date, or `None` if the date is before the earliest available date.
+    pub fn get_date(&self, date: &EU4Date) -> Option<(Vec<Rgb<u8>>, Vec<Rgb<u8>>)> {
+        if let Some(i_frame) = self.i_frames.get(&date) {
+            return Some(i_frame.clone());
+        }
+
+        let (mut iter_date, mut i_frame) =
+            EU4Date::iter_range_inclusive_reversed(*date, date.with_year(date.year - 1))
+                .find_map(|d| Some((d, self.i_frames.get(&d)?.clone())))?;
+        while iter_date < *date {
+            self.apply_diffs(&iter_date, &mut i_frame);
+            iter_date = iter_date.tomorrow();
+        }
+        return Some(i_frame);
+    }
+
+    pub fn apply_diffs(&self, date: &EU4Date, color_maps: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>)) {
+        if let Some(events) = self.diffs.get(date) {
+            ColorMapEvent::apply_many(color_maps, events);
+        }
+    }
 }

@@ -72,6 +72,22 @@ impl Month {
             Month::DEC => Month::JAN,
         };
     }
+    pub const fn prev(&self) -> Month {
+        return match self {
+            Month::JAN => Month::DEC,
+            Month::FEB => Month::JAN,
+            Month::MAR => Month::FEB,
+            Month::APR => Month::MAR,
+            Month::MAY => Month::APR,
+            Month::JUN => Month::MAY,
+            Month::JUL => Month::JUN,
+            Month::AUG => Month::JUL,
+            Month::SEP => Month::AUG,
+            Month::OCT => Month::SEP,
+            Month::NOV => Month::OCT,
+            Month::DEC => Month::NOV,
+        };
+    }
 }
 impl Display for Month {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -118,6 +134,27 @@ impl EU4Date {
             };
         }
     }
+    pub fn yesterday(&self) -> EU4Date {
+        if self.day > 1 {
+            return EU4Date {
+                year: self.year,
+                month: self.month,
+                day: self.day - 1,
+            };
+        } else if self.month == Month::JAN {
+            return EU4Date {
+                year: self.year - 1,
+                month: Month::DEC,
+                day: Month::DEC.length(),
+            };
+        } else {
+            return EU4Date {
+                year: self.year,
+                month: self.month.prev(),
+                day: self.month.prev().length(),
+            };
+        }
+    }
     pub fn iter_range_inclusive(first: EU4Date, last: EU4Date) -> impl Iterator<Item = EU4Date> {
         return std::iter::successors(Some(first), move |curr| {
             if *curr >= last {
@@ -126,6 +163,28 @@ impl EU4Date {
                 Some(curr.tomorrow())
             }
         });
+    }
+    /// Iterates in reverse order, starting with `last`
+    pub fn iter_range_inclusive_reversed(
+        first: EU4Date,
+        last: EU4Date,
+    ) -> impl Iterator<Item = EU4Date> {
+        return std::iter::successors(Some(last), move |curr| {
+            if *curr < first {
+                None
+            } else {
+                Some(curr.yesterday())
+            }
+        });
+    }
+
+    /// Returns an EU4Date with the same date except the year
+    pub fn with_year(&self, year: u64) -> EU4Date {
+        return EU4Date {
+            year,
+            month: self.month,
+            day: self.day,
+        };
     }
 }
 
