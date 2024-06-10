@@ -8,7 +8,7 @@ use image::Rgb;
 use imageproc::definitions::HasBlack;
 
 use crate::{
-    country_history::CountryHistoryEvent,
+    country_history::{CountryHistoryEvent, WarHistoryEvent},
     eu4_map::{generate_map_colors_config, UNCLAIMED_COLOR},
     map_parsers::MapAssets,
     save_parser::SaveGame,
@@ -142,6 +142,7 @@ impl ColorMapManager {
         assets: &MapAssets,
         province_history: &HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
         country_history: &HashMap<EU4Date, Vec<(String, CountryHistoryEvent)>>,
+        war_history: &HashMap<EU4Date, Vec<WarHistoryEvent>>,
         save: &SaveGame,
         start_date: EU4Date,
         end_date: EU4Date,
@@ -177,8 +178,30 @@ impl ColorMapManager {
         };
         out.i_frames
             .insert(start_date, (owners.clone(), controllers.clone()));
+
         for date in EU4Date::iter_range_inclusive(start_date, end_date) {
             let mut diffs: Vec<(u64, ColorMapEvent)> = Vec::new();
+            if let Some(events) = war_history.get(&date) {
+                for event in events {
+                    match event {
+                        WarHistoryEvent::RemoveOccupations(w_owner, w_controller) => {
+                            let Some(w_owner) = tag_colors.get(w_owner) else {
+                                continue;
+                            };
+                            let Some(w_controller) = tag_colors.get(w_controller) else {
+                                continue;
+                            };
+                            for (id, owner) in owners.iter().enumerate() {
+                                if owner == w_owner && controllers[id] == *w_controller {
+                                    controllers[id] = Rgb::black();
+                                    diffs
+                                        .push((id as u64, ColorMapEvent::Controller(Rgb::black())));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(events) = province_history.get(&date) {
                 let mut fake_owners: Vec<(u64, &String)> = Vec::new();
                 let mut set_controller: Vec<u64> = Vec::new();

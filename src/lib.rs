@@ -2,6 +2,7 @@ use std::io::Cursor;
 
 use ab_glyph::FontRef;
 use base64::Engine;
+use country_history::WarHistoryEvent;
 use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
 use map_history::ColorMapManager;
 use map_parsers::from_cp1252;
@@ -176,13 +177,16 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
 
     let province_history = map_history::make_combined_events(&save);
     let country_history = country_history::make_combined_events(&save);
-    log!("{:?}", country_history);
+    let war_history = WarHistoryEvent::make_war_events(&save)
+        .map_err::<JsValue, _>(|_| JsError::new("Failed to parse war events").into())?;
+    log!("{:?}", war_history);
     let save = SaveGame::new_parser(&save)
         .ok_or::<JsValue>(JsError::new("Failed to parse save file (at step 2)").into())?;
     let history = ColorMapManager::new(
         &assets,
         &province_history,
         &country_history,
+        &war_history,
         &save,
         EU4Date::new(1444, Month::NOV, 11).unwrap(),
         save.date,
@@ -198,6 +202,10 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
     return Ok(Closure::new(move || {
         if current_date > history.end_date {
             return;
+        }
+
+        if current_date.day == 1 {
+            log!("{current_date}");
         }
 
         history.apply_diffs(&current_date, &mut current_frame);
