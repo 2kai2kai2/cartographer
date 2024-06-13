@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
+use bitstream_io::{BigEndian, ByteRead, ByteReader};
 use eu4_parser_core::{
     raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
     EU4Date, Month,
 };
 use image::Rgb;
 use imageproc::definitions::HasBlack;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     country_history::{CountryHistoryEvent, WarHistoryEvent},
@@ -74,9 +76,9 @@ impl ProvinceHistoryEvent {
     }
 
     pub fn combine_events(
-        provinces: Vec<(u64, Vec<(EU4Date, ProvinceHistoryEvent)>)>,
-    ) -> HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>> {
-        let mut out: HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>> = HashMap::new();
+        provinces: Vec<(u16, Vec<(EU4Date, ProvinceHistoryEvent)>)>,
+    ) -> HashMap<EU4Date, Vec<(u16, ProvinceHistoryEvent)>> {
+        let mut out: HashMap<EU4Date, Vec<(u16, ProvinceHistoryEvent)>> = HashMap::new();
         for (id, events) in provinces {
             for (date, event) in events {
                 out.entry(date).or_default().push((id, event));
@@ -88,14 +90,14 @@ impl ProvinceHistoryEvent {
 
 pub fn make_combined_events(
     save: &RawEU4Object,
-) -> HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>> {
+) -> HashMap<EU4Date, Vec<(u16, ProvinceHistoryEvent)>> {
     let province_histories = save
         .get_first_obj("provinces")
         .unwrap()
         .iter_all_KVs()
         .filter_map(|(k, v)| {
             Some((
-                k.as_int()?.abs() as u64,
+                k.as_int()?.abs() as u16,
                 ProvinceHistoryEvent::extract_events(v.as_object()?.get_first_obj("history")?),
             ))
         })
@@ -109,7 +111,7 @@ pub enum ColorMapEvent {
     Controller(Rgb<u8>),
 }
 impl ColorMapEvent {
-    pub fn apply(target: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>), event: &(u64, ColorMapEvent)) {
+    pub fn apply(target: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>), event: &(u16, ColorMapEvent)) {
         match event {
             (id, ColorMapEvent::Owner(color)) => target.0[*id as usize] = *color,
             (id, ColorMapEvent::Controller(color)) => target.1[*id as usize] = *color,
@@ -118,7 +120,7 @@ impl ColorMapEvent {
 
     pub fn apply_many(
         target: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>),
-        events: &Vec<(u64, ColorMapEvent)>,
+        events: &Vec<(u16, ColorMapEvent)>,
     ) {
         events
             .into_iter()
@@ -131,16 +133,17 @@ impl ColorMapEvent {
 /// And the diffs for every date that there are any (including the ones with i-frames)
 ///
 /// If controller is `[0, 0, 0]` then controller is same as owner
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ColorMapManager {
     pub start_date: EU4Date,
     pub end_date: EU4Date,
-    pub diffs: HashMap<EU4Date, Vec<(u64, ColorMapEvent)>>,
+    pub diffs: HashMap<EU4Date, Vec<(u16, ColorMapEvent)>>,
     pub i_frames: HashMap<EU4Date, (Vec<Rgb<u8>>, Vec<Rgb<u8>>)>,
 }
 impl ColorMapManager {
     pub fn new(
         assets: &MapAssets,
-        province_history: &HashMap<EU4Date, Vec<(u64, ProvinceHistoryEvent)>>,
+        province_history: &HashMap<EU4Date, Vec<(u16, ProvinceHistoryEvent)>>,
         country_history: &HashMap<EU4Date, Vec<(String, CountryHistoryEvent)>>,
         war_history: &HashMap<EU4Date, Vec<WarHistoryEvent>>,
         save: &SaveGame,
@@ -160,9 +163,9 @@ impl ColorMapManager {
             &assets.water,
             &assets.wasteland,
             |_| None,
-            |tag| tag_colors.get(&tag).map(Rgb::to_owned),
+            |_| None,
         );
-        let mut controllers: Vec<Rgb<u8>> = generate_map_colors_config(
+        let mut controllers = generate_map_colors_config(
             assets.provinces_len,
             &assets.water,
             &assets.wasteland,
@@ -180,7 +183,7 @@ impl ColorMapManager {
             .insert(start_date, (owners.clone(), controllers.clone()));
 
         for date in EU4Date::iter_range_inclusive(start_date, end_date) {
-            let mut diffs: Vec<(u64, ColorMapEvent)> = Vec::new();
+            let mut diffs: Vec<(u16, ColorMapEvent)> = Vec::new();
             if let Some(events) = war_history.get(&date) {
                 for event in events {
                     match event {
@@ -195,7 +198,7 @@ impl ColorMapManager {
                                 if owner == w_owner && controllers[id] == *w_controller {
                                     controllers[id] = Rgb::black();
                                     diffs
-                                        .push((id as u64, ColorMapEvent::Controller(Rgb::black())));
+                                        .push((id as u16, ColorMapEvent::Controller(Rgb::black())));
                                 }
                             }
                         }
@@ -203,8 +206,8 @@ impl ColorMapManager {
                 }
             }
             if let Some(events) = province_history.get(&date) {
-                let mut fake_owners: Vec<(u64, &String)> = Vec::new();
-                let mut set_controller: Vec<u64> = Vec::new();
+                let mut fake_owners: Vec<(u16, &String)> = Vec::new();
+                let mut set_controller: Vec<u16> = Vec::new();
                 for (id, event) in events {
                     match event {
                         ProvinceHistoryEvent::Owner(tag) => {
@@ -252,7 +255,7 @@ impl ColorMapManager {
                                 .filter(|(_id, color)| *color == prev_color)
                                 .for_each(|(id, color)| {
                                     *color = *new_color;
-                                    diffs.push((id as u64, ColorMapEvent::Owner(*new_color)));
+                                    diffs.push((id as u16, ColorMapEvent::Owner(*new_color)));
                                 });
                             controllers
                                 .iter_mut()
@@ -260,7 +263,7 @@ impl ColorMapManager {
                                 .filter(|(_id, color)| *color == prev_color)
                                 .for_each(|(id, color)| {
                                     *color = *new_color;
-                                    diffs.push((id as u64, ColorMapEvent::Controller(*new_color)));
+                                    diffs.push((id as u16, ColorMapEvent::Controller(*new_color)));
                                 });
                         }
                     }
@@ -301,5 +304,116 @@ impl ColorMapManager {
         if let Some(events) = self.diffs.get(date) {
             ColorMapEvent::apply_many(color_maps, events);
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct SerializedColorMapManager {
+    start_date: String,
+    end_date: String,
+    diffs: HashMap<String, String>,
+}
+impl SerializedColorMapManager {
+    pub fn encode(manager: &ColorMapManager) -> Self {
+        return Self {
+            start_date: manager.start_date.to_string(),
+            end_date: manager.end_date.to_string(),
+            diffs: manager
+                .diffs
+                .iter()
+                .map(|(date, events)| {
+                    (
+                        date.to_string(),
+                        base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            events
+                                .into_iter()
+                                .flat_map(|(id, ev)| {
+                                    id.to_be_bytes().into_iter().chain(match ev {
+                                        ColorMapEvent::Owner(Rgb(color)) => {
+                                            std::iter::once(0u8).chain(color.into_iter().cloned())
+                                        }
+                                        ColorMapEvent::Controller(Rgb(color)) => {
+                                            std::iter::once(1u8).chain(color.into_iter().cloned())
+                                        }
+                                    })
+                                })
+                                .collect::<Vec<u8>>(),
+                        ),
+                    )
+                })
+                .collect::<HashMap<String, String>>(),
+        };
+    }
+    pub fn decode(&self, assets: &MapAssets) -> anyhow::Result<ColorMapManager> {
+        let start_date: EU4Date = self.start_date.parse()?;
+        let end_date: EU4Date = self.end_date.parse()?;
+        let diffs: HashMap<EU4Date, Vec<(u16, ColorMapEvent)>> = self
+            .diffs
+            .iter()
+            .map(|(date, events)| {
+                let events =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, events)?;
+                let mut reader = ByteReader::endian(std::io::Cursor::new(events), BigEndian);
+                let mut out_events: Vec<(u16, ColorMapEvent)> = Vec::new();
+                loop {
+                    let Ok(id) = reader.read::<u16>() else {
+                        break;
+                    };
+                    match reader.read() {
+                        Ok(0u8) => {
+                            let Ok(color) = reader.read() else {
+                                break;
+                            };
+                            out_events.push((id, ColorMapEvent::Owner(Rgb(color))));
+                        }
+                        Ok(1u8) => {
+                            let Ok(color) = reader.read() else {
+                                break;
+                            };
+                            out_events.push((id, ColorMapEvent::Controller(Rgb(color))));
+                        }
+                        _ => break,
+                    }
+                }
+
+                return Ok((date.parse()?, out_events));
+            })
+            .collect::<anyhow::Result<_>>()?;
+
+        let mut color_maps = (
+            generate_map_colors_config(
+                assets.provinces_len,
+                &assets.water,
+                &assets.wasteland,
+                |_| None,
+                |_| None,
+            ),
+            generate_map_colors_config(
+                assets.provinces_len,
+                &assets.water,
+                &assets.wasteland,
+                |_| Some("".to_string()),
+                |_| Some(Rgb::black()),
+            ),
+        );
+
+        let mut i_frames: HashMap<EU4Date, (Vec<Rgb<u8>>, Vec<Rgb<u8>>)> = HashMap::new();
+        i_frames.insert(start_date, color_maps.clone());
+        for date in EU4Date::iter_range_inclusive(start_date, end_date) {
+            if let Some(events) = diffs.get(&date) {
+                ColorMapEvent::apply_many(&mut color_maps, events);
+            }
+            if date.month == Month::JAN && date.day == 1 {
+                i_frames.insert(date, color_maps.clone());
+            }
+        }
+
+        return Ok(ColorMapManager {
+            start_date,
+            end_date,
+            diffs,
+            i_frames,
+        });
     }
 }

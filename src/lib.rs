@@ -179,7 +179,6 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
     let country_history = country_history::make_combined_events(&save);
     let war_history = WarHistoryEvent::make_war_events(&save)
         .map_err::<JsValue, _>(|_| JsError::new("Failed to parse war events").into())?;
-    log!("{:?}", war_history);
     let save = SaveGame::new_parser(&save)
         .ok_or::<JsValue>(JsError::new("Failed to parse save file (at step 2)").into())?;
     let history = ColorMapManager::new(

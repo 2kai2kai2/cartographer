@@ -100,13 +100,13 @@ impl Display for Month {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize, Hash)]
 pub struct EU4Date {
-    pub year: u64,
+    pub year: u16,
     pub month: Month,
     pub day: u8,
 }
 
 impl EU4Date {
-    pub const fn new(year: u64, month: Month, day: u8) -> Option<EU4Date> {
+    pub const fn new(year: u16, month: Month, day: u8) -> Option<EU4Date> {
         if day == 0 || day >= month.length() {
             return None;
         }
@@ -179,7 +179,7 @@ impl EU4Date {
     }
 
     /// Returns an EU4Date with the same date except the year
-    pub fn with_year(&self, year: u64) -> EU4Date {
+    pub fn with_year(&self, year: u16) -> EU4Date {
         return EU4Date {
             year,
             month: self.month,
@@ -199,7 +199,7 @@ impl FromStr for EU4Date {
                 text
             )));
         };
-        let year = y.parse::<u64>()?;
+        let year = y.parse::<u16>()?;
         let month = Month::from_u8(m.parse::<u8>()?)
             .ok_or(Error::msg(format!("Invalid month {}", text)))?;
         let day = d.parse::<u8>()?;
