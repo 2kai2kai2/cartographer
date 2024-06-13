@@ -3,13 +3,16 @@
         <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
         <link href="./main.css" rel="stylesheet" />
     </head>
-    <body style="overflow: scroll; width: 100vw; height: 100vh;">
+    <body style="overflow: scroll; width: 100vw; height: 100vh">
         <input type="file" id="file-selector" accept=".eu4" />
-        <canvas id="canvas" width="5632" height="2048" style="border: solid 1px red;"></canvas>
+        <canvas
+            id="canvas"
+            width="5632"
+            height="2048"
+            style="border: solid 1px red"
+        ></canvas>
         <script type="module">
-            import init, {
-                do_webgl,
-            } from "./pkg/rs.js";
+            import init, { do_webgl, generate_map_history } from "./pkg/rs.js";
 
             /** @type {HTMLInputElement} */
             const file_selector = document.getElementById("file-selector");
@@ -27,11 +30,20 @@
                         await file_selector.files[0].arrayBuffer()
                     );
 
-                    const next_callback = await do_webgl(array);
+                    /** @type {string} */
+                    const history = await generate_map_history(array);
+                    // const history_blob = new Blob([history]);
+                    // const compressed = await new Response(
+                    //     history_blob
+                    //         .stream()
+                    //         .pipeThrough(new CompressionStream("gzip"))
+                    // ).blob();
+                    // console.log(history.length, compressed.size);
+
+                    const next_callback = await do_webgl(history);
                     console.log(next_callback);
                     setInterval(next_callback, 3);
                 });
-                
             }
 
             run();

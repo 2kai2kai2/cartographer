@@ -4,7 +4,7 @@ use ab_glyph::FontRef;
 use base64::Engine;
 use country_history::WarHistoryEvent;
 use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
-use map_history::ColorMapManager;
+use map_history::{ColorMapManager, SerializedColorMapManager};
 use map_parsers::from_cp1252;
 use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
@@ -152,22 +152,18 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
-    let save = if array.starts_with("EU4txt".as_bytes()) {
+pub async fn generate_map_history(save_file: &[u8]) -> Result<String, JsValue> {
+    let save = if save_file.starts_with("EU4txt".as_bytes()) {
         log!("Detected uncompressed save file");
-        from_cp1252(array).map_err(map_error)?
-    } else if array.starts_with("PK\x03\x04".as_bytes()) {
+        from_cp1252(save_file).map_err(map_error)?
+    } else if save_file.starts_with("PK\x03\x04".as_bytes()) {
         log!("Detected compressed file");
-        decompress_eu4txt(array).map_err(map_error)?
+        decompress_eu4txt(save_file).map_err(map_error)?
     } else {
         return Err(JsError::new("Could not determine the EU4 save format").into());
     };
     let (_, save) = RawEU4Object::parse_object_inner(&save)
         .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
-
-    let document = web_sys::window().unwrap().document().unwrap();
-    let canvas = document.get_element_by_id("canvas").unwrap();
-    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
     log!("Loading assets...");
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
@@ -190,6 +186,27 @@ pub async fn do_webgl(array: &[u8]) -> Result<JsValue, JsValue> {
         EU4Date::new(1444, Month::NOV, 11).unwrap(),
         save.date,
     );
+
+    return serde_json::to_string(&SerializedColorMapManager::encode(&history))
+        .map_err(|err| JsError::new(&err.to_string()).into());
+}
+
+#[wasm_bindgen]
+pub async fn do_webgl(history: &str) -> Result<JsValue, JsValue> {
+    let document = web_sys::window().unwrap().document().unwrap();
+    let canvas = document.get_element_by_id("canvas").unwrap();
+    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+    log!("Loading assets...");
+    let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
+    let base_url = window.location().origin()? + &window.location().pathname()?;
+    let url_map_assets = format!("{base_url}/../resources/vanilla");
+    let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
+
+    let history = serde_json::from_str::<SerializedColorMapManager>(history)
+        .map_err::<JsValue, _>(|err| JsError::new(&err.to_string()).into())?
+        .decode(&assets)
+        .map_err::<JsValue, _>(|err| JsError::new(&err.to_string()).into())?;
 
     let mut current_date = history.start_date;
     let mut current_frame = history
