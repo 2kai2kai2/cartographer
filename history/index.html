@@ -1,0 +1,144 @@
+<html>
+    <head>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+        <link href="../output.css" rel="stylesheet" />
+    </head>
+    <body
+        class="m-0 flex items-center justify-center overflow-scroll w-fit h-fit"
+    >
+        <div
+            id="file-selector-wrapper"
+            class="flex items-center justify-center w-[100vw] h-[100vh]"
+        >
+            <input type="file" id="file-selector" accept=".eu4" />
+        </div>
+        <canvas
+            id="canvas"
+            width="5632"
+            height="2048"
+            style="border: solid 1px red"
+            hidden
+        ></canvas>
+        <div
+            id="controls"
+            class="fixed right-0 top-0 w-24 bg-gray-500 bg-opacity-50 flex flex-col items-center p-1 [&[hidden]]:invisible"
+            hidden
+        >
+            <button id="date-label" class="m-0"></button>
+            <div class="flex items-center justify-center gap-1">
+                <button id="speed-0-button" class="text-center">&spar;</button>
+                <button id="speed-1-button" class="text-center">></button>
+                <button id="speed-2-button" class="text-center">&gg;</button>
+                <button id="speed-3-button" class="text-center">&ggg;</button>
+            </div>
+        </div>
+        <script type="module">
+            import init, { do_webgl, generate_map_history } from "../pkg/rs.js";
+
+            /** @type {HTMLDivElement} */
+            const file_selector_wrapper = document.getElementById(
+                "file-selector-wrapper"
+            );
+            /** @type {HTMLInputElement} */
+            const file_selector = document.getElementById("file-selector");
+            /** @type {HTMLCanvasElement} */
+            const canvas = document.getElementById("canvas");
+            const controls_div = document.getElementById("controls");
+            const date_label = document.getElementById("date-label");
+            /** @type {HTMLButtonElement} */
+            const speed_0_button = document.getElementById("speed-0-button");
+            /** @type {HTMLButtonElement} */
+            const speed_1_button = document.getElementById("speed-1-button");
+            /** @type {HTMLButtonElement} */
+            const speed_2_button = document.getElementById("speed-2-button");
+            /** @type {HTMLButtonElement} */
+            const speed_3_button = document.getElementById("speed-3-button");
+
+            const base_url = new URL(
+                "..",
+                window.location.origin + window.location.pathname
+            );
+            async function run() {
+                await init();
+
+                file_selector.addEventListener("change", async (ev) => {
+                    if (!file_selector.files?.length) {
+                        return;
+                    }
+                    file_selector_wrapper.remove();
+                    canvas.hidden = false;
+
+                    const array = new Uint8Array(
+                        await file_selector.files[0].arrayBuffer()
+                    );
+
+                    /** @type {string} */
+                    const history = await generate_map_history(
+                        array,
+                        base_url.href
+                    );
+                    // const history_blob = new Blob([history]);
+                    // const compressed = await new Response(
+                    //     history_blob
+                    //         .stream()
+                    //         .pipeThrough(new CompressionStream("gzip"))
+                    // ).blob();
+                    // console.log(history.length, compressed.size);
+
+                    const _next_callback = await do_webgl(
+                        history,
+                        base_url.href
+                    );
+                    const next_callback = (date) => {
+                        date_label.textContent = _next_callback(date);
+                    };
+
+                    let interval = undefined;
+                    let speed = 0;
+                    date_label.onclick = () => {
+                        const new_date = prompt(
+                            "Enter date in format '1444.11.11'"
+                        )?.trim();
+                        if (!new_date || !/^\d+\.\d+\.\d+$/.test(new_date)) {
+                            return;
+                        }
+                        clearInterval(interval);
+                        interval = undefined;
+                        speed = 0;
+                        next_callback(new_date);
+                    };
+
+                    speed_0_button.onclick = () => {
+                        clearInterval(interval);
+                        interval = undefined;
+                        speed = 0;
+                    };
+                    speed_1_button.onclick = () => {
+                        if (speed !== 1) {
+                            clearInterval(interval);
+                            interval = setInterval(next_callback, 100);
+                            speed = 1;
+                        }
+                    };
+                    speed_2_button.onclick = () => {
+                        if (speed !== 2) {
+                            clearInterval(interval);
+                            interval = setInterval(next_callback, 40);
+                            speed = 2;
+                        }
+                    };
+                    speed_3_button.onclick = () => {
+                        if (speed !== 3) {
+                            clearInterval(interval);
+                            interval = setInterval(next_callback, 10);
+                            speed = 3;
+                        }
+                    };
+                    controls_div.hidden = false;
+                });
+            }
+
+            run();
+        </script>
+    </body>
+</html>

@@ -152,7 +152,7 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn generate_map_history(save_file: &[u8]) -> Result<String, JsValue> {
+pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<String, JsValue> {
     let save = if save_file.starts_with("EU4txt".as_bytes()) {
         log!("Detected uncompressed save file");
         from_cp1252(save_file).map_err(map_error)?
@@ -166,8 +166,6 @@ pub async fn generate_map_history(save_file: &[u8]) -> Result<String, JsValue> {
         .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
 
     log!("Loading assets...");
-    let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
-    let base_url = window.location().origin()? + &window.location().pathname()?;
     let url_map_assets = format!("{base_url}/../resources/vanilla");
     let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
 
@@ -192,14 +190,12 @@ pub async fn generate_map_history(save_file: &[u8]) -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn do_webgl(history: &str) -> Result<JsValue, JsValue> {
+pub async fn do_webgl(history: &str, base_url: &str) -> Result<JsValue, JsValue> {
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
     log!("Loading assets...");
-    let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
-    let base_url = window.location().origin()? + &window.location().pathname()?;
     let url_map_assets = format!("{base_url}/../resources/vanilla");
     let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
 

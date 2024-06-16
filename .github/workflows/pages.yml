@@ -23,7 +23,7 @@ jobs:
       - name: Build WASM
         run: wasm-pack build --target web --release
       - name: Creating artifact
-        run: tar -cvf artifact.tar pkg/ resources/ index.html main.css
+        run: tar -cvf artifact.tar pkg/ resources/ index.html main.css history/ output.css
       - uses: actions/upload-artifact@v4
         with:
           name: "github-pages"
