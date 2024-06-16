@@ -212,6 +212,9 @@ impl ColorMapManager {
                     match event {
                         ProvinceHistoryEvent::Owner(tag) => {
                             let color = tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
+                            if owners[*id as usize] == color {
+                                continue;
+                            }
                             owners[*id as usize] = color;
                             diffs.push((*id, ColorMapEvent::Owner(color)));
                         }
@@ -230,6 +233,10 @@ impl ColorMapManager {
                                 continue;
                             }
                             let color = tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
+                            if controllers[*id as usize] == color {
+                                set_controller.push(*id);
+                                continue;
+                            }
                             controllers[*id as usize] = color;
                             diffs.push((*id, ColorMapEvent::Controller(color)));
                             set_controller.push(*id);
