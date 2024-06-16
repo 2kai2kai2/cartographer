@@ -12,13 +12,7 @@
         >
             <input type="file" id="file-selector" accept=".eu4" />
         </div>
-        <canvas
-            id="canvas"
-            width="5632"
-            height="2048"
-            style="border: solid 1px red"
-            hidden
-        ></canvas>
+        <canvas id="canvas" width="5632" height="2048" hidden></canvas>
         <div
             id="controls"
             class="fixed right-0 top-0 w-24 bg-gray-500 bg-opacity-50 flex flex-col items-center p-1 [&[hidden]]:invisible"
@@ -92,6 +86,7 @@
                     const next_callback = (date) => {
                         date_label.textContent = _next_callback(date);
                     };
+                    next_callback();
 
                     let interval = undefined;
                     let speed = 0;

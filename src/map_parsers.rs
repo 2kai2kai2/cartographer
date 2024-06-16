@@ -61,7 +61,7 @@ impl MapAssets {
             let [id, r, g, b, _name, x] = parts.as_slice() else {
                 return Err(anyhow!("Invalid csv line {}", line));
             };
-            if x != &"x" {
+            if x.trim() != "x" {
                 continue; // the x seems to mark it as used?
             }
 
