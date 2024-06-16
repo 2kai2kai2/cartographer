@@ -215,18 +215,35 @@ pub async fn do_webgl(history: &str) -> Result<JsValue, JsValue> {
     let callback = webgl_draw_map(canvas, assets)?;
     log!("Made callback");
 
-    return Ok(Closure::new(move || {
-        if current_date > history.end_date {
-            return;
-        }
+    // if no date is specified, it just goes to the next one
+    // if it is specified, we will try to resolve it, but this may be slower.
+    return Ok(
+        Closure::new(move |date: Option<String>| -> Result<String, JsValue> {
+            if let Some(date) = date {
+                let Ok(date) = date.parse::<EU4Date>() else {
+                    return Err(JsError::new("Invalid date.").into());
+                };
 
-        if current_date.day == 1 {
-            log!("{current_date}");
-        }
+                current_date = date;
+                let Some(frame) = history.get_date(&date) else {
+                    return Err(JsError::new("Unable to resolve the map state at this date. It may be outside the game's timespan.").into());
+                };
 
-        history.apply_diffs(&current_date, &mut current_frame);
-        callback(&current_frame.0, &current_frame.1);
-        current_date = current_date.tomorrow();
-    })
-    .into_js_value());
+                current_frame = frame;
+                log!("{current_date}");
+            } else {
+                if current_date > history.end_date {
+                    return Ok(current_date.to_string());
+                }
+
+                history.apply_diffs(&current_date, &mut current_frame);
+            }
+
+            callback(&current_frame.0, &current_frame.1);
+            let ret = current_date.to_string();
+            current_date = current_date.tomorrow();
+            return Ok(ret);
+        })
+        .into_js_value(),
+    );
 }

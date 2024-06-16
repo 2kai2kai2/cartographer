@@ -1,21 +1,81 @@
 <html>
     <head>
         <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-        <link href="./main.css" rel="stylesheet" />
+        <style>
+            body {
+                margin: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: scroll;
+                width: fit-content;
+                height: fit-content;
+            }
+
+            #controls {
+                position: fixed;
+                right: 0;
+                top: 0;
+                background-color: #69696969;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 4px;
+            }
+            #controls[hidden] {
+                display: none;
+            }
+        </style>
     </head>
-    <body style="overflow: scroll; width: 100vw; height: 100vh">
-        <input type="file" id="file-selector" accept=".eu4" />
+    <body>
+        <div
+            id="file-selector-wrapper"
+            style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100vw;
+                height: 100vh;
+            "
+        >
+            <input type="file" id="file-selector" accept=".eu4" />
+        </div>
         <canvas
             id="canvas"
             width="5632"
             height="2048"
             style="border: solid 1px red"
+            hidden
         ></canvas>
+        <div id="controls" hidden>
+            <p id="date-label" style="margin: 0"></p>
+            <div
+                style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                "
+            >
+                <button id="pause-play-button">pause/play</button>
+            </div>
+        </div>
         <script type="module">
             import init, { do_webgl, generate_map_history } from "./pkg/rs.js";
 
+            /** @type {HTMLDivElement} */
+            const file_selector_wrapper = document.getElementById(
+                "file-selector-wrapper"
+            );
             /** @type {HTMLInputElement} */
             const file_selector = document.getElementById("file-selector");
+            /** @type {HTMLCanvasElement} */
+            const canvas = document.getElementById("canvas");
+            const controls_div = document.getElementById("controls");
+            const date_label = document.getElementById("date-label");
+            /** @type {HTMLButtonElement} */
+            const pause_play_button =
+                document.getElementById("pause-play-button");
+            let canvas_scale = 1;
 
             async function run() {
                 await init();
@@ -24,7 +84,8 @@
                     if (!file_selector.files?.length) {
                         return;
                     }
-                    file_selector.remove();
+                    file_selector_wrapper.remove();
+                    canvas.hidden = false;
 
                     const array = new Uint8Array(
                         await file_selector.files[0].arrayBuffer()
@@ -40,9 +101,21 @@
                     // ).blob();
                     // console.log(history.length, compressed.size);
 
-                    const next_callback = await do_webgl(history);
-                    console.log(next_callback);
-                    setInterval(next_callback, 3);
+                    const _next_callback = await do_webgl(history);
+                    const next_callback = (date) => {
+                        date_label.textContent = _next_callback(date);
+                    };
+
+                    let interval = undefined;
+                    pause_play_button.addEventListener("click", () => {
+                        if (interval === undefined) {
+                            interval = setInterval(next_callback, 5);
+                        } else {
+                            clearInterval(interval);
+                            interval = undefined;
+                        }
+                    });
+                    controls_div.hidden = false;
                 });
             }
 
