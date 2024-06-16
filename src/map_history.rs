@@ -298,7 +298,7 @@ impl ColorMapManager {
         }
 
         let (mut iter_date, mut i_frame) =
-            EU4Date::iter_range_inclusive_reversed(*date, date.with_year(date.year - 1))
+            EU4Date::iter_range_inclusive_reversed(date.with_year(date.year - 1), *date)
                 .find_map(|d| Some((d, self.i_frames.get(&d)?.clone())))?;
         while iter_date < *date {
             self.apply_diffs(&iter_date, &mut i_frame);

@@ -219,11 +219,10 @@ pub async fn do_webgl(history: &str, base_url: &str) -> Result<JsValue, JsValue>
                 let Ok(date) = date.parse::<EU4Date>() else {
                     return Err(JsError::new("Invalid date.").into());
                 };
-
-                current_date = date;
                 let Some(frame) = history.get_date(&date) else {
                     return Err(JsError::new("Unable to resolve the map state at this date. It may be outside the game's timespan.").into());
                 };
+                current_date = date;
 
                 current_frame = frame;
                 log!("{current_date}");
