@@ -138,6 +138,16 @@ impl Handler {
     ) -> Result<CreateInteractionResponse, Option<String>> {
         match interaction.data.name.as_str() {
             "reservations" => self.reservations_command().await,
+            "stats" => Ok(CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .content(
+                        "\
+                        Stats functionality is currently moved to https://2kai2kai2.github.io/cartographer/
+                        You can upload any non-ironman save to generate an image you can upload to Discord.\
+                        ",
+                    )
+                    .ephemeral(true),
+            )),
             _ => Err(Some("Unsupported command".to_string())),
         }
     }
