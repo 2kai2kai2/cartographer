@@ -1,4 +1,5 @@
 use anyhow::Context;
+use lazy_static::lazy_static;
 use reservations::{Reservation, ReservationsData};
 use serenity::all::Ready;
 use serenity::model::application::*;
@@ -9,10 +10,38 @@ use serenity::{
 };
 use serenity::{async_trait, json};
 use shuttle_runtime::SecretStore;
-use sqlx::{prelude::*, PgPool};
+use sqlx::PgPool;
+use std::collections::HashMap;
 
 mod db_types;
 mod reservations;
+
+lazy_static! {
+    static ref TAGS: HashMap<String, Vec<String>> = {
+        let tags = include_str!("../../cartographer_web/resources/vanilla/tags.txt");
+        tags.lines()
+            .map(|line| {
+                let mut it = line.split(';');
+                let tag = it.next().expect("Invalid tags file");
+                return (tag.to_string(), it.map(str::to_string).collect());
+            })
+            .collect()
+    };
+}
+
+/// Gets the tag for a country name or tag.
+fn get_tag(country: &str) -> Option<String> {
+    let country = country.trim();
+    if country.len() == 3 && TAGS.contains_key(&country.to_uppercase()) {
+        return Some(country.to_uppercase());
+    }
+    return TAGS.iter().find_map(|(tag, names)| {
+        names
+            .iter()
+            .find(|name| name.eq_ignore_ascii_case(country))
+            .and(Some(tag.to_uppercase()))
+    });
+}
 
 fn make_error_msg(text: impl Into<String>) -> CreateInteractionResponse {
     return CreateInteractionResponse::Message(
@@ -61,9 +90,7 @@ impl Handler {
         game_id: u64,
     ) -> Result<CreateInteractionResponse, Option<String>> {
         let tag_input = CreateInputText::new(InputTextStyle::Short, "EU4 Country Tag", "tag")
-            .min_length(3)
-            .max_length(3)
-            .placeholder("ENG");
+            .placeholder("Name (Sweden) or tag (SWE)");
         let modal = CreateModal::new(format!("reserve:{game_id}"), "Select country tag")
             .components(vec![CreateActionRow::InputText(tag_input)]);
         return Ok(CreateInteractionResponse::Modal(modal));
@@ -143,10 +170,24 @@ impl Handler {
     async fn handle_reserve_modal(
         &self,
         interaction: &ModalInteraction,
-        tag: &String,
+        country: &String,
         game_id: u64,
     ) -> Result<CreateInteractionResponse, Option<String>> {
-        let tag = tag.to_uppercase();
+        let tag = get_tag(&country).ok_or(Some("Unrecognized country name or tag.".to_string()))?;
+
+        let check_query = sqlx::query_scalar::<_, bool>(
+            "
+            SELECT EXISTS(
+                SELECT 1
+                FROM reservations
+                WHERE game_id = $1
+                AND tag = $2
+            )
+            ",
+        )
+        .bind(game_id as i64)
+        .bind(&tag);
+
         let insert_query = sqlx::query(
             "
             INSERT INTO Reservations (
@@ -169,7 +210,7 @@ impl Handler {
         .bind(game_id as i64)
         .bind(interaction.user.id.get() as i64)
         .bind(chrono::offset::Utc::now())
-        .bind(tag);
+        .bind(&tag);
 
         let items_query = sqlx::query_as::<_, db_types::RawReservation>(
             "
@@ -186,6 +227,11 @@ impl Handler {
             .begin()
             .await
             .map_err(|err| format!("ERROR: while initiating transaction: {err}"))?;
+        match check_query.fetch_one(&mut *tr).await {
+            Err(err) => return Err(Some(format!("ERROR: while checking tag: {err}"))),
+            Ok(true) => return Err(Some(format!("The tag {tag} is already reserved."))),
+            Ok(false) => (),
+        };
         insert_query
             .execute(&mut *tr)
             .await
@@ -220,10 +266,12 @@ impl Handler {
                 let Ok(game_id) = game_id.parse::<u64>() else {
                     return Err(Some("ERROR: failed to parse game id".to_string()));
                 };
-                let Some(tag) = &input_text.value else {
+                let Some(country) = &input_text.value else {
                     return Err(None);
                 };
-                return self.handle_reserve_modal(interaction, tag, game_id).await;
+                return self
+                    .handle_reserve_modal(interaction, country, game_id)
+                    .await;
             }
             _ => Err(None),
         };

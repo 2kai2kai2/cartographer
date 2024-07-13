@@ -3,6 +3,8 @@ use std::fmt::Display;
 use serde::Deserialize;
 use sqlx::prelude::FromRow;
 
+use crate::TAGS;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, FromRow)]
 pub struct Reservation {
     pub timestamp: chrono::DateTime<chrono::Utc>,
@@ -15,7 +17,7 @@ impl Display for Reservation {
             f,
             "<@{}>: {} <t:{}>",
             self.user_id,
-            self.tag,
+            TAGS.get(&self.tag).map_or(&self.tag, |names| &names[0]),
             self.timestamp.timestamp()
         );
     }

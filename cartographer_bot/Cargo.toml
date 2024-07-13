@@ -23,6 +23,7 @@ shuttle-runtime = "0.46.0"
 shuttle-serenity = "0.46.0"
 shuttle-shared-db = { version = "0.46.0", features = ["postgres", "sqlx"] }
 sqlx = { version = "0.7.1", features = ["chrono", "postgres"] }
+lazy_static = "1.5.0"
 
 [profile.release]
 lto = true
