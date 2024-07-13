@@ -1,12 +1,13 @@
 use std::fmt::Display;
 
 use serde::Deserialize;
+use sqlx::prelude::FromRow;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, FromRow)]
 pub struct Reservation {
-    timestamp: chrono::DateTime<chrono::Utc>,
-    tag: String,
-    user_id: u64,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub tag: String,
+    pub user_id: u64,
 }
 impl Display for Reservation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

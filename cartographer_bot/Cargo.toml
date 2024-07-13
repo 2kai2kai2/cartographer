@@ -3,19 +3,28 @@ name = "cartographer_bot"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 anyhow = "1.0.86"
-worker = { version="0.3.0", features=["d1"]}
-serenity = { version = "0.12.2", default-features = false, features = ["builder", "chrono", "interactions_endpoint", "http", "rustls_backend"] }
+serenity = { version = "0.12.2", default-features = false, features = [
+    "builder",
+    "chrono",
+    "client",
+    "interactions_endpoint",
+    "gateway",
+    "model",
+    "http",
+    "rustls_backend",
+] }
 chrono = "0.4.38"
 nom = "7.1.3"
-serde = { version = "1.0.204", features=["derive"] }
+serde = { version = "1.0.204", features = ["derive"] }
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }
+shuttle-runtime = "0.46.0"
+shuttle-serenity = "0.46.0"
+shuttle-shared-db = { version = "0.46.0", features = ["postgres", "sqlx"] }
+sqlx = { version = "0.7.1", features = ["chrono", "postgres"] }
 
 [profile.release]
-opt-level = "s" # optimize for size in release builds
 lto = true
 strip = true
 codegen-units = 1
