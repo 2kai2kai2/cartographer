@@ -27,7 +27,10 @@
             </div>
         </div>
         <script type="module">
-            import init, { do_webgl, generate_map_history } from "../pkg/rs.js";
+            import init, {
+                do_webgl,
+                generate_map_history,
+            } from "../pkg/cartographer_web.js";
 
             /** @type {HTMLDivElement} */
             const file_selector_wrapper = document.getElementById(
