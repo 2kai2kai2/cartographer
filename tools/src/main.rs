@@ -1,3 +1,4 @@
+use decancer::cure;
 use image::{GenericImage, GenericImageView};
 
 use crate::utils::read_cp1252;
@@ -5,7 +6,7 @@ use anyhow::{anyhow, Result};
 use std::{
     collections::HashMap,
     fs::File,
-    io::{stdin, stdout, Write},
+    io::{stdin, stdout, Read, Write},
 };
 
 mod utils;
@@ -22,12 +23,13 @@ fn lines_without_comments<'a>(input: &'a str) -> impl Iterator<Item = &'a str> {
         .map(|line| line.split('#').next().unwrap_or(line));
 }
 
-fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<()> {
+/// Returns a vector of tags
+fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<Vec<String>> {
     let flagfiles_txt = read_cp1252(&format!("{documents_dir}/gfx/flags/flagfiles.txt"))?;
-    let mut flagfiles_tags: Vec<&str> = flagfiles_txt
+    let mut flagfiles_tags: Vec<String> = flagfiles_txt
         .split_ascii_whitespace()
         .skip(1)
-        .map(|item| item.strip_suffix(".tga").unwrap())
+        .map(|item| item.strip_suffix(".tga").unwrap().to_string())
         .collect();
     while flagfiles_tags.last().map_or(false, |tag| {
         tag.len() != 3 || tag.chars().any(|c| !c.is_ascii_uppercase())
@@ -38,7 +40,7 @@ fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<()> {
 
     File::create(format!("{destination_dir}/flagfiles.txt"))?.write(
         flagfiles_tags
-            .into_iter()
+            .iter()
             .map(|p| format!("{p}\n"))
             .collect::<String>()
             .as_bytes(),
@@ -72,7 +74,7 @@ fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<()> {
         )
         .unwrap();
 
-    return Ok(());
+    return Ok(flagfiles_tags);
 }
 
 fn read_definition_csv(text: &str) -> Result<HashMap<[u8; 3], u64>> {
@@ -175,6 +177,54 @@ fn calculate_wasteland_adjacencies(
         .unwrap();
 }
 
+/// Returns a hashmap `tag -> name`
+pub fn load_tag_names(steam_dir: &str, tags: &Vec<String>) -> Result<Vec<(String, Vec<String>)>> {
+    fn parse_line<'a>(line: &'a str) -> Option<(&'a str, &'a str)> {
+        let line = line.strip_prefix(" ")?;
+        let (key, line) = line.split_once(':')?;
+        let (_, value) = line.split_once('"')?;
+        let value = value.strip_suffix('"')?;
+        return Some((key, value));
+    }
+    fn generate_name_variants(name: &str) -> Result<Vec<String>> {
+        let mut names = vec![name.to_string()];
+
+        let normalized = cure(
+            name,
+            decancer::Options::default()
+                .retain_capitalization()
+                .ascii_only(),
+        )?
+        .to_string();
+        if normalized != name {
+            names.push(normalized);
+        }
+
+        return Ok(names);
+    }
+    let mut items = std::fs::read_dir(format!("{steam_dir}/localisation"))?
+        .filter_map(|file| Some(file.ok()?.file_name().to_str()?.to_string()))
+        .filter(|filename| filename.ends_with("_l_english.yml"))
+        .flat_map(|filename| {
+            let mut file = File::open(format!("{steam_dir}/localisation/{filename}"))
+                .expect("Failed to open file");
+            let text = {
+                let mut text = String::new();
+                file.read_to_string(&mut text).expect("Failed to read file");
+                text
+            };
+            return text
+                .lines()
+                .filter_map(parse_line)
+                .filter(|(k, _)| tags.contains(&k.to_string()))
+                .map(|(k, v)| (k.to_string(), generate_name_variants(v).unwrap()))
+                .collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
+    items.sort();
+    return Ok(items);
+}
+
 fn main() -> Result<()> {
     fn trim_cli(c: char) -> bool {
         return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
@@ -185,7 +235,7 @@ fn main() -> Result<()> {
     let target_name = stdin_line()?;
     let target_name = target_name.trim_matches(trim_cli);
 
-    let destination = format!("../resources/{target_name}");
+    let destination = format!("../cartographer_web/resources/{target_name}");
 
     print!("Steam files directory: ");
     stdout().flush()?;
@@ -266,7 +316,17 @@ fn main() -> Result<()> {
     );
 
     // ====
-    load_flagfiles(documents_dir, &destination)?;
+    let tags = load_flagfiles(documents_dir, &destination)?;
+
+    let country_names = load_tag_names(steam_dir, &tags)?;
+    let country_names: Vec<u8> = country_names
+        .iter()
+        .flat_map(|(tag, name)| format!("{tag};{}\n", name.join(";")).into_bytes())
+        .collect();
+    File::create(format!("{destination}/tags.txt"))
+        .unwrap()
+        .write(&country_names)
+        .unwrap();
 
     return Ok(());
 }
