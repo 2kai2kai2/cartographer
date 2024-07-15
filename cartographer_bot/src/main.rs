@@ -1,7 +1,7 @@
 use anyhow::Context;
 use lazy_static::lazy_static;
 use reservations::{Reservation, ReservationsData};
-use serenity::all::Ready;
+use serenity::all::{ActivityData, Ready};
 use serenity::model::application::*;
 use serenity::{
     all::{EventHandler, GatewayIntents},
@@ -343,6 +343,7 @@ async fn serenity(
 
     let client = Client::builder(&token, GatewayIntents::empty())
         .event_handler(Handler { db: pool })
+        .activity(ActivityData::custom("Taking EU4 Reservations"))
         .await
         .context("Err creating client")?;
 
