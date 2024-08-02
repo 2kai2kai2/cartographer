@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use bitstream_io::{BigEndian, ByteRead, ByteReader};
+use eu4_map_core::{generate_map_colors_config, UNCLAIMED_COLOR};
 use eu4_parser_core::{
     raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
+    save_parser::SaveGame,
     EU4Date, Month,
 };
 use image::Rgb;
@@ -11,9 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     country_history::{CountryHistoryEvent, WarHistoryEvent},
-    eu4_map::{generate_map_colors_config, UNCLAIMED_COLOR},
     map_parsers::MapAssets,
-    save_parser::SaveGame,
 };
 
 #[derive(Debug, PartialEq, Eq)]

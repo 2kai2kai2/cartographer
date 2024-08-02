@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use eu4_parser_core::{
     raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
-    EU4Date,
+    save_parser, EU4Date,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -63,7 +63,7 @@ pub enum WarHistoryEvent {
     /// A custom event representing the removal of occupations at the end of a war.
     ///
     /// Changes the control of all provinces with `(owner, controller)` to be unoccupied
-    /// 
+    ///
     /// Since you can only be at war with somebody in one war at a time, the end of a war always
     /// means that occupations between the two will end.
     RemoveOccupations(String, String),
@@ -75,7 +75,7 @@ impl WarHistoryEvent {
         let mut out: HashMap<EU4Date, Vec<WarHistoryEvent>> = HashMap::new();
         for war in save.iter_all_KVs().filter_map(|kv| match kv {
             (RawEU4Scalar("previous_war"), RawEU4Value::Object(obj)) => {
-                crate::save_parser::War::from_parsed_obj(obj).transpose()
+                save_parser::War::from_parsed_obj(obj).transpose()
             }
             _ => None,
         }) {

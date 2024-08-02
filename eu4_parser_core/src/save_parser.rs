@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::{cmp::min, collections::HashMap};
 
-use anyhow::{anyhow, Result};
-use eu4_parser_core::{
+use crate::{
     eu4_date::EU4Date,
     raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
 };
+use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mod {

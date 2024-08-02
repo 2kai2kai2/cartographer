@@ -3,10 +3,10 @@ use std::io::Cursor;
 use ab_glyph::FontRef;
 use base64::Engine;
 use country_history::WarHistoryEvent;
+use eu4_parser_core::save_parser::SaveGame;
 use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
 use map_history::{ColorMapManager, SerializedColorMapManager};
 use map_parsers::from_cp1252;
-use save_parser::SaveGame;
 use stats_image::StatsImageDefaultAssets;
 use wasm_bindgen::prelude::*;
 use webgl::webgl_draw_map;
@@ -14,10 +14,8 @@ use webgl::webgl_draw_map;
 use crate::map_parsers::MapAssets;
 
 mod country_history;
-mod eu4_map;
 mod map_history;
 mod map_parsers;
-mod save_parser;
 mod stats_image;
 mod webgl;
 
@@ -118,17 +116,17 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
         FontRef::try_from_slice(include_bytes!("../resources/GARA.TTF")).map_err(map_error)?;
 
     log!("Generating map...");
-    let color_map = eu4_map::generate_save_map_colors_config(
+    let color_map = eu4_map_core::generate_save_map_colors_config(
         map_assets.provinces_len,
         &map_assets.water,
         &map_assets.wasteland,
         &save,
     );
-    let base_map = eu4_map::make_base_map(&map_assets.base_map, &color_map);
+    let base_map = eu4_map_core::make_base_map(&map_assets.base_map, &color_map);
 
     log!("Drawing borders...");
-    let borders_config = eu4_map::generate_player_borders_config(&save);
-    let map_image = eu4_map::apply_borders(&base_map, &borders_config);
+    let borders_config = eu4_map_core::generate_player_borders_config(&save);
+    let map_image = eu4_map_core::apply_borders(&base_map, &borders_config);
 
     log!("Drawing stats...");
 

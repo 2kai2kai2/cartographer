@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::save_parser::SaveGame;
+use eu4_parser_core::save_parser::SaveGame;
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
 

@@ -1,2 +1,2 @@
 [workspace]
-members = ["tools", "eu4_parser_core", "cartographer_bot", "cartographer_web"]
+members = ["tools", "eu4_parser_core", "eu4_map_core", "cartographer_bot", "cartographer_web"]

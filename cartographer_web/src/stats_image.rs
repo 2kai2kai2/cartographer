@@ -5,11 +5,8 @@ use anyhow::{anyhow, Result};
 use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
 
-use crate::{
-    map_parsers::FlagImages,
-    save_parser::{Nation, SaveGame, WarResult},
-    Fetcher,
-};
+use crate::{map_parsers::FlagImages, Fetcher};
+use eu4_parser_core::save_parser::{Nation, SaveGame, WarResult};
 use imageproc::drawing;
 
 pub fn army_display(army: f64) -> String {
