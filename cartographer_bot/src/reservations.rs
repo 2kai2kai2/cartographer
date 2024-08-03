@@ -76,6 +76,33 @@ impl ReservationsData {
         };
         self.reservations.remove(index);
     }
+
+    pub fn make_map(&self) -> anyhow::Result<image::RgbaImage> {
+        let mut img =
+            image::load_from_memory_with_format(crate::PNG_MAP_1444, image::ImageFormat::Png)?
+                .into_rgba8();
+        let icon_x =
+            image::load_from_memory_with_format(crate::PNG_ICON_X, image::ImageFormat::Png)?;
+        for reservation in &self.reservations {
+            let Some((x, y)) = crate::CAPITAL_LOCATIONS.get(&reservation.tag) else {
+                continue;
+            };
+            let x = x.round() - icon_x.width() as f64 / 2.0;
+            let y = 2048.0 - y.round() - icon_x.height() as f64 / 2.0;
+            image::imageops::overlay(&mut img, &icon_x, x as i64, y as i64);
+        }
+        return Ok(img);
+    }
+
+    pub fn make_map_png(&self) -> anyhow::Result<Vec<u8>> {
+        let img = self.make_map()?;
+        let mut img_vec: Vec<u8> = Vec::new();
+        img.write_to(
+            &mut std::io::Cursor::new(&mut img_vec),
+            image::ImageFormat::Png,
+        )?;
+        return Ok(img_vec);
+    }
 }
 impl Display for ReservationsData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

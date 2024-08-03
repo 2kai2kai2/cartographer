@@ -2,13 +2,13 @@ use anyhow::Context;
 use lazy_static::lazy_static;
 use reservations::{Reservation, ReservationsData};
 use serenity::all::{ActivityData, Ready};
+use serenity::async_trait;
 use serenity::model::application::*;
 use serenity::{
     all::{EventHandler, GatewayIntents},
     builder::*,
     Client,
 };
-use serenity::{async_trait, json};
 use shuttle_runtime::SecretStore;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -16,14 +16,35 @@ use std::collections::HashMap;
 mod db_types;
 mod reservations;
 
+const PNG_MAP_1444: &[u8] = include_bytes!("../assets/vanilla/1444.png");
+const PNG_ICON_X: &[u8] = include_bytes!("../assets/vanilla/xIcon.png");
+
 lazy_static! {
-    static ref TAGS: HashMap<String, Vec<String>> = {
+    pub static ref TAGS: HashMap<String, Vec<String>> = {
         let tags = include_str!("../../cartographer_web/resources/vanilla/tags.txt");
         tags.lines()
             .map(|line| {
                 let mut it = line.split(';');
                 let tag = it.next().expect("Invalid tags file");
                 return (tag.to_string(), it.map(str::to_string).collect());
+            })
+            .collect()
+    };
+    pub static ref CAPITAL_LOCATIONS: HashMap<String, (f64, f64)> = {
+        let locations = include_str!("../assets/vanilla/capitals.txt");
+        locations
+            .lines()
+            .map(|line| {
+                let mut it = line.split(';');
+                let tag = it.next().expect("Missing tag on line");
+                let x = it.next().expect("Missing x on line");
+                let y = it.next().expect("Missing y on line");
+                if tag.len() != 3 || !tag.chars().all(|c| c.is_ascii_uppercase()) {
+                    panic!("Invalid tag '{tag}'");
+                }
+                let x: f64 = x.parse().expect("Failed to parse x location");
+                let y: f64 = y.parse().expect("Failed to parse y location");
+                (tag.to_string(), (x, y))
             })
             .collect()
     };
@@ -65,7 +86,6 @@ impl Handler {
         let game_id = game_id as u64;
         println!("Gameid {game_id}");
 
-        let res = ReservationsData::new();
         let reserve_input = CreateButton::new(format!("reserve:{game_id}")).label("Reserve");
         let unreserve_button = CreateButton::new(format!("unreserve:{game_id}"))
             .style(ButtonStyle::Danger)
@@ -74,14 +94,19 @@ impl Handler {
             reserve_input,
             unreserve_button,
         ])];
-        let response = CreateInteractionResponseMessage::new()
-            .content(format!("{res}"))
+
+        let reservations = ReservationsData::new();
+        let msg = CreateInteractionResponseMessage::new()
+            .content(reservations.to_string())
             .components(action_row);
-        println!(
-            "Made response {}",
-            json::to_string(&response).unwrap_or("ERR".to_string())
-        );
-        return Ok(CreateInteractionResponse::Message(response));
+        let msg = match reservations.make_map_png() {
+            Ok(img) => msg.files([CreateAttachment::bytes(img, "reservation_map.png")]),
+            Err(err) => {
+                println!("{err}");
+                msg.files([])
+            }
+        };
+        return Ok(CreateInteractionResponse::Message(msg));
     }
 
     async fn handle_reserve_button(
@@ -119,15 +144,22 @@ impl Handler {
             ",
         )
         .bind(game_id as i64);
-
         let mut tr = self.db.begin().await.or(Err(None))?;
         delete_query.execute(&mut *tr).await.or(Err(None))?;
         let reservations = items_query.fetch_all(&mut *tr).await.or(Err(None))?;
         tr.commit().await.or(Err(None))?;
+        println!("queries done");
 
         let reservations = reservations.into_iter().map(Reservation::from).collect();
-        let msg = CreateInteractionResponseMessage::new()
-            .content(format!("{}", ReservationsData { reservations }));
+        let reservations = ReservationsData { reservations };
+        let msg = CreateInteractionResponseMessage::new().content(reservations.to_string());
+        let msg = match reservations.make_map_png() {
+            Ok(img) => msg.files([CreateAttachment::bytes(img, "reservation_map.png")]),
+            Err(err) => {
+                println!("{err}");
+                msg.files([])
+            }
+        };
         return Ok(CreateInteractionResponse::UpdateMessage(msg));
     }
 
@@ -255,8 +287,15 @@ impl Handler {
             .map_err(|err| format!("ERROR: while committing transaction: {err}"))?;
 
         let reservations = reservations.into_iter().map(Reservation::from).collect();
-        let msg = CreateInteractionResponseMessage::new()
-            .content(format!("{}", ReservationsData { reservations }));
+        let reservations = ReservationsData { reservations };
+        let msg = CreateInteractionResponseMessage::new().content(reservations.to_string());
+        let msg = match reservations.make_map_png() {
+            Ok(img) => msg.files([CreateAttachment::bytes(img, "reservation_map.png")]),
+            Err(err) => {
+                println!("{err}");
+                msg.files([])
+            }
+        };
         return Ok(CreateInteractionResponse::UpdateMessage(msg));
     }
 
@@ -306,6 +345,7 @@ impl EventHandler for Handler {
                 match self.handle_component_interaction(&ctx, interaction).await {
                     Ok(response) => interaction.create_response(ctx.http, response).await,
                     Err(Some(msg)) => {
+                        println!("An error occurred during an interaction: {msg}");
                         interaction
                             .create_response(ctx.http, make_error_msg(msg))
                             .await
@@ -317,6 +357,7 @@ impl EventHandler for Handler {
                 match self.handle_modal_interaction(&ctx, interaction).await {
                     Ok(response) => interaction.create_response(ctx.http, response).await,
                     Err(Some(msg)) => {
+                        println!("An error occurred during a modal interaction: {msg}");
                         interaction
                             .create_response(ctx.http, make_error_msg(msg))
                             .await
