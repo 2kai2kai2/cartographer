@@ -117,3 +117,20 @@ impl Display for ReservationsData {
         return Ok(());
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn test123() {
+        let mut res = ReservationsData::new();
+        res.try_add(Reservation {
+            tag: "ENG".to_string(),
+            timestamp: chrono::Utc::now(),
+            user_id: 123,
+        })
+        .unwrap();
+        let img = res.make_map().unwrap();
+        img.save("./output.png").unwrap();
+    }
+}

@@ -76,10 +76,21 @@ struct Handler {
     db: PgPool,
 }
 impl Handler {
-    async fn reservations_command(&self) -> Result<CreateInteractionResponse, Option<String>> {
+    async fn reservations_command(
+        &self,
+        interaction: &CommandInteraction,
+    ) -> Result<CreateInteractionResponse, Option<String>> {
         println!("Handling /reservations");
         // TODO: check permissions
-        let game_id: i64 = sqlx::query_scalar("INSERT INTO Games DEFAULT VALUES RETURNING game_id")
+        let query = sqlx::query_scalar(
+            "
+            INSERT INTO games(server_id)
+            VALUES($1)
+            RETURNING game_id
+            ",
+        )
+        .bind(interaction.guild_id.map(|id| id.get() as i64));
+        let game_id: i64 = query
             .fetch_one(&self.db)
             .await
             .map_err(|err| Some(err.to_string()))?;
@@ -114,6 +125,21 @@ impl Handler {
         interaction: &ComponentInteraction,
         game_id: u64,
     ) -> Result<CreateInteractionResponse, Option<String>> {
+        // temp: add server id to games since we currently don't have them
+        let query = sqlx::query(
+            "
+            UPDATE games
+            SET server_id = $1
+            WHERE game_id = $2 AND server_id IS NULL
+        ",
+        )
+        .bind(interaction.guild_id.map(|id| id.get() as i64))
+        .bind(game_id as i64);
+        query
+            .execute(&self.db)
+            .await
+            .map_err(|err| Some(err.to_string()))?;
+
         let tag_input = CreateInputText::new(InputTextStyle::Short, "EU4 Country Tag", "tag")
             .placeholder("Name (Sweden) or tag (SWE)");
         let modal = CreateModal::new(format!("reserve:{game_id}"), "Select country tag")
@@ -128,7 +154,7 @@ impl Handler {
     ) -> Result<CreateInteractionResponse, Option<String>> {
         let delete_query = sqlx::query(
             "
-            DELETE FROM Reservations
+            DELETE FROM reservations
             WHERE game_id = $1 AND user_id = $2
             ",
         )
@@ -138,7 +164,7 @@ impl Handler {
         let items_query = sqlx::query_as::<_, db_types::RawReservation>(
             "
             SELECT user_id, timestamp, tag
-            FROM Reservations
+            FROM reservations
             WHERE game_id = $1
             ORDER BY timestamp ASC
             ",
@@ -169,7 +195,7 @@ impl Handler {
         interaction: &CommandInteraction,
     ) -> Result<CreateInteractionResponse, Option<String>> {
         match interaction.data.name.as_str() {
-            "reservations" => self.reservations_command().await,
+            "reservations" => self.reservations_command(interaction).await,
             "stats" => Ok(CreateInteractionResponse::Message(
                 CreateInteractionResponseMessage::new()
                     .content(
@@ -232,7 +258,7 @@ impl Handler {
 
         let insert_query = sqlx::query(
             "
-            INSERT INTO Reservations (
+            INSERT INTO reservations (
                 game_id,
                 user_id,
                 timestamp,
@@ -257,7 +283,7 @@ impl Handler {
         let items_query = sqlx::query_as::<_, db_types::RawReservation>(
             "
             SELECT user_id, timestamp, tag
-            FROM Reservations
+            FROM reservations
             WHERE game_id = $1
             ORDER BY timestamp ASC
             ",
