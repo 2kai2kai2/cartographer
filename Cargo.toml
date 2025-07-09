@@ -6,4 +6,5 @@ members = [
     "eu4_map_core",
     "cartographer_bot",
     "cartographer_web",
+    "stellaris_map_core",
 ]
