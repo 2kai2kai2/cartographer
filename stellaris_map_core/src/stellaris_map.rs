@@ -16,10 +16,10 @@ pub fn draw_systems(mut image: RgbImage, save: &SaveGame) -> RgbImage {
         imageproc::drawing::draw_filled_circle_mut(
             &mut image,
             (
-                (width as f64 / 2.0 - system.coordinate.x) as i32,
-                (system.coordinate.y + height as f64 / 2.0) as i32,
+                (width as f64 / 2.0 - system.coordinate.x * scale) as i32,
+                (system.coordinate.y * scale + height as f64 / 2.0) as i32,
             ),
-            1,
+            std::cmp::max(scale as i32, 1),
             Rgb([255, 255, 255]),
         );
     }
@@ -29,6 +29,9 @@ pub fn draw_systems(mut image: RgbImage, save: &SaveGame) -> RgbImage {
 pub fn draw_hyperlanes(mut image: RgbImage, save: &SaveGame) -> RgbImage {
     let width = image.width();
     let height = image.height();
+    let image_diameter = std::cmp::min(width, height) as f64;
+    let scale = image_diameter / (save.galaxy_radius * 2.0);
+
     for (system_idx, system) in &save.galactic_objects {
         for hyperlane in &system.hyperlanes {
             if hyperlane.to < *system_idx {
@@ -42,12 +45,12 @@ pub fn draw_hyperlanes(mut image: RgbImage, save: &SaveGame) -> RgbImage {
             imageproc::drawing::draw_line_segment_mut(
                 &mut image,
                 (
-                    (width as f64 / 2.0 - system.coordinate.x) as f32,
-                    (system.coordinate.y + height as f64 / 2.0) as f32,
+                    (width as f64 / 2.0 - system.coordinate.x * scale) as f32,
+                    (system.coordinate.y * scale + height as f64 / 2.0) as f32,
                 ),
                 (
-                    (width as f64 / 2.0 - other_system.coordinate.x) as f32,
-                    (other_system.coordinate.y + height as f64 / 2.0) as f32,
+                    (width as f64 / 2.0 - other_system.coordinate.x * scale) as f32,
+                    (other_system.coordinate.y * scale + height as f64 / 2.0) as f32,
                 ),
                 HYPERLANE_COLOR,
             );

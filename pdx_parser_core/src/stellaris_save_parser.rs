@@ -375,6 +375,7 @@ pub struct SaveGame {
     pub dlc: Vec<String>,
     pub date: StellarisDate,
     pub multiplayer: bool,
+    pub galaxy_radius: f64,
     // pub player_wars: Vec<War>,
     pub game_mod: Mod,
 }
@@ -432,6 +433,8 @@ impl SaveGame {
                 _ => None,
             })
             .collect();
+
+        let galaxy_radius = raw_save.expect_first_scalar("galaxy_radius")?.try_into()?;
         let date = raw_save.expect_first_scalar("date")?.try_into()?;
 
         return Ok(SaveGame {
@@ -444,6 +447,7 @@ impl SaveGame {
                 .get_first_scalar("multi_player")
                 .and_then(|mp| mp.as_bool())
                 .unwrap_or(false),
+            galaxy_radius,
             game_mod: Mod::Vanilla,
         });
     }
