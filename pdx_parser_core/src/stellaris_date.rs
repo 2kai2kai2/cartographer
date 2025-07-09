@@ -1,4 +1,4 @@
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
@@ -103,7 +103,12 @@ impl FromStr for StellarisDate {
     type Err = Error;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let parts = text.trim().split('.').collect::<Vec<&str>>();
+        let text = text
+            .trim()
+            .strip_prefix('"')
+            .and_then(|text| text.strip_suffix('"'))
+            .ok_or(anyhow!("Stellaris dates are saved in quotation marks."))?;
+        let parts = text.split('.').collect::<Vec<&str>>();
         let [y, m, d] = parts.as_slice() else {
             return Err(Error::msg(format!(
                 "Date string '{}' did not have a proper three parts",

@@ -88,9 +88,7 @@ impl GalacticObject {
         let obj_type = obj.expect_first_scalar("type")?.as_string();
 
         let name = obj
-            .get_first_obj("name")
-            .ok_or(anyhow!("Galactic object is missing name."))?;
-        let name = name
+            .expect_first_obj("name")?
             .get_first_as_string("key")
             .unwrap_or("unknown".to_string());
 
@@ -128,8 +126,8 @@ pub struct Country {
     pub fleet_size: u32,
     pub empire_size: u32,
     pub num_sapient_pops: u32,
-    pub capital: u32,
-    /// Pair of `(income, expense)`
+    pub capital: Option<u32>,
+    /// Pair of `(income, expense)`. Both will be positive.
     pub balance: HashMap<String, (f64, f64)>,
     pub map_color: [u8; 3],
     pub nation_color: [u8; 3],
@@ -146,12 +144,53 @@ impl Country {
 
         let tech_power = obj.expect_first_scalar("tech_power")?.try_into()?;
 
-        let fleet_size = obj.get_first_as_int("fleet_size").unwrap_or(0) as u32;
-        let empire_size = obj.get_first_as_int("empire_size").unwrap_or(0) as u32;
-        let num_sapient_pops = obj.get_first_as_int("num_sapient_pops").unwrap_or(0) as u32;
+        let fleet_size = obj
+            .get_first_scalar("fleet_size")
+            .map(u32::try_from)
+            .transpose()?
+            .unwrap_or(0);
+        let empire_size = obj
+            .get_first_scalar("empire_size")
+            .map(u32::try_from)
+            .transpose()?
+            .unwrap_or(0);
+        let num_sapient_pops = obj
+            .get_first_scalar("num_sapient_pops")
+            .map(u32::try_from)
+            .transpose()?
+            .unwrap_or(0);
 
-        let capital = obj.expect_first_scalar("capital")?.try_into()?;
-        let balance = HashMap::new();
+        let capital = obj
+            .get_first_scalar("capital")
+            .map(u32::try_from)
+            .transpose()?;
+
+        let mut balance: HashMap<String, (f64, f64)> = HashMap::new();
+        let budget_current_month = obj
+            .expect_first_obj("budget")?
+            .expect_first_obj("current_month")?;
+        for (_, source) in budget_current_month
+            .expect_first_obj("income")?
+            .iter_all_KVs()
+        {
+            let source = source.expect_object()?;
+            for (resource, amount) in source.iter_all_KVs() {
+                let resource = resource.as_string();
+                let amount: f64 = amount.expect_scalar()?.try_into()?;
+                balance.entry(resource).or_default().0 += amount;
+            }
+        }
+        for (_, source) in budget_current_month
+            .expect_first_obj("expenses")?
+            .iter_all_KVs()
+        {
+            let source = source.expect_object()?;
+            for (resource, amount) in source.iter_all_KVs() {
+                let resource = resource.as_string();
+                let amount: f64 = amount.expect_scalar()?.try_into()?;
+                balance.entry(resource).or_default().1 += amount;
+            }
+        }
 
         let map_color = [0, 0, 0];
         let nation_color = [0, 0, 0];
@@ -407,42 +446,5 @@ impl SaveGame {
                 .unwrap_or(false),
             game_mod: Mod::Vanilla,
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::raw_parser::RawPDXObjectItem;
-
-    use super::*;
-
-    #[test]
-    fn view() {
-        let text = std::fs::read_to_string("../gamestate").unwrap();
-        let (rest, obj) = RawPDXObject::parse_object_inner(&text).unwrap();
-        assert!(rest.is_empty());
-        // let country0_obj = obj.get_first_object_at_path(["country", "0"]).unwrap();
-        // let country0 = Country::from_parsed_obj(0, country0_obj).unwrap();
-        // println!("{country0:?}");
-        let save = SaveGame::new_parser(&obj).unwrap();
-        println!("{save:?}");
-        // for item in &obj
-        //     .get_first_object_at_path(["galactic_object", "0"])
-        //     .unwrap()
-        //     .0
-        // {
-        //     match item {
-        //         RawPDXObjectItem::KV(k, RawPDXValue::Scalar(scalar)) => {
-        //             println!("{}: {}", k.0, scalar.0)
-        //         }
-        //         RawPDXObjectItem::KV(k, RawPDXValue::Object(object)) => {
-        //             println!("{}: {{<{} items>}}", k.0, object.0.len())
-        //         }
-        //         RawPDXObjectItem::Value(RawPDXValue::Scalar(scalar)) => println!("{}", scalar.0),
-        //         RawPDXObjectItem::Value(RawPDXValue::Object(obj)) => {
-        //             println!("{{<{} items>}}", obj.0.len())
-        //         }
-        //     }
-        // }
     }
 }
