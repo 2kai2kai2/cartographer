@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use eu4_parser_core::{
-    raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
-    save_parser, EU4Date,
+use pdx_parser_core::{
+    eu4_save_parser,
+    raw_parser::{RawPDXObject, RawPDXScalar, RawPDXValue},
+    EU4Date,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -11,14 +12,14 @@ pub enum CountryHistoryEvent {
 }
 impl CountryHistoryEvent {
     /// Should be passed the `history` object for a country
-    pub fn extract_events<'a>(object: &RawEU4Object<'a>) -> Vec<(EU4Date, CountryHistoryEvent)> {
+    pub fn extract_events<'a>(object: &RawPDXObject<'a>) -> Vec<(EU4Date, CountryHistoryEvent)> {
         return object
             .iter_all_KVs()
             .filter_map(|(k, v)| Some((k.as_date()?, v.as_object()?)))
             .flat_map(|(date, obj)| {
                 obj.iter_all_KVs()
-                    .filter_map(move |(RawEU4Scalar(ev), val)| match (ev, val) {
-                        (&"changed_tag_from", RawEU4Value::Scalar(tag)) => {
+                    .filter_map(move |(RawPDXScalar(ev), val)| match (ev, val) {
+                        (&"changed_tag_from", RawPDXValue::Scalar(tag)) => {
                             Some((date, CountryHistoryEvent::ChangedTagFrom(tag.as_string())))
                         }
 
@@ -42,7 +43,7 @@ impl CountryHistoryEvent {
 }
 
 pub fn make_combined_events(
-    save: &RawEU4Object,
+    save: &RawPDXObject,
 ) -> HashMap<EU4Date, Vec<(String, CountryHistoryEvent)>> {
     let province_histories = save
         .get_first_obj("countries")
@@ -70,12 +71,12 @@ pub enum WarHistoryEvent {
 }
 impl WarHistoryEvent {
     pub fn make_war_events(
-        save: &RawEU4Object,
+        save: &RawPDXObject,
     ) -> anyhow::Result<HashMap<EU4Date, Vec<WarHistoryEvent>>> {
         let mut out: HashMap<EU4Date, Vec<WarHistoryEvent>> = HashMap::new();
         for war in save.iter_all_KVs().filter_map(|kv| match kv {
-            (RawEU4Scalar("previous_war"), RawEU4Value::Object(obj)) => {
-                save_parser::War::from_parsed_obj(obj).transpose()
+            (RawPDXScalar("previous_war"), RawPDXValue::Object(obj)) => {
+                eu4_save_parser::War::from_parsed_obj(obj).transpose()
             }
             _ => None,
         }) {

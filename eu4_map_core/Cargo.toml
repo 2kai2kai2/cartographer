@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 image = "0.25.1"
 imageproc = "0.24.0"
-eu4_parser_core = { path = "../eu4_parser_core" }
+pdx_parser_core = { path = "../pdx_parser_core" }

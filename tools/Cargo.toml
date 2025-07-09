@@ -9,4 +9,4 @@ encoding_rs = "0.8.34"
 encoding_rs_io = "0.1.7"
 image = "0.25.1"
 decancer = "3.2.3"
-eu4_parser_core = { path = "../eu4_parser_core" }
+pdx_parser_core = { path = "../pdx_parser_core" }

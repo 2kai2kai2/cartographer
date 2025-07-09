@@ -52,8 +52,8 @@ impl CountryHistory {
             .collect::<Vec<&str>>()
             .join("\n");
 
-        let (_, obj) = eu4_parser_core::raw_parser::RawEU4Object::parse_object_inner(&text)
-            .ok_or(anyhow!("Failed to parse RawEU4Object for history file"))?;
+        let (_, obj) = pdx_parser_core::raw_parser::RawPDXObject::parse_object_inner(&text)
+            .ok_or(anyhow!("Failed to parse RawPDXObject for history file"))?;
 
         let government = obj.get_first_as_string("government").ok_or(anyhow!(
             "Field `government` missing in country history file."

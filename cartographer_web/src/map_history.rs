@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use bitstream_io::{BigEndian, ByteRead, ByteReader};
 use eu4_map_core::{generate_map_colors_config, UNCLAIMED_COLOR};
-use eu4_parser_core::{
-    raw_parser::{RawEU4Object, RawEU4Scalar, RawEU4Value},
-    save_parser::SaveGame,
-    EU4Date, Month,
-};
 use image::Rgb;
 use imageproc::definitions::HasBlack;
+use pdx_parser_core::{
+    eu4_save_parser::SaveGame,
+    raw_parser::{RawPDXObject, RawPDXScalar, RawPDXValue},
+    EU4Date, Month,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -33,39 +33,39 @@ pub enum ProvinceHistoryEvent {
 }
 impl ProvinceHistoryEvent {
     /// Should be passed the `history` object for a province
-    pub fn extract_events<'a>(object: &RawEU4Object<'a>) -> Vec<(EU4Date, ProvinceHistoryEvent)> {
+    pub fn extract_events<'a>(object: &RawPDXObject<'a>) -> Vec<(EU4Date, ProvinceHistoryEvent)> {
         return object
             .iter_all_KVs()
             .filter_map(|(k, v)| Some((k.as_date()?, v.as_object()?)))
             .flat_map(|(date, obj)| {
                 obj.iter_all_KVs()
-                    .filter_map(move |(RawEU4Scalar(ev), val)| match (ev, val) {
-                        (&"owner", RawEU4Value::Scalar(tag)) => {
+                    .filter_map(move |(RawPDXScalar(ev), val)| match (ev, val) {
+                        (&"owner", RawPDXValue::Scalar(tag)) => {
                             Some((date, ProvinceHistoryEvent::Owner(tag.as_string())))
                         }
-                        (&"fake_owner", RawEU4Value::Scalar(tag)) => {
+                        (&"fake_owner", RawPDXValue::Scalar(tag)) => {
                             Some((date, ProvinceHistoryEvent::FakeOwner(tag.as_string())))
                         }
-                        (&"controller", RawEU4Value::Object(controller_obj)) => Some((
+                        (&"controller", RawPDXValue::Object(controller_obj)) => Some((
                             date,
                             ProvinceHistoryEvent::Controller(
                                 controller_obj.get_first_as_string("tag")?,
                             ),
                         )),
-                        (&"religion", RawEU4Value::Scalar(religion)) => {
+                        (&"religion", RawPDXValue::Scalar(religion)) => {
                             Some((date, ProvinceHistoryEvent::Religion(religion.as_string())))
                         }
-                        (&"add_core", RawEU4Value::Scalar(add_core)) => {
+                        (&"add_core", RawPDXValue::Scalar(add_core)) => {
                             Some((date, ProvinceHistoryEvent::AddCore(add_core.as_string())))
                         }
-                        (&"remove_core", RawEU4Value::Scalar(remove_core)) => Some((
+                        (&"remove_core", RawPDXValue::Scalar(remove_core)) => Some((
                             date,
                             ProvinceHistoryEvent::RemoveCore(remove_core.as_string()),
                         )),
-                        (&"add_claim", RawEU4Value::Scalar(add_claim)) => {
+                        (&"add_claim", RawPDXValue::Scalar(add_claim)) => {
                             Some((date, ProvinceHistoryEvent::AddClaim(add_claim.as_string())))
                         }
-                        (&"remove_claim", RawEU4Value::Scalar(remove_claim)) => Some((
+                        (&"remove_claim", RawPDXValue::Scalar(remove_claim)) => Some((
                             date,
                             ProvinceHistoryEvent::RemoveClaim(remove_claim.as_string()),
                         )),
@@ -89,7 +89,7 @@ impl ProvinceHistoryEvent {
 }
 
 pub fn make_combined_events(
-    save: &RawEU4Object,
+    save: &RawPDXObject,
 ) -> HashMap<EU4Date, Vec<(u16, ProvinceHistoryEvent)>> {
     let province_histories = save
         .get_first_obj("provinces")

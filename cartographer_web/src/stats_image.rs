@@ -6,8 +6,8 @@ use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
 
 use crate::{map_parsers::FlagImages, Fetcher};
-use eu4_parser_core::save_parser::{Nation, SaveGame, WarResult};
 use imageproc::drawing;
+use pdx_parser_core::eu4_save_parser::{Nation, SaveGame, WarResult};
 
 pub fn army_display(army: f64) -> String {
     if army >= 1000000.0 {

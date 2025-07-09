@@ -1,5 +1,5 @@
 [package]
-name = "eu4_parser_core"
+name = "pdx_parser_core"
 version = "0.1.0"
 edition = "2021"
 

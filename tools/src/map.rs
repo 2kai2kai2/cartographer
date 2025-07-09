@@ -1,6 +1,6 @@
 use anyhow::anyhow;
-use eu4_parser_core::raw_parser::{RawEU4Scalar, RawEU4Value};
 use image::GenericImageView;
+use pdx_parser_core::raw_parser::{RawPDXScalar, RawPDXValue};
 use std::{collections::HashMap, fs::File, io::Write};
 
 use crate::utils::lines_without_comments;
@@ -113,7 +113,7 @@ pub fn parse_water_provinces(default_map: &str) -> anyhow::Result<Vec<u64>> {
         .collect::<Vec<&str>>()
         .join("\n");
     let Some((_, parsed)) =
-        eu4_parser_core::raw_parser::RawEU4Object::parse_object_inner(&default_map)
+        pdx_parser_core::raw_parser::RawPDXObject::parse_object_inner(&default_map)
     else {
         return Err(anyhow!("Failed to parse text of default.map"));
     };
@@ -125,13 +125,13 @@ pub fn parse_water_provinces(default_map: &str) -> anyhow::Result<Vec<u64>> {
     };
     let sea_starts = sea_starts
         .iter_values()
-        .filter_map(RawEU4Value::as_scalar)
-        .filter_map(RawEU4Scalar::as_int)
+        .filter_map(RawPDXValue::as_scalar)
+        .filter_map(RawPDXScalar::as_int)
         .map(|v| v as u64);
     let lakes = lakes
         .iter_values()
-        .filter_map(RawEU4Value::as_scalar)
-        .filter_map(RawEU4Scalar::as_int)
+        .filter_map(RawPDXValue::as_scalar)
+        .filter_map(RawPDXScalar::as_int)
         .map(|v| v as u64);
     return Ok(sea_starts.chain(lakes).collect());
 }
@@ -142,7 +142,7 @@ pub fn parse_wasteland_provinces(climate_txt: &str) -> anyhow::Result<Vec<u64>> 
         .collect::<Vec<&str>>()
         .join("\n");
     let Some((_, parsed)) =
-        eu4_parser_core::raw_parser::RawEU4Object::parse_object_inner(&climate_txt)
+        pdx_parser_core::raw_parser::RawPDXObject::parse_object_inner(&climate_txt)
     else {
         return Err(anyhow!("Failed to parse text of climate.txt"));
     };
@@ -151,8 +151,8 @@ pub fn parse_wasteland_provinces(climate_txt: &str) -> anyhow::Result<Vec<u64>> 
     };
     let impassable = impassable
         .iter_values()
-        .filter_map(RawEU4Value::as_scalar)
-        .filter_map(RawEU4Scalar::as_int)
+        .filter_map(RawPDXValue::as_scalar)
+        .filter_map(RawPDXScalar::as_int)
         .map(|v| v as u64);
     return Ok(impassable.collect());
 }
@@ -164,7 +164,7 @@ pub fn parse_province_city_positions(
         .collect::<Vec<&str>>()
         .join("\n");
     let Some((_, parsed)) =
-        eu4_parser_core::raw_parser::RawEU4Object::parse_object_inner(&positions_txt)
+        pdx_parser_core::raw_parser::RawPDXObject::parse_object_inner(&positions_txt)
     else {
         return Err(anyhow!("Failed to parse text of positions.txt"));
     };
@@ -182,15 +182,15 @@ pub fn parse_province_city_positions(
                 .iter_values();
             let x = positions
                 .next()
-                .and_then(RawEU4Value::as_scalar)
-                .and_then(RawEU4Scalar::as_float)
+                .and_then(RawPDXValue::as_scalar)
+                .and_then(RawPDXScalar::as_float)
                 .ok_or(anyhow!(
                     "Failed to parse x position for province id {province_id}"
                 ))?;
             let y = positions
                 .next()
-                .and_then(RawEU4Value::as_scalar)
-                .and_then(RawEU4Scalar::as_float)
+                .and_then(RawPDXValue::as_scalar)
+                .and_then(RawPDXScalar::as_float)
                 .ok_or(anyhow!(
                     "Failed to parse x position for province id {province_id}"
                 ))?;

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use eu4_parser_core::save_parser::SaveGame;
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
+use pdx_parser_core::eu4_save_parser::SaveGame;
 
 /// Finds the tag (if any) that owns the majority of the provinces in the vector.
 pub fn majority_owner(

@@ -3,10 +3,10 @@ use std::io::Cursor;
 use ab_glyph::FontRef;
 use base64::Engine;
 use country_history::WarHistoryEvent;
-use eu4_parser_core::save_parser::SaveGame;
-use eu4_parser_core::{raw_parser::RawEU4Object, EU4Date, Month};
 use map_history::{ColorMapManager, SerializedColorMapManager};
 use map_parsers::from_cp1252;
+use pdx_parser_core::eu4_save_parser::SaveGame;
+use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
 use stats_image::StatsImageDefaultAssets;
 use wasm_bindgen::prelude::*;
 use webgl::webgl_draw_map;
@@ -50,7 +50,7 @@ pub fn parse_eu4_save(array: &[u8]) -> Result<JsValue, JsValue> {
     } else {
         return Err(JsError::new("Could not determine the EU4 save format").into());
     };
-    let (_, save) = RawEU4Object::parse_object_inner(&save)
+    let (_, save) = RawPDXObject::parse_object_inner(&save)
         .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
     return SaveGame::new_parser(&save)
         .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
@@ -160,7 +160,7 @@ pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<St
     } else {
         return Err(JsError::new("Could not determine the EU4 save format").into());
     };
-    let (_, save) = RawEU4Object::parse_object_inner(&save)
+    let (_, save) = RawPDXObject::parse_object_inner(&save)
         .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
 
     log!("Loading assets...");
