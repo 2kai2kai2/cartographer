@@ -1,0 +1,448 @@
+use serde::{Deserialize, Serialize};
+use std::{cmp::min, collections::HashMap};
+
+use crate::{
+    raw_parser::{RawPDXExtractError, RawPDXObject, RawPDXScalar, RawPDXValue},
+    stellaris_date::StellarisDate,
+};
+use anyhow::{anyhow, Context, Result};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Mod {
+    Vanilla,
+}
+
+fn eu4_obj_as_color<'a>(value: &RawPDXObject<'a>) -> Result<[u8; 3]> {
+    return value
+        .iter_values()
+        .map(|item| match item {
+            RawPDXValue::Scalar(scalar) => scalar.try_into().map_err(anyhow::Error::from),
+            _ => Err(anyhow!("Found non-scalar in")),
+        })
+        .collect::<Result<Vec<u8>>>()?
+        .try_into()
+        .or(Err(anyhow!("Object was wrong length for color")));
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalacticObjectCoord {
+    pub x: f64,
+    pub y: f64,
+    /// meaning unknown
+    pub origin: u64,
+    /// meaning unknown
+    pub randomized: bool,
+}
+impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for GalacticObjectCoord {
+    type Error = anyhow::Error;
+
+    fn try_from(obj: &'b RawPDXObject<'a>) -> std::result::Result<Self, Self::Error> {
+        let x = obj.expect_first_scalar("x")?.try_into()?;
+        let y = obj.expect_first_scalar("y")?.try_into()?;
+        let origin = obj.expect_first_scalar("origin")?.try_into()?;
+        let randomized = obj.expect_first_scalar("randomized")?.try_into()?;
+
+        return Ok(GalacticObjectCoord {
+            x,
+            y,
+            origin,
+            randomized,
+        });
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Hyperlane {
+    /// Destination system id. Should also have a path back.
+    pub to: u32,
+    pub length: f64,
+    pub bridge: bool,
+}
+impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for Hyperlane {
+    type Error = anyhow::Error;
+
+    fn try_from(obj: &'b RawPDXObject<'a>) -> std::result::Result<Self, Self::Error> {
+        let to = obj.expect_first_scalar("to")?.try_into()?;
+        let length = obj.expect_first_scalar("length")?.try_into()?;
+        let bridge = match obj.get_first_scalar("bridge") {
+            Some(bridge) => bridge.try_into()?,
+            None => false,
+        };
+
+        return Ok(Hyperlane { to, length, bridge });
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalacticObject {
+    pub coordinate: GalacticObjectCoord,
+    pub obj_type: String,
+    pub name: String,
+    pub planets: Vec<u32>,
+    pub hyperlanes: Vec<Hyperlane>,
+}
+impl GalacticObject {
+    pub fn from_parsed_obj(obj: &RawPDXObject) -> Result<GalacticObject, anyhow::Error> {
+        let coordinate = obj.expect_first_obj("coordinate")?.try_into()?;
+
+        let obj_type = obj.expect_first_scalar("type")?.as_string();
+
+        let name = obj
+            .get_first_obj("name")
+            .ok_or(anyhow!("Galactic object is missing name."))?;
+        let name = name
+            .get_first_as_string("key")
+            .unwrap_or("unknown".to_string());
+
+        let planets = obj
+            .iter_all_KVs()
+            .filter(|(k, _)| k.0 == "planet")
+            .map(|(_, v)| Ok(v.expect_scalar()?.try_into()?))
+            .collect::<Result<_, anyhow::Error>>()?;
+        let hyperlanes = match obj.get_first_obj("hyperlane") {
+            Some(hyperlanes) => hyperlanes
+                .iter_values()
+                .map(|lane| lane.expect_object()?.try_into())
+                .collect::<Result<_, _>>()?,
+            None => Vec::new(),
+        };
+
+        return Ok(GalacticObject {
+            coordinate,
+            obj_type,
+            name,
+            planets,
+            hyperlanes,
+        });
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Country {
+    pub idx: u32,
+    pub name: String,
+    // adjective
+    pub victory_rank: u32,
+    pub victory_score: f32,
+    pub tech_power: f32,
+    pub fleet_size: u32,
+    pub empire_size: u32,
+    pub num_sapient_pops: u32,
+    pub capital: u32,
+    /// Pair of `(income, expense)`
+    pub balance: HashMap<String, (f64, f64)>,
+    pub map_color: [u8; 3],
+    pub nation_color: [u8; 3],
+}
+impl Country {
+    pub fn from_parsed_obj(idx: u32, obj: &RawPDXObject) -> Result<Country> {
+        let name = obj
+            .expect_first_obj("name")?
+            .get_first_as_string("key")
+            .unwrap_or("unknown".to_string());
+
+        let victory_rank = obj.expect_first_scalar("victory_rank")?.try_into()?;
+        let victory_score = obj.expect_first_scalar("victory_score")?.try_into()?;
+
+        let tech_power = obj.expect_first_scalar("tech_power")?.try_into()?;
+
+        let fleet_size = obj.get_first_as_int("fleet_size").unwrap_or(0) as u32;
+        let empire_size = obj.get_first_as_int("empire_size").unwrap_or(0) as u32;
+        let num_sapient_pops = obj.get_first_as_int("num_sapient_pops").unwrap_or(0) as u32;
+
+        let capital = obj.expect_first_scalar("capital")?.try_into()?;
+        let balance = HashMap::new();
+
+        let map_color = [0, 0, 0];
+        let nation_color = [0, 0, 0];
+
+        return Ok(Country {
+            idx,
+            name,
+            victory_rank,
+            victory_score,
+            tech_power,
+            fleet_size,
+            empire_size,
+            num_sapient_pops,
+            capital,
+            balance,
+            map_color,
+            nation_color,
+        });
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WarResult {
+    WhitePeace = 1,
+    AttackerVictory = 2,
+    DefenderVictory = 3,
+}
+
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct War {
+//     pub name: String,
+//     pub attackers: Vec<u32>,
+//     pub defenders: Vec<u32>,
+//     pub attacker_losses: i64,
+//     pub defender_losses: i64,
+//     pub start_date: StellarisDate,
+//     pub end_date: Option<StellarisDate>,
+//     pub result: Option<WarResult>,
+// }
+
+// impl War {
+//     pub fn player_attackers(&self, player_tags: &Vec<u32>) -> Vec<u32> {
+//         return self
+//             .attackers
+//             .iter()
+//             .filter(|a| player_tags.contains(a))
+//             .cloned()
+//             .collect();
+//     }
+//     pub fn player_defenders(&self, player_tags: &Vec<u32>) -> Vec<u32> {
+//         return self
+//             .defenders
+//             .iter()
+//             .filter(|d| player_tags.contains(d))
+//             .cloned()
+//             .collect();
+//     }
+
+//     /** An evaluation of how 'significant' the war probably is  */
+//     pub fn war_scale(&self, players: &Vec<u32>) -> i64 {
+//         let player_attackers = self.player_attackers(players).len();
+//         let player_defenders = self.player_defenders(players).len();
+//         let casualties = self.attacker_losses + self.defender_losses;
+//         if player_attackers <= 1 || player_defenders <= 1 {
+//             return casualties;
+//         }
+
+//         return casualties * min(player_attackers, player_defenders) as i64;
+//     }
+
+//     pub fn is_player_war(&self, players: &Vec<u32>) -> bool {
+//         return self.attackers.iter().any(|a| players.contains(a))
+//             && self.defenders.iter().any(|d| players.contains(d));
+//     }
+
+//     /// ?????There are nonexistant wars in save files, so keep an option?????
+//     pub fn from_parsed_obj(obj: &RawPDXObject) -> Result<Option<War>> {
+//         let mut attackers: Vec<String> = Vec::new();
+//         let mut defenders: Vec<String> = Vec::new();
+//         let mut earliest_date: Option<StellarisDate> = None;
+//         let mut latest_date: Option<StellarisDate> = None;
+//         for (date, value) in obj
+//             .get_first_obj("history")
+//             .ok_or(anyhow!("No history in war"))?
+//             .iter_all_KVs()
+//             .filter_map(|(k, v)| {
+//                 Some((
+//                     k.as_date()?,
+//                     v.as_object().expect("date events should be objects"),
+//                 ))
+//             })
+//         {
+//             for (event, value) in value.iter_all_KVs() {
+//                 match (event.0, value) {
+//                     ("add_attacker", RawPDXValue::Scalar(value)) => {
+//                         attackers.push(value.as_string());
+//                         match earliest_date {
+//                             None => earliest_date = Some(date),
+//                             Some(prev_date) if date < prev_date => earliest_date = Some(date),
+//                             _ => {}
+//                         }
+//                     }
+//                     ("add_defender", RawPDXValue::Scalar(value)) => {
+//                         defenders.push(value.as_string());
+//                         match earliest_date {
+//                             None => earliest_date = Some(date),
+//                             Some(prev_date) if date < prev_date => earliest_date = Some(date),
+//                             _ => {}
+//                         }
+//                     }
+//                     ("rem_attacker", RawPDXValue::Scalar(_))
+//                     | ("rem_defender", RawPDXValue::Scalar(_)) => match latest_date {
+//                         None => latest_date = Some(date),
+//                         Some(prev_date) if prev_date < date => latest_date = Some(date),
+//                         _ => {}
+//                     },
+//                     _ => {}
+//                 }
+//             }
+//         }
+//         let Some(start_date) = earliest_date else {
+//             return Ok(None);
+//         };
+
+//         let mut attacker_losses: i64 = 0;
+//         let mut defender_losses: i64 = 0;
+//         for (key, value) in obj.iter_all_KVs() {
+//             if key.0 != "participants" {
+//                 continue;
+//             }
+//             let RawPDXValue::Object(obj) = value else {
+//                 // this shouldn't happen?
+//                 continue;
+//             };
+
+//             let Some(tag) = obj.get_first_scalar("tag") else {
+//                 continue;
+//             };
+//             let Some(losses) = obj.get_first_object_at_path(["losses", "members"]) else {
+//                 continue;
+//             };
+//             let losses: i64 = losses
+//                 .iter_values()
+//                 .filter_map(RawPDXValue::as_scalar)
+//                 .filter_map(RawPDXScalar::as_int)
+//                 .sum();
+//             if attackers.contains(&tag.as_string()) {
+//                 attacker_losses += losses;
+//             } else if defenders.contains(&tag.as_string()) {
+//                 defender_losses += losses;
+//             }
+//         }
+
+//         let name = obj
+//             .get_first_scalar("name")
+//             .ok_or(anyhow!("No name in war"))?
+//             .as_string();
+//         return Ok(Some(War {
+//             name: name.clone(),
+//             attackers: todo!(),
+//             defenders: todo!(),
+//             attacker_losses,
+//             defender_losses,
+//             start_date,
+//             end_date: latest_date,
+//             result: match obj.get_first_scalar("outcome") {
+//                 Some(RawPDXScalar("1")) => Some(WarResult::WhitePeace),
+//                 Some(RawPDXScalar("2")) => Some(WarResult::AttackerVictory),
+//                 Some(RawPDXScalar("3")) => Some(WarResult::DefenderVictory),
+//                 _ => None,
+//             },
+//         }));
+//     }
+// }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveGame {
+    pub all_nations: HashMap<u32, Country>,
+    /// `tag: playername`
+    pub player_tags: HashMap<u32, String>,
+    pub galactic_objects: HashMap<u32, GalacticObject>,
+    pub dlc: Vec<String>,
+    pub date: StellarisDate,
+    pub multiplayer: bool,
+    // pub player_wars: Vec<War>,
+    pub game_mod: Mod,
+}
+
+impl SaveGame {
+    pub fn player_nations(&self) -> impl Iterator<Item = (&String, &Country)> {
+        return self
+            .player_tags
+            .iter()
+            .filter_map(|(tag, player)| Some((player, self.all_nations.get(tag)?)));
+    }
+
+    pub fn new_parser(raw_save: &RawPDXObject) -> Result<SaveGame, anyhow::Error> {
+        let all_nations = raw_save
+            .expect_first_obj("country")?
+            .iter_all_KVs()
+            .map(|(k, v)| {
+                let k: u32 = k.try_into()?;
+                let v = Country::from_parsed_obj(k, v.expect_object()?)?;
+                return Ok((k, v));
+            })
+            .collect::<Result<_, anyhow::Error>>()?;
+        let player_tags: Vec<&RawPDXObject> = raw_save
+            .expect_first_obj("player")?
+            .iter_values()
+            .map(RawPDXValue::expect_object)
+            .collect::<Result<Vec<_>, _>>()?;
+        let player_tags: HashMap<u32, String> = player_tags
+            .iter()
+            .map(|player_obj| {
+                let name = player_obj.expect_first_scalar("name")?.as_string();
+                let country_idx = player_obj.expect_first_scalar("country")?.try_into()?;
+                return Ok((country_idx, name));
+            })
+            .collect::<Result<_, anyhow::Error>>()?;
+
+        let galactic_objects = raw_save
+            .expect_first_obj("galactic_object")?
+            .iter_all_KVs()
+            .map(|(k, v)| {
+                let k = k.try_into()?;
+                let v = v
+                    .as_object()
+                    .ok_or(anyhow!("Expected galactic_object entries to be objects."))?;
+                let v = GalacticObject::from_parsed_obj(v)?;
+                return Ok((k, v));
+            })
+            .collect::<Result<_, anyhow::Error>>()?;
+
+        let dlc: Vec<String> = raw_save
+            .expect_first_obj("required_dlcs")?
+            .iter_values()
+            .filter_map(|v| match v {
+                RawPDXValue::Scalar(scalar) => Some(scalar.as_string()),
+                _ => None,
+            })
+            .collect();
+        let date = raw_save.expect_first_scalar("date")?.try_into()?;
+
+        return Ok(SaveGame {
+            all_nations,
+            player_tags,
+            galactic_objects,
+            dlc,
+            date,
+            multiplayer: raw_save
+                .get_first_scalar("multi_player")
+                .and_then(|mp| mp.as_bool())
+                .unwrap_or(false),
+            game_mod: Mod::Vanilla,
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::raw_parser::RawPDXObjectItem;
+
+    use super::*;
+
+    #[test]
+    fn view() {
+        let text = std::fs::read_to_string("../gamestate").unwrap();
+        let (rest, obj) = RawPDXObject::parse_object_inner(&text).unwrap();
+        assert!(rest.is_empty());
+        // let country0_obj = obj.get_first_object_at_path(["country", "0"]).unwrap();
+        // let country0 = Country::from_parsed_obj(0, country0_obj).unwrap();
+        // println!("{country0:?}");
+        let save = SaveGame::new_parser(&obj).unwrap();
+        println!("{save:?}");
+        // for item in &obj
+        //     .get_first_object_at_path(["galactic_object", "0"])
+        //     .unwrap()
+        //     .0
+        // {
+        //     match item {
+        //         RawPDXObjectItem::KV(k, RawPDXValue::Scalar(scalar)) => {
+        //             println!("{}: {}", k.0, scalar.0)
+        //         }
+        //         RawPDXObjectItem::KV(k, RawPDXValue::Object(object)) => {
+        //             println!("{}: {{<{} items>}}", k.0, object.0.len())
+        //         }
+        //         RawPDXObjectItem::Value(RawPDXValue::Scalar(scalar)) => println!("{}", scalar.0),
+        //         RawPDXObjectItem::Value(RawPDXValue::Object(obj)) => {
+        //             println!("{{<{} items>}}", obj.0.len())
+        //         }
+        //     }
+        // }
+    }
+}

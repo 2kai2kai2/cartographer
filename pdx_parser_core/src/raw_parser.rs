@@ -35,6 +35,26 @@ impl<'a, D: FromStr> From<RawPDXScalar<'a>> for PDXScalar<D> {
     }
 }
 
+/// Occurs when extracting/converting from
+/// - [`RawPDXValue`]
+/// - [`RawPDXObject`]
+/// - [`RawPDXScalar`]
+/// - [`RawPDXObjectItem`]
+///
+/// into some other type
+#[derive(Debug, thiserror::Error)]
+pub enum RawPDXExtractError {
+    /// Expected the value to be a scalar but it was not.
+    #[error("Expected the value to be a scalar but it was not.")]
+    NotScalar,
+    /// Expected the value to be an object but it was not.
+    #[error("Expected the value to be an object but it was not.")]
+    NotObject,
+    /// Expected a key to be present in an object but it was not.
+    #[error("Expected key `{0}` to be present in an object but it was not.")]
+    MissingKey(String),
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RawPDXScalar<'a>(pub &'a str);
 macro_rules! implement_try_from_raw_pdx_scalar {
@@ -63,10 +83,10 @@ implement_try_from_raw_pdx_scalar!(f32, std::num::ParseFloatError);
 implement_try_from_raw_pdx_scalar!(f64, std::num::ParseFloatError);
 implement_try_from_raw_pdx_scalar!(EU4Date, anyhow::Error);
 implement_try_from_raw_pdx_scalar!(StellarisDate, anyhow::Error);
-impl<'a> TryFrom<RawPDXScalar<'a>> for bool {
+impl<'a> TryFrom<&RawPDXScalar<'a>> for bool {
     type Error = anyhow::Error;
 
-    fn try_from(value: RawPDXScalar<'a>) -> Result<Self, Self::Error> {
+    fn try_from(value: &RawPDXScalar<'a>) -> Result<Self, Self::Error> {
         return match value.0 {
             "yes" => Ok(true),
             "no" => Ok(false),
@@ -74,8 +94,8 @@ impl<'a> TryFrom<RawPDXScalar<'a>> for bool {
         };
     }
 }
-impl<'a> From<RawPDXScalar<'a>> for &'a str {
-    fn from(value: RawPDXScalar<'a>) -> Self {
+impl<'a> From<&RawPDXScalar<'a>> for &'a str {
+    fn from(value: &RawPDXScalar<'a>) -> Self {
         return value
             .0
             .strip_prefix('"')
@@ -202,6 +222,15 @@ impl<'a> RawPDXObject<'a> {
             .map(|(_, v)| v);
     }
 
+    /// Like [`RawPDXObject::get_first`] but returns a result instead of an option.
+    ///
+    /// If the key is not found, the error will be [`RawPDXExtractError::MissingKey`]
+    pub fn expect_first(&self, key: &str) -> Result<&RawPDXValue<'a>, RawPDXExtractError> {
+        return self
+            .get_first(key)
+            .ok_or_else(|| RawPDXExtractError::MissingKey(key.to_string()));
+    }
+
     pub fn get_first_obj(&self, key: &str) -> Option<&RawPDXObject<'a>> {
         return self.iter_all_KVs().find_map(|(k, v)| {
             if k.0 != key {
@@ -212,6 +241,15 @@ impl<'a> RawPDXObject<'a> {
                 None
             }
         });
+    }
+
+    /// Like [`RawPDXObject::get_first_obj`] but returns a result instead of an option.
+    ///
+    /// If the key is not found, the error will be [`RawPDXExtractError::MissingKey`]
+    pub fn expect_first_obj(&self, key: &str) -> Result<&RawPDXObject<'a>, RawPDXExtractError> {
+        return self
+            .get_first_obj(key)
+            .ok_or_else(|| RawPDXExtractError::MissingKey(key.to_string()));
     }
 
     pub fn get_first_scalar(&self, key: &str) -> Option<&RawPDXScalar<'a>> {
@@ -225,6 +263,16 @@ impl<'a> RawPDXObject<'a> {
             }
         });
     }
+
+    /// Like [`RawPDXObject::get_first_scalar`] but returns a result instead of an option.
+    ///
+    /// If the key is not found, the error will be [`RawPDXExtractError::MissingKey`]
+    pub fn expect_first_scalar(&self, key: &str) -> Result<&RawPDXScalar<'a>, RawPDXExtractError> {
+        return self
+            .get_first_scalar(key)
+            .ok_or_else(|| RawPDXExtractError::MissingKey(key.to_string()));
+    }
+
     pub fn get_first_as_int(&self, key: &str) -> Option<i64> {
         return self.get_first(key)?.as_scalar()?.as_int();
     }
@@ -263,15 +311,16 @@ impl<'a> RawPDXObject<'a> {
         return obj.get_first_scalar(path.last()?);
     }
 
+    /// If the path is empty, will return `self`.
     pub fn get_first_object_at_path<const N: usize>(
         &self,
         path: [&str; N],
     ) -> Option<&RawPDXObject<'a>> {
         let mut obj = self;
-        for key in path.into_iter().take(N - 1) {
+        for key in path {
             obj = obj.get_first_obj(key)?;
         }
-        return obj.get_first_obj(path.last()?);
+        return Some(obj);
     }
 }
 
@@ -328,12 +377,32 @@ impl<'a> RawPDXValue<'a> {
         }
     }
 
+    /// Like [`RawPDXValue::as_scalar`] but returns a result instead of an option.
+    ///
+    /// If the value is not a scalar, the error will be [`RawPDXExtractError::NotScalar`]
+    pub fn expect_scalar<'b>(&'b self) -> Result<&'b RawPDXScalar<'a>, RawPDXExtractError> {
+        return match self {
+            RawPDXValue::Scalar(scalar) => Ok(scalar),
+            RawPDXValue::Object(_) => Err(RawPDXExtractError::NotScalar),
+        };
+    }
+
     pub fn as_object<'b>(&'b self) -> Option<&'b RawPDXObject<'a>> {
         if let RawPDXValue::Object(object) = self {
             return Some(object);
         } else {
             return None;
         }
+    }
+
+    /// Like [`RawPDXValue::as_object`] but returns a result instead of an option.
+    ///
+    /// If the value is not a object, the error will be [`RawPDXExtractError::NotObject`]
+    pub fn expect_object<'b>(&'b self) -> Result<&'b RawPDXObject<'a>, RawPDXExtractError> {
+        return match self {
+            RawPDXValue::Scalar(_) => Err(RawPDXExtractError::NotObject),
+            RawPDXValue::Object(object) => Ok(object),
+        };
     }
 }
 
