@@ -56,7 +56,7 @@ pub struct Planet {
     // todo: name
     pub planet_class: String,
     /// Determines where in the system it appears
-    pub orbit: u32,
+    pub orbit: f32,
     pub planet_size: u32,
     /// Even if the system is 'owned', this may not be set.
     pub owner: Option<u32>,
@@ -463,6 +463,10 @@ impl SaveGame {
         let all_nations = raw_save
             .expect_first_obj("country")?
             .iter_all_KVs()
+            .filter(|(_, v)| match v.as_scalar() {
+                Some(scalar) if scalar.as_string() == "none" => false,
+                _ => true,
+            })
             .map(|(k, v)| {
                 let k: u32 = k.try_into()?;
                 let v = Country::from_parsed_obj(k, v.expect_object()?)?;
@@ -499,6 +503,7 @@ impl SaveGame {
             .collect::<Result<Vec<GalacticObject>, anyhow::Error>>()?;
 
         let planets = raw_save
+            .expect_first_obj("planets")?
             .expect_first_obj("planet")?
             .iter_all_KVs()
             .enumerate()
