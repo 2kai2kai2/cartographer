@@ -52,6 +52,46 @@ impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for GalacticObjectCoord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Planet {
+    // todo: name
+    pub planet_class: String,
+    /// Determines where in the system it appears
+    pub orbit: u32,
+    pub planet_size: u32,
+    /// Even if the system is 'owned', this may not be set.
+    pub owner: Option<u32>,
+    /// Even if the system is 'owned', this may not be set.
+    pub controller: Option<u32>,
+    pub num_sapient_pops: u32,
+    // ...
+}
+impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for Planet {
+    type Error = anyhow::Error;
+
+    fn try_from(obj: &'b RawPDXObject<'a>) -> std::result::Result<Self, Self::Error> {
+        let planet_class = obj.expect_first_scalar("planet_class")?.as_string();
+        let orbit = obj.expect_first_scalar("orbit")?.try_into()?;
+        let planet_size = obj.expect_first_scalar("planet_size")?.try_into()?;
+        let owner = obj
+            .get_first_scalar("owner")
+            .and_then(|owner| owner.try_into().ok());
+        let controller = obj
+            .get_first_scalar("controller")
+            .and_then(|controller| controller.try_into().ok());
+        let num_sapient_pops = obj.expect_first_scalar("num_sapient_pops")?.try_into()?;
+
+        return Ok(Planet {
+            planet_class,
+            orbit,
+            planet_size,
+            owner,
+            controller,
+            num_sapient_pops,
+        });
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hyperlane {
     /// Destination system id. Should also have a path back.
     pub to: u32,
@@ -78,11 +118,22 @@ pub struct GalacticObject {
     pub coordinate: GalacticObjectCoord,
     pub obj_type: String,
     pub name: String,
+    /// The computed owner of this system.
+    /// In most cases this is relatively simple-- only one country should have control of the system.
+    /// However, this can be complicated during occupation or other situations.
+    ///
+    /// NOTE: will be `None` when returned from `try_from` and will need to be updated based on further data.
+    pub map_owner: Option<u32>,
+    /// Planet ids, including the sun.
     pub planets: Vec<u32>,
     pub hyperlanes: Vec<Hyperlane>,
+    /// Should be a subset of [`GalacticObject::planets`]
+    pub colonies: Vec<u32>,
 }
-impl GalacticObject {
-    pub fn from_parsed_obj(obj: &RawPDXObject) -> Result<GalacticObject, anyhow::Error> {
+impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for GalacticObject {
+    type Error = anyhow::Error;
+
+    fn try_from(obj: &'b RawPDXObject<'a>) -> std::result::Result<Self, Self::Error> {
         let coordinate = obj.expect_first_obj("coordinate")?.try_into()?;
 
         let obj_type = obj.expect_first_scalar("type")?.as_string();
@@ -104,13 +155,22 @@ impl GalacticObject {
                 .collect::<Result<_, _>>()?,
             None => Vec::new(),
         };
+        let colonies = match obj.get_first_obj("colonies") {
+            Some(colonies) => colonies
+                .iter_values()
+                .map(|id| Ok(id.expect_scalar()?.try_into()?))
+                .collect::<Result<_, anyhow::Error>>()?,
+            None => Vec::new(),
+        };
 
         return Ok(GalacticObject {
             coordinate,
             obj_type,
             name,
+            map_owner: None,
             planets,
             hyperlanes,
+            colonies,
         });
     }
 }
@@ -120,6 +180,10 @@ pub struct Country {
     pub idx: u32,
     pub name: String,
     // adjective
+    /// Known types:
+    /// - `default` is normal player+npc countries
+    ///
+    pub country_type: String,
     pub victory_rank: u32,
     pub victory_score: f32,
     pub tech_power: f32,
@@ -192,12 +256,19 @@ impl Country {
             }
         }
 
-        let map_color = [0, 0, 0];
+        let country_type = obj.expect_first_scalar("type")?.as_string();
+
+        let map_color = [
+            ((idx * 37) % 256) as u8,
+            ((idx * 71) % 256) as u8,
+            ((idx * 127) % 256) as u8,
+        ];
         let nation_color = [0, 0, 0];
 
         return Ok(Country {
             idx,
             name,
+            country_type,
             victory_rank,
             victory_score,
             tech_power,
@@ -371,7 +442,7 @@ pub struct SaveGame {
     pub all_nations: HashMap<u32, Country>,
     /// `tag: playername`
     pub player_tags: HashMap<u32, String>,
-    pub galactic_objects: HashMap<u32, GalacticObject>,
+    pub galactic_objects: Vec<GalacticObject>,
     pub dlc: Vec<String>,
     pub date: StellarisDate,
     pub multiplayer: bool,
@@ -412,18 +483,80 @@ impl SaveGame {
             })
             .collect::<Result<_, anyhow::Error>>()?;
 
-        let galactic_objects = raw_save
+        let mut galactic_objects = raw_save
             .expect_first_obj("galactic_object")?
             .iter_all_KVs()
-            .map(|(k, v)| {
-                let k = k.try_into()?;
-                let v = v
-                    .as_object()
-                    .ok_or(anyhow!("Expected galactic_object entries to be objects."))?;
-                let v = GalacticObject::from_parsed_obj(v)?;
-                return Ok((k, v));
+            .enumerate()
+            .map(|(i, (k, v))| {
+                let k: u32 = k.try_into()?;
+                if i != k as usize {
+                    return Err(anyhow!(
+                        "Expected consistently incrementing galactic object indices."
+                    ));
+                }
+                return v.expect_object()?.try_into();
             })
-            .collect::<Result<_, anyhow::Error>>()?;
+            .collect::<Result<Vec<GalacticObject>, anyhow::Error>>()?;
+
+        let planets = raw_save
+            .expect_first_obj("planet")?
+            .iter_all_KVs()
+            .enumerate()
+            .map(|(i, (k, v))| {
+                let k: u32 = k.try_into()?;
+                if i != k as usize {
+                    return Err(anyhow!(
+                        "Expected consistently incrementing planet indices."
+                    ));
+                }
+                return v.expect_object()?.try_into();
+            })
+            .collect::<Result<Vec<Planet>, anyhow::Error>>()?;
+
+        'systems_loop: for system in &mut galactic_objects {
+            // First see if there are colonies. If there are, they decide ownership.
+            // TODO: total wars may confuse this method
+            if let Some(colony) = system.colonies.first() {
+                let Some(colony) = planets.get(*colony as usize) else {
+                    // TODO: this suggests inconsistency in the save file
+                    // so we probably want to display some warning.
+                    continue 'systems_loop;
+                };
+                let Some(owner) = colony.owner.or(colony.controller) else {
+                    // TODO: colonies should have owners, if they do not then something is wrong.
+                    // so we probably want to display some warning.
+                    continue 'systems_loop;
+                };
+                system.map_owner = Some(owner);
+                continue 'systems_loop;
+            }
+
+            // Otherwise, check if any of the planets has owner set
+            for planet in &system.planets {
+                let Some(planet) = planets.get(*planet as usize) else {
+                    // TODO: this suggests inconsistency in the save file
+                    // so we probably want to display some warning.
+                    continue;
+                };
+                if let Some(owner) = planet.owner {
+                    system.map_owner = Some(owner);
+                    continue 'systems_loop;
+                }
+            }
+
+            // And finally just if controller is set
+            for planet in &system.planets {
+                let Some(planet) = planets.get(*planet as usize) else {
+                    // TODO: this suggests inconsistency in the save file
+                    // so we probably want to display some warning.
+                    continue;
+                };
+                if let Some(controller) = planet.controller {
+                    system.map_owner = Some(controller);
+                    continue 'systems_loop;
+                }
+            }
+        }
 
         let dlc: Vec<String> = raw_save
             .expect_first_obj("required_dlcs")?
