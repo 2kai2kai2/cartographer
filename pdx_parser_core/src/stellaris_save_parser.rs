@@ -175,11 +175,64 @@ impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for GalacticObject {
     }
 }
 
+/// Assets are in `steamapps/common/Stellaris/flags/<category>/<file>`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CountryFlag {
+    pub icon_category: String,
+    pub icon_file: String,
+    /// I think should always be `backgrounds`, at least in vanilla
+    pub background_category: String,
+    pub background_file: String,
+
+    /// Acts as border on map and primary flag color
+    pub color_primary: String,
+    /// Acts as fill on map and secondary flag color
+    pub color_secondary: String,
+    /// May be "null"
+    pub color3: String,
+    /// May be "null"
+    pub color4: String,
+}
+impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for CountryFlag {
+    type Error = anyhow::Error;
+
+    fn try_from(obj: &'b RawPDXObject<'a>) -> std::result::Result<Self, Self::Error> {
+        let icon = obj.expect_first_obj("icon")?;
+        let icon_category = icon.expect_first_scalar("category")?.as_string();
+        let icon_file = icon.expect_first_scalar("file")?.as_string();
+
+        let background = obj.expect_first_obj("background")?;
+        let background_category = background.expect_first_scalar("category")?.as_string();
+        let background_file = background.expect_first_scalar("file")?.as_string();
+
+        let colors = obj.expect_first_obj("colors")?;
+        let &[color_primary, color_secondary, color3, color4, ..] = &colors.0.as_slice() else {
+            return Err(anyhow!("Unexpected shape for flag colors array"));
+        };
+        let color_primary = color_primary.expect_value()?.expect_scalar()?.as_string();
+        let color_secondary = color_secondary.expect_value()?.expect_scalar()?.as_string();
+        let color3 = color3.expect_value()?.expect_scalar()?.as_string();
+        let color4 = color4.expect_value()?.expect_scalar()?.as_string();
+
+        return Ok(CountryFlag {
+            icon_category,
+            icon_file,
+            background_category,
+            background_file,
+            color_primary,
+            color_secondary,
+            color3,
+            color4,
+        });
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Country {
     pub idx: u32,
     pub name: String,
     // adjective
+    pub flag: CountryFlag,
     /// Known types:
     /// - `default` is normal player+npc countries
     ///
@@ -193,8 +246,6 @@ pub struct Country {
     pub capital: Option<u32>,
     /// Pair of `(income, expense)`. Both will be positive.
     pub balance: HashMap<String, (f64, f64)>,
-    pub map_color: [u8; 3],
-    pub nation_color: [u8; 3],
 }
 impl Country {
     pub fn from_parsed_obj(idx: u32, obj: &RawPDXObject) -> Result<Country> {
@@ -202,6 +253,7 @@ impl Country {
             .expect_first_obj("name")?
             .get_first_as_string("key")
             .unwrap_or("unknown".to_string());
+        let flag = obj.expect_first_obj("flag")?.try_into()?;
 
         let victory_rank = obj.expect_first_scalar("victory_rank")?.try_into()?;
         let victory_score = obj.expect_first_scalar("victory_score")?.try_into()?;
@@ -268,6 +320,7 @@ impl Country {
         return Ok(Country {
             idx,
             name,
+            flag,
             country_type,
             victory_rank,
             victory_score,
@@ -277,8 +330,6 @@ impl Country {
             num_sapient_pops,
             capital,
             balance,
-            map_color,
-            nation_color,
         });
     }
 }

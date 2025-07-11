@@ -7,6 +7,7 @@ use pdx_parser_core::stellaris_save_parser::{GalacticObject, SaveGame};
 pub const SPACE_COLOR: Rgb<u8> = Rgb([10, 10, 10]);
 pub const HYPERLANE_COLOR: Rgb<u8> = Rgb([40, 100, 150]);
 pub const MAX_BORDER_RANGE: f64 = 50.0;
+pub const ERROR_PINK: Rgb<u8> = Rgb([255, 19, 240]);
 
 /// Returns `(scale, pixel_locations)`.
 /// - scale is number of pixels per stellaris map distance unit
@@ -73,7 +74,11 @@ pub fn draw_hyperlanes(mut image: RgbImage, save: &SaveGame) -> RgbImage {
     return image;
 }
 
-pub(crate) fn draw_political_map(mut image: RgbImage, save: &SaveGame) -> RgbImage {
+pub(crate) fn draw_political_map(
+    mut image: RgbImage,
+    save: &SaveGame,
+    colors: &HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
+) -> RgbImage {
     let (scale, locations) = systems_to_img_space(image.dimensions(), save);
     let locations: Vec<_> = locations.collect();
 
@@ -152,7 +157,10 @@ pub(crate) fn draw_political_map(mut image: RgbImage, save: &SaveGame) -> RgbIma
                 // Should show warning about this inconsistency in the save.
                 return original_color;
             };
-            return Rgb(owner.map_color);
+            let Some((_, map_color, _)) = colors.get(&owner.flag.color_secondary) else {
+                return ERROR_PINK;
+            };
+            return Rgb(*map_color);
         }
     });
 
