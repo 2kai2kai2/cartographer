@@ -5,7 +5,7 @@ use crate::{
     raw_parser::{RawPDXExtractError, RawPDXObject, RawPDXScalar, RawPDXValue},
     stellaris_date::StellarisDate,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mod {
@@ -310,13 +310,6 @@ impl Country {
 
         let country_type = obj.expect_first_scalar("type")?.as_string();
 
-        let map_color = [
-            ((idx * 37) % 256) as u8,
-            ((idx * 71) % 256) as u8,
-            ((idx * 127) % 256) as u8,
-        ];
-        let nation_color = [0, 0, 0];
-
         return Ok(Country {
             idx,
             name,
@@ -511,7 +504,7 @@ impl SaveGame {
     }
 
     pub fn new_parser(raw_save: &RawPDXObject) -> Result<SaveGame, anyhow::Error> {
-        let all_nations = raw_save
+        let all_nations: HashMap<u32, Country> = raw_save
             .expect_first_obj("country")?
             .iter_all_KVs()
             .filter(|(_, v)| match v.as_scalar() {
@@ -569,22 +562,62 @@ impl SaveGame {
             })
             .collect::<Result<Vec<Planet>, anyhow::Error>>()?;
 
+        /// Some "countries" should not appear on the map, even if they can own territory
+        /// For example: primitives, mining drones, etc.
+        fn country_on_map(country: &Country) -> bool {
+            // TODO: load automatically from `Stellaris/common/country_types/00_country_types.txt`
+            // Those that have `*->faction->generate_borders`=`yes` (or not present)
+            return matches!(
+                country.country_type.as_str(),
+                "default"
+                    | "dormant_marauders"
+                    | "awakened_marauders"
+                    | "fallen_empire"
+                    | "awakened_fallen_empire"
+                    | "rebel"
+                    | "caravaneer_home"
+                    // crisis
+                    | "swarm" 
+                    | "extradimensional"
+                    | "extradimensional_2"
+                    | "extradimensional_3"
+                    | "ai_empire"
+                    | "cybrex_empire"
+                    | "sentinels"
+                    | "gate_builders"
+                    | "synth_queen_storm"
+                    | "synth_queen"
+                    | "awakened_synth_queen"
+                    | "feral_prethoryn"
+                    | "gray_goo"
+                    | "voidspawn_boss" // ??
+            );
+        }
         'systems_loop: for system in &mut galactic_objects {
             // First see if there are colonies. If there are, they decide ownership.
             // TODO: total wars may confuse this method
-            if let Some(colony) = system.colonies.first() {
+            for colony in &system.colonies {
                 let Some(colony) = planets.get(*colony as usize) else {
                     // TODO: this suggests inconsistency in the save file
                     // so we probably want to display some warning.
-                    continue 'systems_loop;
+                    continue;
                 };
-                let Some(owner) = colony.owner.or(colony.controller) else {
+
+                let Some(owner_id) = colony.owner else {
                     // TODO: colonies should have owners, if they do not then something is wrong.
                     // so we probably want to display some warning.
-                    continue 'systems_loop;
+                    continue;
                 };
-                system.map_owner = Some(owner);
-                continue 'systems_loop;
+                let Some(owner) = all_nations.get(&owner_id) else {
+                    // TODO: country doesn't seem to exist, something is probably wrong.
+                    // so we probably want to display some warning.
+                    continue;
+                };
+
+                if country_on_map(owner) {
+                    system.map_owner = Some(owner_id);
+                    continue 'systems_loop;
+                }
             }
 
             // Otherwise, check if any of the planets has owner set
@@ -594,8 +627,18 @@ impl SaveGame {
                     // so we probably want to display some warning.
                     continue;
                 };
-                if let Some(owner) = planet.owner {
-                    system.map_owner = Some(owner);
+
+                let Some(owner_id) = planet.owner else {
+                    continue;
+                };
+                let Some(owner) = all_nations.get(&owner_id) else {
+                    // TODO: country doesn't seem to exist, something is probably wrong.
+                    // so we probably want to display some warning.
+                    continue;
+                };
+
+                if country_on_map(owner) {
+                    system.map_owner = Some(owner_id);
                     continue 'systems_loop;
                 }
             }
@@ -607,8 +650,18 @@ impl SaveGame {
                     // so we probably want to display some warning.
                     continue;
                 };
-                if let Some(controller) = planet.controller {
-                    system.map_owner = Some(controller);
+
+                let Some(controller_id) = planet.controller else {
+                    continue;
+                };
+                let Some(controller) = all_nations.get(&controller_id) else {
+                    // TODO: country doesn't seem to exist, something is probably wrong.
+                    // so we probably want to display some warning.
+                    continue;
+                };
+
+                if country_on_map(controller) {
+                    system.map_owner = Some(controller_id);
                     continue 'systems_loop;
                 }
             }
