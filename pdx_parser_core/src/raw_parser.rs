@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use anyhow::anyhow;
+
 use crate::{eu4_date::EU4Date, stellaris_date::StellarisDate};
 
 #[inline]
@@ -44,6 +46,12 @@ impl<'a, D: FromStr> From<RawPDXScalar<'a>> for PDXScalar<D> {
 /// into some other type
 #[derive(Debug, thiserror::Error)]
 pub enum RawPDXExtractError {
+    /// Expected the object item to be a KV but it was not.
+    #[error("Expected the object item to be a KV but it was not.")]
+    NotKV,
+    /// Expected the object item to be a value but it was not.
+    #[error("Expected the object item to be a value but it was not.")]
+    NotValue,
     /// Expected the value to be a scalar but it was not.
     #[error("Expected the value to be a scalar but it was not.")]
     NotScalar,
@@ -66,6 +74,22 @@ macro_rules! implement_try_from_raw_pdx_scalar {
                 return value.0.parse();
             }
         }
+        impl<'a> TryFrom<&RawPDXValue<'a>> for $t {
+            type Error = ::anyhow::Error;
+
+            fn try_from(value: &RawPDXValue<'a>) -> Result<Self, Self::Error> {
+                let value = value.expect_scalar()?;
+                return Ok(value.0.parse()?);
+            }
+        }
+        impl<'a> TryFrom<&RawPDXObjectItem<'a>> for $t {
+            type Error = ::anyhow::Error;
+
+            fn try_from(value: &RawPDXObjectItem<'a>) -> Result<Self, Self::Error> {
+                let value = value.expect_value()?.expect_scalar()?;
+                return Ok(value.0.parse()?);
+            }
+        }
     };
 }
 
@@ -74,15 +98,20 @@ implement_try_from_raw_pdx_scalar!(u16, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(u32, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(u64, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(u128, std::num::ParseIntError);
+implement_try_from_raw_pdx_scalar!(usize, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(i8, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(i16, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(i32, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(i64, std::num::ParseIntError);
 implement_try_from_raw_pdx_scalar!(i128, std::num::ParseIntError);
+implement_try_from_raw_pdx_scalar!(isize, std::num::ParseIntError);
+
 implement_try_from_raw_pdx_scalar!(f32, std::num::ParseFloatError);
 implement_try_from_raw_pdx_scalar!(f64, std::num::ParseFloatError);
+
 implement_try_from_raw_pdx_scalar!(EU4Date, anyhow::Error);
 implement_try_from_raw_pdx_scalar!(StellarisDate, anyhow::Error);
+
 impl<'a> TryFrom<&RawPDXScalar<'a>> for bool {
     type Error = anyhow::Error;
 
@@ -173,6 +202,22 @@ impl<'a> RawPDXObjectItem<'a> {
                 return Some((rest, RawPDXObjectItem::KV(scalar, value)));
             }
             (rest, value) => return Some((rest, value.into())),
+        };
+    }
+
+    pub fn expect_kv(
+        &'a self,
+    ) -> Result<(&'a RawPDXScalar<'a>, &'a RawPDXValue<'a>), RawPDXExtractError> {
+        return match self {
+            RawPDXObjectItem::KV(key, value) => Ok((key, value)),
+            RawPDXObjectItem::Value(_) => Err(RawPDXExtractError::NotKV),
+        };
+    }
+
+    pub fn expect_value(&'a self) -> Result<&'a RawPDXValue<'a>, RawPDXExtractError> {
+        return match self {
+            RawPDXObjectItem::KV(_, _) => Err(RawPDXExtractError::NotValue),
+            RawPDXObjectItem::Value(value) => Ok(value),
         };
     }
 }
@@ -321,6 +366,15 @@ impl<'a> RawPDXObject<'a> {
             obj = obj.get_first_obj(key)?;
         }
         return Some(obj);
+    }
+}
+impl<'a, 'b> IntoIterator for &'b RawPDXObject<'a> {
+    type Item = &'b RawPDXObjectItem<'a>;
+
+    type IntoIter = <&'b [RawPDXObjectItem<'a>] as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        return self.0.iter();
     }
 }
 

@@ -10,3 +10,4 @@ encoding_rs_io = "0.1.7"
 image = "0.25.1"
 decancer = "3.2.3"
 pdx_parser_core = { path = "../pdx_parser_core" }
+clap = { version = "4.5.41", features = ["derive"] }
