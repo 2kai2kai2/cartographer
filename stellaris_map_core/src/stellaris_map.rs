@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
-use pdx_parser_core::stellaris_save_parser::{GalacticObject, SaveGame};
+use pdx_parser_core::stellaris_save_parser::{Country, GalacticObject, SaveGame};
 
 pub const SPACE_COLOR: Rgb<u8> = Rgb([10, 10, 10]);
 pub const HYPERLANE_COLOR: Rgb<u8> = Rgb([40, 100, 150]);
@@ -74,13 +74,59 @@ pub fn draw_hyperlanes(mut image: RgbImage, save: &SaveGame) -> RgbImage {
     return image;
 }
 
-pub(crate) fn draw_political_map(
+/// Returns for each galactic object (system) by index
+/// - `(owner_id, owner_country, owner_map_color)`
+/// - Returns an `Err` if an id/name references a country/color that does not exist
+fn make_galactic_object_ownership<'a, 'b>(
+    save: &'a SaveGame,
+    colors: &'b HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
+) -> impl Iterator<Item = Result<Option<(u32, &'a Country, [u8; 3])>, ()>> + 'b
+where
+    'a: 'b,
+{
+    return save.galactic_objects.iter().map(|system| {
+        let Some(owner_id) = system.map_owner else {
+            return Ok(None);
+        };
+        let Some(owner) = save.all_nations.get(&owner_id) else {
+            return Err(());
+        };
+        let Some(map_color) = owner.flag.index_map_color(owner.color_index, colors) else {
+            return Err(());
+        };
+        return Ok(Some((owner_id, owner, map_color)));
+    });
+}
+
+pub(crate) fn draw_political_map<'a>(
     mut image: RgbImage,
-    save: &SaveGame,
+    save: &'a SaveGame,
     colors: &HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
 ) -> RgbImage {
     let (scale, locations) = systems_to_img_space(image.dimensions(), save);
-    let locations: Vec<_> = locations.collect();
+    let galactic_object_ownership = make_galactic_object_ownership(save, colors);
+
+    /// Combined data on a system/galactic object
+    struct SystemData<'a> {
+        id: usize,
+        galactic_object: &'a GalacticObject,
+        img_location: (f64, f64),
+        owner: Result<Option<(u32, &'a Country, [u8; 3])>, ()>,
+    }
+    let systems: Vec<_> = locations
+        .zip(galactic_object_ownership)
+        .zip(&save.galactic_objects)
+        .enumerate()
+        .map(
+            |(id, ((img_location, owner), galactic_object))| SystemData {
+                id,
+                galactic_object,
+                img_location,
+                owner,
+            },
+        )
+        .collect();
+    assert_eq!(save.galactic_objects.len(), systems.len());
 
     let cell_size = MAX_BORDER_RANGE * scale * 1.1;
     let num_cols = (image.width() as f64 / cell_size).ceil() as usize;
@@ -88,17 +134,22 @@ pub(crate) fn draw_political_map(
     let num_bins = num_rows * num_cols;
     let mut bins = vec![Vec::new(); num_bins];
 
-    for (i, (x, y)) in locations
-        .iter()
-        .filter(|(x, y)| {
+    for SystemData {
+        id,
+        img_location: (x, y),
+        ..
+    } in systems.iter().filter(
+        |SystemData {
+             img_location: (x, y),
+             ..
+         }| {
             0.0 < *x && *x < (image.width() as f64) && 0.0 < *y && *y < (image.height() as f64)
-        })
-        .enumerate()
-    {
+        },
+    ) {
         let col = *x / cell_size;
         let row = *y / cell_size;
         let cell_idx = (row as usize) * num_cols + (col as usize);
-        bins[cell_idx].push(i);
+        bins[cell_idx].push(*id);
     }
 
     const MAX_BORDER_RANGE_SQUARED: f64 = MAX_BORDER_RANGE * MAX_BORDER_RANGE;
@@ -131,8 +182,8 @@ pub(crate) fn draw_political_map(
             for col in try_cols {
                 let cell_idx = row * num_cols + col;
                 for system_idx in &bins[cell_idx] {
-                    let dx = (x as f64) - locations[*system_idx].0;
-                    let dy = (y as f64) - locations[*system_idx].1;
+                    let dx = (x as f64) - systems[*system_idx].img_location.0;
+                    let dy = (y as f64) - systems[*system_idx].img_location.1;
                     let distance_squared = dx * dx + dy * dy;
                     if distance_squared < nearest_distance_squared {
                         nearest_idx = *system_idx;
@@ -144,24 +195,12 @@ pub(crate) fn draw_political_map(
 
         if nearest_distance_squared > MAX_BORDER_RANGE_SQUARED {
             return original_color; // Out of border range, leave unchanged.
-        } else {
-            let system = save.galactic_objects.get(nearest_idx).expect(
-                "locations is derived from galactic_objects so should have the correct length.",
-            );
-
-            let Some(owner) = system.map_owner else {
-                return original_color; // unowned
-            };
-            let Some(owner) = save.all_nations.get(&owner) else {
-                // TODO: this only happens if there is a reference to a nonexistent country.
-                // Should show warning about this inconsistency in the save.
-                return original_color;
-            };
-            let Some((_, map_color, _)) = colors.get(&owner.flag.color_secondary) else {
-                return ERROR_PINK;
-            };
-            return Rgb(*map_color);
         }
+        return match &systems[nearest_idx].owner {
+            Ok(Some((_, _, map_color))) => Rgb(*map_color),
+            Ok(None) => original_color,
+            Err(()) => ERROR_PINK,
+        };
     });
 
     return image;

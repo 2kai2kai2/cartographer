@@ -184,15 +184,50 @@ pub struct CountryFlag {
     pub background_category: String,
     pub background_file: String,
 
-    /// Acts as border on map and primary flag color
-    pub color_primary: String,
-    /// Acts as fill on map and secondary flag color
-    pub color_secondary: String,
-    /// May be "null"
-    pub color3: String,
-    /// May be "null"
-    pub color4: String,
+    /// 0. Acts as border on map and primary flag color
+    /// 1. Acts secondary flag color. Sometimes the map fill color, depending on [`Country::color_index`]
+    /// 2. May be "null"
+    /// 3. May be "null"
+    pub colors: [String; 4],
 }
+impl CountryFlag {
+    /// Returns the map fill color based on the country's `color_index`
+    pub fn index_map_color<'a>(
+        &'a self,
+        idx: i8,
+        all_colors: &HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
+    ) -> Option<[u8; 3]> {
+        if matches!(idx, 1..=4) && self.colors[idx as usize - 1] != "null" {
+            // for some reason, there is sometimes a valid index but it is null
+            // it seems to do the same fallback behavior so just do that
+
+            // TODO: sometimes even if there is an index, it picks a different one.
+            // I think it's because the fill/border colors are too similar
+            return Some(all_colors.get(&self.colors[idx as usize - 1])?.1);
+        }
+
+        // TODO: this is not 100% consistent with how the game makes these decisions
+        let primary_color = all_colors.get(&self.colors[0])?.1;
+        let mut max_diff = 0;
+        let mut max_diff_color = [0, 0, 0];
+        for color in &self.colors[1..=3] {
+            if color == "null" {
+                continue;
+            }
+            let color = all_colors.get(color)?.1;
+            let diff = color[0].abs_diff(primary_color[0]) as u32
+                + color[1].abs_diff(primary_color[1]) as u32
+                + color[2].abs_diff(primary_color[2]) as u32;
+            if diff > max_diff {
+                max_diff = diff;
+                max_diff_color = color;
+            }
+        }
+
+        return Some(max_diff_color);
+    }
+}
+
 impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for CountryFlag {
     type Error = anyhow::Error;
 
@@ -209,20 +244,19 @@ impl<'b, 'a> TryFrom<&'b RawPDXObject<'a>> for CountryFlag {
         let &[color_primary, color_secondary, color3, color4, ..] = &colors.0.as_slice() else {
             return Err(anyhow!("Unexpected shape for flag colors array"));
         };
-        let color_primary = color_primary.expect_value()?.expect_scalar()?.as_string();
-        let color_secondary = color_secondary.expect_value()?.expect_scalar()?.as_string();
-        let color3 = color3.expect_value()?.expect_scalar()?.as_string();
-        let color4 = color4.expect_value()?.expect_scalar()?.as_string();
+        let colors = [
+            color_primary.expect_value()?.expect_scalar()?.as_string(),
+            color_secondary.expect_value()?.expect_scalar()?.as_string(),
+            color3.expect_value()?.expect_scalar()?.as_string(),
+            color4.expect_value()?.expect_scalar()?.as_string(),
+        ];
 
         return Ok(CountryFlag {
             icon_category,
             icon_file,
             background_category,
             background_file,
-            color_primary,
-            color_secondary,
-            color3,
-            color4,
+            colors,
         });
     }
 }
@@ -233,6 +267,13 @@ pub struct Country {
     pub name: String,
     // adjective
     pub flag: CountryFlag,
+    /// This seems to control which flag color is used for the "fill" color on the map.
+    ///
+    /// Sometimes it's `-1` which seems to use some other method to pick a sufficiently "different" color
+    /// in the list.
+    ///
+    /// TODO: figure out the actual method this uses
+    pub color_index: i8,
     /// Known types:
     /// - `default` is normal player+npc countries
     ///
@@ -254,6 +295,7 @@ impl Country {
             .get_first_as_string("key")
             .unwrap_or("unknown".to_string());
         let flag = obj.expect_first_obj("flag")?.try_into()?;
+        let color_index = obj.expect_first_scalar("color_index")?.try_into()?;
 
         let victory_rank = obj.expect_first_scalar("victory_rank")?.try_into()?;
         let victory_score = obj.expect_first_scalar("victory_score")?.try_into()?;
@@ -314,6 +356,7 @@ impl Country {
             idx,
             name,
             flag,
+            color_index,
             country_type,
             victory_rank,
             victory_score,
