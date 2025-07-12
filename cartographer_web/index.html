@@ -39,8 +39,8 @@
         </dialog>
         <script type="module">
             import init, {
-                parse_eu4_save,
-                render_stats_image,
+                parse_save_file,
+                render_stats_image_eu4,
             } from "./pkg/cartographer_web.js";
 
             const file_selector_view =
@@ -99,7 +99,7 @@
                         await file_selector.files[0].arrayBuffer()
                     );
                     /**
-                     * @typedef {Object} SaveGame
+                     * @typedef {Object} SaveGameEU4
                      * @property {Map<string, unknown>} all_nations tag: nation
                      * @property {Map<string, string} player_tags tag: playername
                      * @property {string[]} dlc
@@ -113,8 +113,18 @@
                      * @property {unknown[]} player_wars
                      * @property {unknown} game_mod
                      */
-                    /** @type {SaveGame} */
-                    const save = parse_eu4_save(array);
+                    /**
+                     * @typedef {Object} SaveGameStellaris
+                     * @property {Map<number, object>} all_nations id: nation
+                     * @property {Map<number, string>} player_tags id: playername
+                     * @property {object[]} galactic_objects
+                     * @property {string[]} dlc
+                     * @property {object} date
+                     * @property {boolean} multiplayer
+                     * @property {string} mod
+                     */
+                    /** @type {["EU4" , SaveGameEU4] | ["Stellaris", SaveGameStellaris]} */
+                    const [a, save] = parse_save_file(array);
 
                     function remove_from_players_table(tag) {
                         save.player_tags.delete(tag);
@@ -192,7 +202,7 @@
                         select_players_view.hidden = true;
                         loading_view.hidden = false;
 
-                        const img_b64 = await render_stats_image(save);
+                        const img_b64 = await render_stats_image_eu4(save);
 
                         const img = document.getElementById("img");
                         img.src = `data:image/png;base64,${img_b64}`;

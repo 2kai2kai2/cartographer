@@ -1,23 +1,19 @@
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 use ab_glyph::FontRef;
 use base64::Engine;
-use country_history::WarHistoryEvent;
-use map_history::{ColorMapManager, SerializedColorMapManager};
-use map_parsers::from_cp1252;
-use pdx_parser_core::eu4_save_parser::SaveGame;
+use eu4::country_history::WarHistoryEvent;
+use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
+use eu4::map_parsers::from_cp1252;
+use eu4::map_parsers::MapAssets;
+use eu4::stats_image::StatsImageDefaultAssets;
+use eu4::webgl::webgl_draw_map;
+use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
-use stats_image::StatsImageDefaultAssets;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use webgl::webgl_draw_map;
 
-use crate::map_parsers::MapAssets;
-
-mod country_history;
-mod map_history;
-mod map_parsers;
-mod stats_image;
-mod webgl;
+mod eu4;
 
 #[macro_export]
 macro_rules! log {
@@ -38,23 +34,77 @@ fn decompress_eu4txt(array: &[u8]) -> anyhow::Result<String> {
     return Ok(meta + "\n" + &gamestate);
 }
 
+fn decompress_stellaris(array: &[u8]) -> anyhow::Result<String> {
+    let mut cursor = Cursor::new(array);
+    let mut unzipper = zip::read::ZipArchive::new(&mut cursor)?;
+
+    // let mut unzipped_meta = unzipper.by_name("meta")?;
+    // let mut meta = String::new();
+    // unzipped_meta.read_to_string(&mut meta)?;
+
+    let mut unzipped_gamestate = unzipper.by_name("gamestate")?;
+    let mut gamestate = String::new();
+    unzipped_gamestate.read_to_string(&mut gamestate)?;
+    return Ok(gamestate);
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum GameSaveType {
+    // /// `.ck3` extension
+    // CK3,
+    /// `.eu4` extension
+    EU4,
+    // /// TBD extension
+    // EU5,
+    /// `.sav` extension
+    Stellaris,
+    // /// `.v3` extension
+    // Victoria3,
+}
+
 /// Should take in a `UInt8Array`
 #[wasm_bindgen]
-pub fn parse_eu4_save(array: &[u8]) -> Result<JsValue, JsValue> {
-    let save = if array.starts_with("EU4txt".as_bytes()) {
-        log!("Detected uncompressed save file");
-        from_cp1252(array).map_err(map_error)?
-    } else if array.starts_with("PK\x03\x04".as_bytes()) {
-        log!("Detected compressed file");
-        decompress_eu4txt(array).map_err(map_error)?
+pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue> {
+    // Need to figure out what game this file is for
+    let filename_lower = filename.to_ascii_lowercase();
+    if filename_lower.ends_with(".eu4") {
+        let save = if array.starts_with("EU4txt".as_bytes()) {
+            log!("Detected uncompressed eu4 save file");
+            from_cp1252(array).map_err(map_error)?
+        } else if array.starts_with("PK\x03\x04".as_bytes()) {
+            log!("Detected compressed file");
+            decompress_eu4txt(array).map_err(map_error)?
+        } else {
+            return Err(JsError::new(
+                "Initial check shows file does not seem to be a valid eu4 format",
+            )
+            .into());
+        };
+        let (_, save) = RawPDXObject::parse_object_inner(&save)
+            .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
+        let save = eu4_save_parser::SaveGame::new_parser(&save)
+            .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 2)").into())?;
+        return serde_wasm_bindgen::to_value(&(GameSaveType::EU4, save)).map_err(map_error);
+    } else if filename_lower.ends_with(".sav") {
+        // seems like all stellaris saves are compressed
+        if !array.starts_with("PK\x03\x04".as_bytes()) {
+            return Err(
+                JsError::new("Stellaris save was not a proper zip-compressed file.").into(),
+            );
+        }
+        let save = decompress_stellaris(array).map_err(map_error)?;
+        let (_, save) = RawPDXObject::parse_object_inner(&save)
+            .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
+        let save = stellaris_save_parser::SaveGame::new_parser(&save).map_err(map_error)?;
+
+        return serde_wasm_bindgen::to_value(&(GameSaveType::Stellaris, save)).map_err(map_error);
     } else {
-        return Err(JsError::new("Could not determine the EU4 save format").into());
-    };
-    let (_, save) = RawPDXObject::parse_object_inner(&save)
-        .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
-    return SaveGame::new_parser(&save)
-        .map(|save| serde_wasm_bindgen::to_value(&save).unwrap())
-        .ok_or(js_sys::Error::new("Failed to parse save file (at step 2)").into());
+        // TODO: try to figure it out from context.
+        return Err(JsError::new(
+            "Could not determine the save format. Did you change the file extension?",
+        )
+        .into());
+    }
 }
 
 fn map_error<E: ToString>(err: E) -> JsValue {
@@ -98,8 +148,8 @@ impl Fetcher {
 }
 
 #[wasm_bindgen]
-pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
-    let save: SaveGame = serde_wasm_bindgen::from_value(save)?;
+pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
+    let save: eu4_save_parser::SaveGame = serde_wasm_bindgen::from_value(save)?;
     log!("Loading assets...");
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
     let base_url = window.location().origin()? + &window.location().pathname()?;
@@ -130,7 +180,7 @@ pub async fn render_stats_image(save: JsValue) -> Result<JsValue, JsValue> {
 
     log!("Drawing stats...");
 
-    let final_img = stats_image::make_final_image(
+    let final_img = eu4::stats_image::make_final_image(
         &image::DynamicImage::ImageRgb8(map_image).to_rgba8(),
         &map_assets.flags,
         &garamond,
@@ -167,11 +217,11 @@ pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<St
     let url_map_assets = format!("{base_url}/../resources/vanilla");
     let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
 
-    let province_history = map_history::make_combined_events(&save);
-    let country_history = country_history::make_combined_events(&save);
+    let province_history = eu4::map_history::make_combined_events(&save);
+    let country_history = eu4::country_history::make_combined_events(&save);
     let war_history = WarHistoryEvent::make_war_events(&save)
         .map_err::<JsValue, _>(|_| JsError::new("Failed to parse war events").into())?;
-    let save = SaveGame::new_parser(&save)
+    let save = eu4_save_parser::SaveGame::new_parser(&save)
         .ok_or::<JsValue>(JsError::new("Failed to parse save file (at step 2)").into())?;
     let history = ColorMapManager::new(
         &assets,
