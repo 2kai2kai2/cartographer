@@ -1,11 +1,11 @@
 use std::cmp::Reverse;
 
+use super::map_parsers::FlagImages;
+use crate::Fetcher;
 use ab_glyph::Font;
 use anyhow::{anyhow, Result};
 use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
-
-use crate::{map_parsers::FlagImages, Fetcher};
 use imageproc::drawing;
 use pdx_parser_core::eu4_save_parser::{Nation, SaveGame, WarResult};
 

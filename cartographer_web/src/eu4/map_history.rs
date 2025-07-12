@@ -11,7 +11,7 @@ use pdx_parser_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
+use super::{
     country_history::{CountryHistoryEvent, WarHistoryEvent},
     map_parsers::MapAssets,
 };

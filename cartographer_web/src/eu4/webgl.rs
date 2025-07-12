@@ -1,8 +1,8 @@
+use super::map_parsers::MapAssets;
+use crate::log;
 use js_sys::{Float32Array, Uint16Array};
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlProgram, WebGlShader};
-
-use crate::{log, map_parsers::MapAssets};
 
 const A_POSITION: &str = "a_position";
 const U_BASE_MAP: &str = "u_base_map";
