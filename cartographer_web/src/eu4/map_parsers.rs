@@ -122,7 +122,7 @@ impl MapAssets {
         });
     }
 
-    /// `dir_url` should be, for example, `"{}/resources/vanilla"`
+    /// `dir_url` should be, for example, `"{}/vanilla"`
     pub async fn load(dir_url: &str) -> anyhow::Result<MapAssets> {
         let url_definition_csv = format!("{dir_url}/definition.csv");
         let url_wasteland_txt = format!("{dir_url}/wasteland.txt");

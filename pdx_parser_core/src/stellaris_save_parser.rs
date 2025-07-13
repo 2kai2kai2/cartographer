@@ -12,18 +12,6 @@ pub enum Mod {
     Vanilla,
 }
 
-fn eu4_obj_as_color<'a>(value: &RawPDXObject<'a>) -> Result<[u8; 3]> {
-    return value
-        .iter_values()
-        .map(|item| match item {
-            RawPDXValue::Scalar(scalar) => scalar.try_into().map_err(anyhow::Error::from),
-            _ => Err(anyhow!("Found non-scalar in")),
-        })
-        .collect::<Result<Vec<u8>>>()?
-        .try_into()
-        .or(Err(anyhow!("Object was wrong length for color")));
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GalacticObjectCoord {
     pub x: f64,

@@ -27,6 +27,7 @@ reqwest = "0.12.4"
 futures = "0.3.30"
 zip = { version = "2.0.0", default-features = false, features = ["deflate"] }
 eu4_map_core = { path = "../eu4_map_core" }
+stellaris_map_core = { path = "../stellaris_map_core" }
 pdx_parser_core = { path = "../pdx_parser_core" }
 limelight = "0.1.3"
 bitstream-io = "2.3.0"

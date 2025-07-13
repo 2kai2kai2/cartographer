@@ -1,12 +1,27 @@
 {
     "name": "cartographer",
+    "private": true,
     "version": "1.0.0",
+    "type": "module",
     "description": "",
     "scripts": {
+        "dev": "vite",
+        "build": "vue-tsc -b && vite build",
+        "preview": "vite preview",
         "tailwind": "npx tailwindcss -i ./input.css -o ./output.css"
     },
     "dependencies": {
+        "@tailwindcss/vite": "^4.1.11",
+        "oh-vue-icons": "^1.0.0-rc3",
+        "tailwindcss": "^4.1.11",
+        "vue": "^3.5.17"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-vue": "^6.0.0",
+        "@vue/tsconfig": "^0.7.0",
         "prettier": "^3.3.2",
-        "tailwindcss": "^3.4.4"
+        "typescript": "~5.8.3",
+        "vite": "^7.0.4",
+        "vue-tsc": "^2.2.12"
     }
 }
