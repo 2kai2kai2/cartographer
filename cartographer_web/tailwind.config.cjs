@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    content: ["./*.html"],
+    purge: ["./index.html", "./page/**/*.{vue,js,ts}"],
     theme: {
         extend: {},
     },

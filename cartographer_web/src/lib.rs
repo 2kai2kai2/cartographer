@@ -5,15 +5,16 @@ use base64::Engine;
 use eu4::country_history::WarHistoryEvent;
 use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
 use eu4::map_parsers::from_cp1252;
-use eu4::map_parsers::MapAssets;
 use eu4::stats_image::StatsImageDefaultAssets;
 use eu4::webgl::webgl_draw_map;
+use image::Rgb;
 use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 mod eu4;
+mod stellaris;
 
 #[macro_export]
 macro_rules! log {
@@ -154,11 +155,11 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
     let base_url = window.location().origin()? + &window.location().pathname()?;
 
-    let url_default_assets = format!("{base_url}/resources");
-    let url_map_assets = format!("{base_url}/resources/vanilla");
+    let url_default_assets = base_url.clone();
+    let url_map_assets = format!("{base_url}/vanilla");
     let (default_assets, map_assets) = futures::try_join!(
         StatsImageDefaultAssets::load(&url_default_assets),
-        MapAssets::load(&url_map_assets),
+        eu4::map_parsers::MapAssets::load(&url_map_assets),
     )
     .map_err(map_error)?;
 
@@ -200,6 +201,45 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsValue> {
+    let save: stellaris_save_parser::SaveGame = serde_wasm_bindgen::from_value(save)?;
+    log!("Loading assets...");
+    let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
+    let base_url = window.location().origin()? + &window.location().pathname()?;
+
+    let url_default_assets = format!("{base_url}/stellaris");
+    let url_map_assets = format!("{base_url}/stellaris/vanilla");
+    let map_assets = stellaris::asset_loaders::MapAssets::load(&url_map_assets)
+        .await
+        .map_err(map_error)?;
+
+    let jura = FontRef::try_from_slice(stellaris::JURA_MEDIUM_TTF).map_err(map_error)?;
+
+    log!("Generating map...");
+    let map_image = image::RgbImage::from_pixel(
+        stellaris::STELLARIS_MAP_IMAGE_SIZE,
+        stellaris::STELLARIS_MAP_IMAGE_SIZE,
+        Rgb([0, 0, 0]),
+    );
+    let map_image = stellaris_map_core::draw_political_map(map_image, &save, &map_assets.colors);
+    let map_image = stellaris_map_core::draw_hyperlanes(map_image, &save);
+    let map_image = stellaris_map_core::draw_systems(map_image, &save);
+
+    log!("Drawing stats...");
+
+    let final_img =
+        stellaris::stats_image::make_final_image(&map_image, &jura, &save).map_err(map_error)?;
+
+    let mut png_buffer: Vec<u8> = Vec::new();
+    final_img
+        .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
+        .map_err(map_error)?;
+    return Ok(JsValue::from_str(
+        &base64::engine::general_purpose::STANDARD.encode(png_buffer),
+    ));
+}
+
+#[wasm_bindgen]
 pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<String, JsValue> {
     let save = if save_file.starts_with("EU4txt".as_bytes()) {
         log!("Detected uncompressed save file");
@@ -214,8 +254,10 @@ pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<St
         .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
 
     log!("Loading assets...");
-    let url_map_assets = format!("{base_url}/../resources/vanilla");
-    let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
+    let url_map_assets = format!("{base_url}/../vanilla");
+    let assets = eu4::map_parsers::MapAssets::load(&url_map_assets)
+        .await
+        .map_err(map_error)?;
 
     let province_history = eu4::map_history::make_combined_events(&save);
     let country_history = eu4::country_history::make_combined_events(&save);
@@ -244,8 +286,10 @@ pub async fn do_webgl(history: &str, base_url: &str) -> Result<JsValue, JsValue>
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
     log!("Loading assets...");
-    let url_map_assets = format!("{base_url}/../resources/vanilla");
-    let assets = MapAssets::load(&url_map_assets).await.map_err(map_error)?;
+    let url_map_assets = format!("{base_url}/../vanilla");
+    let assets = eu4::map_parsers::MapAssets::load(&url_map_assets)
+        .await
+        .map_err(map_error)?;
 
     let history = serde_json::from_str::<SerializedColorMapManager>(history)
         .map_err::<JsValue, _>(|err| JsError::new(&err.to_string()).into())?

@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 
-use image::{ImageBuffer, Luma, Rgb, RgbImage};
-use imageproc::definitions::HasBlack;
+use image::{Rgb, RgbImage};
 use pdx_parser_core::stellaris_save_parser::{Country, GalacticObject, SaveGame};
 
-pub const SPACE_COLOR: Rgb<u8> = Rgb([10, 10, 10]);
-pub const HYPERLANE_COLOR: Rgb<u8> = Rgb([40, 100, 150]);
-pub const MAX_BORDER_RANGE: f64 = 50.0;
-pub const ERROR_PINK: Rgb<u8> = Rgb([255, 19, 240]);
+const SPACE_COLOR: Rgb<u8> = Rgb([10, 10, 10]);
+const HYPERLANE_COLOR: Rgb<u8> = Rgb([40, 100, 150]);
+const MAX_BORDER_RANGE: f64 = 50.0;
+const ERROR_PINK: Rgb<u8> = Rgb([255, 19, 240]);
 
 /// Returns `(scale, pixel_locations)`.
 /// - scale is number of pixels per stellaris map distance unit
 ///
 /// Scale is already applied, and is only returned for use elsewhere.
-pub fn systems_to_img_space<'a>(
+fn systems_to_img_space<'a>(
     dimensions: (u32, u32),
     save: &'a SaveGame,
 ) -> (f64, impl Iterator<Item = (f64, f64)> + 'a) {
@@ -98,7 +97,7 @@ where
     });
 }
 
-pub(crate) fn draw_political_map<'a>(
+pub fn draw_political_map<'a>(
     mut image: RgbImage,
     save: &'a SaveGame,
     colors: &HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
