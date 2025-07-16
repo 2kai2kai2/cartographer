@@ -356,6 +356,11 @@ impl Country {
             balance,
         });
     }
+
+    /// Returns the income and expenses of the specified resource, or 0 if not found
+    pub fn get_resource_balance(&self, key: &str) -> (f64, f64) {
+        return self.balance.get(key).cloned().unwrap_or((0.0, 0.0));
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
