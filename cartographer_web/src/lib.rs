@@ -209,9 +209,11 @@ pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsVa
 
     let url_default_assets = format!("{base_url}/stellaris");
     let url_map_assets = format!("{base_url}/stellaris/vanilla");
-    let map_assets = stellaris::asset_loaders::MapAssets::load(&url_map_assets)
-        .await
-        .map_err(map_error)?;
+    let (map_assets, stats_assets) = futures::try_join!(
+        stellaris::asset_loaders::MapAssets::load(&url_map_assets),
+        stellaris::asset_loaders::StatsImageAssets::load(&url_default_assets),
+    )
+    .map_err(map_error)?;
 
     let jura = FontRef::try_from_slice(stellaris::JURA_MEDIUM_TTF).map_err(map_error)?;
 
@@ -228,7 +230,7 @@ pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsVa
     log!("Drawing stats...");
 
     let final_img =
-        stellaris::stats_image::make_final_image(&map_image, &jura, &save).map_err(map_error)?;
+        stellaris::stats_image::make_final_image(&map_image, &jura, &stats_assets, &save).map_err(map_error)?;
 
     let mut png_buffer: Vec<u8> = Vec::new();
     final_img

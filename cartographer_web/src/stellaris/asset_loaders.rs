@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use image::RgbaImage;
+
 use crate::Fetcher;
 
 pub struct MapAssets {
@@ -35,5 +37,41 @@ impl MapAssets {
         let colors = MapAssets::parse_colors_csv(&colors)?;
 
         return Ok(MapAssets { colors });
+    }
+}
+
+pub struct StatsImageAssets {
+    pub(crate) screen_bg: RgbaImage,
+    /// Should be 32x32 images stacked vertically, in order:
+    /// - Pop
+    /// - Energy
+    /// - Minerals
+    /// - Food
+    /// - Consumer Goods
+    /// - Alloys
+    /// - Unity
+    /// - Research
+    pub(crate) resource_icons: RgbaImage,
+}
+impl StatsImageAssets {
+    pub async fn load(dir_url: &str) -> anyhow::Result<StatsImageAssets> {
+        let client = Fetcher::new();
+
+        let url_screen_bg = format!("{dir_url}/screen_bg.png");
+        let url_resource_icons = format!("{dir_url}/resource_icons.png");
+
+        let screen_bg = client
+            .get_image(&url_screen_bg, image::ImageFormat::Png)
+            .await?
+            .to_rgba8();
+        let resource_icons = client
+            .get_image(&url_resource_icons, image::ImageFormat::Png)
+            .await?
+            .to_rgba8();
+
+        return Ok(StatsImageAssets {
+            screen_bg,
+            resource_icons,
+        });
     }
 }
