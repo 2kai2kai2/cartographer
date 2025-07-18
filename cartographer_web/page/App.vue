@@ -1,17 +1,33 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import FileUploadPage from "./components/FileUploadPage.vue";
+import EU4PlayerEditor from "./components/EU4PlayerEditor.vue";
 import {
     parse_save_file,
     render_stats_image_eu4,
     render_stats_image_stellaris,
 } from "../pkg/cartographer_web";
+import type { EU4SaveGame, StellarisSaveGame } from "./types";
 
 const img_value = ref<string>("");
-const save_game = ref<["EU4", object] | ["Stellaris", object] | undefined>();
+const save_game = ref<
+    ["EU4", EU4SaveGame] | ["Stellaris", StellarisSaveGame] | undefined
+>();
 const stage = ref<
     "file_upload" | "parsing" | "player_edit" | "rendering" | "img_display"
 >("file_upload");
+const as_eu4_save = computed({
+    get() {
+        if (save_game.value?.[0] == "EU4") {
+            return save_game.value[1];
+        }
+    },
+    set(v: EU4SaveGame) {
+        if (save_game.value?.[0] == "EU4") {
+            save_game.value[1] = v;
+        }
+    },
+});
 async function do_rendering() {
     switch (save_game.value?.[0]) {
         case "EU4": {
@@ -22,7 +38,9 @@ async function do_rendering() {
             break;
         }
         case "Stellaris":
-            const img_b64 = await render_stats_image_stellaris(save_game.value[1]);
+            const img_b64 = await render_stats_image_stellaris(
+                save_game.value[1]
+            );
             img_value.value = `data:image/png;base64,${img_b64}`;
             save_game.value = undefined; // free up memory
             stage.value = "img_display";
@@ -74,15 +92,13 @@ async function on_player_edit_confirm() {
                 class="fill-blue-950"
             />
         </template>
-        <div v-else-if="stage == 'player_edit'">
-            {{ (save_game?.[1] as any)?.["player_tags"] }}
-            <button
-                @click="on_player_edit_confirm"
-                class="border pt-0.5 pb-0.5 pl-1 pr-1"
-            >
-                Confirm
-            </button>
-        </div>
+        <template v-else-if="stage == 'player_edit'">
+            <EU4PlayerEditor
+                v-if="as_eu4_save"
+                v-model="as_eu4_save"
+                @confirm="on_player_edit_confirm"
+            />
+        </template>
         <template v-else-if="stage == 'rendering'">
             <v-icon
                 name="fa-spinner"
