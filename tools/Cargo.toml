@@ -11,3 +11,5 @@ image = "0.25.1"
 decancer = "3.2.3"
 pdx_parser_core = { path = "../pdx_parser_core" }
 clap = { version = "4.5.41", features = ["derive"] }
+image_dds = "0.7.2"
+ddsfile = "0.5.2"
