@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use image::{GenericImageView, RgbaImage};
 use pdx_parser_core::raw_parser::{RawPDXObjectItem, RawPDXScalar, RawPDXValue};
 use std::fs::File;
 
@@ -89,5 +90,60 @@ pub fn convert_flag_colors(gamefiles: &std::path::Path, target: &std::path::Path
     std::fs::write(&destination, csv)
         .context(format!("While writing to {}", destination.display()))?;
 
+    return Ok(());
+}
+
+/// Makes `flag_parts.png` and `flag_parts.txt`
+pub fn pack_flag_imgs(gamefiles: &std::path::Path, target: &std::path::Path) -> Result<()> {
+    let source = gamefiles.join("flags");
+    let flags_dir = std::fs::read_dir(source)?;
+    let mut imgs = Vec::new();
+    let mut names = Vec::new();
+    for entry in flags_dir {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let category = entry.file_name();
+        let category = category
+            .to_str()
+            .ok_or(anyhow!("Flag category directory name was not utf8"))?;
+        for entry in std::fs::read_dir(entry.path())? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let filename = entry.file_name();
+            let filename = filename.to_str().ok_or(anyhow!("File name was not utf8"))?;
+            if !filename.ends_with(".dds") {
+                continue;
+            }
+
+            let image = std::fs::File::open(entry.path())?;
+            let image = ddsfile::Dds::read(image)?;
+            let image = image_dds::image_from_dds(&image, 0)?;
+            let image = if image.dimensions() != (128, 128) {
+                image::imageops::resize(&image, 128, 128, image::imageops::FilterType::Triangle)
+            } else {
+                image
+            };
+            imgs.push(image);
+            names.push(format!("{category}/{filename}"));
+        }
+    }
+
+    let png_destination = target.join("flag_parts.png");
+    let num_cols = 8;
+    let num_rows = imgs.len().div_ceil(num_cols);
+    let mut out_img = RgbaImage::new(128 * num_cols as u32, 128 * num_rows as u32);
+    for (i, img) in imgs.iter().enumerate() {
+        let row = i / num_cols;
+        let col = i % num_cols;
+        image::imageops::overlay(&mut out_img, img, col as i64 * 128, row as i64 * 128);
+    }
+    out_img.save(png_destination)?;
+
+    let txt_destination = target.join("flag_parts.txt");
+    std::fs::write(txt_destination, &names.join("\n"))?;
     return Ok(());
 }
