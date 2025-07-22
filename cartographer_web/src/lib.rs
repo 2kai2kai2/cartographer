@@ -229,8 +229,14 @@ pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsVa
 
     log!("Drawing stats...");
 
-    let final_img =
-        stellaris::stats_image::make_final_image(&map_image, &jura, &stats_assets, &save).map_err(map_error)?;
+    let final_img = stellaris::stats_image::make_final_image(
+        &map_image,
+        &jura,
+        &stats_assets,
+        &save,
+        &map_assets.colors,
+    )
+    .map_err(map_error)?;
 
     let mut png_buffer: Vec<u8> = Vec::new();
     final_img

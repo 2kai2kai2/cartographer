@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use image::RgbaImage;
 
-use crate::Fetcher;
+use crate::{
+    stellaris::flags::{FlagFrames, FlagParts},
+    Fetcher,
+};
 
 pub struct MapAssets {
     pub(crate) colors: HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
@@ -52,6 +55,8 @@ pub struct StatsImageAssets {
     /// - Unity
     /// - Research
     pub(crate) resource_icons: RgbaImage,
+    pub(crate) flag_parts: FlagParts,
+    pub(crate) flag_frames: FlagFrames,
 }
 impl StatsImageAssets {
     pub async fn load(dir_url: &str) -> anyhow::Result<StatsImageAssets> {
@@ -59,6 +64,9 @@ impl StatsImageAssets {
 
         let url_screen_bg = format!("{dir_url}/screen_bg.png");
         let url_resource_icons = format!("{dir_url}/resource_icons.png");
+        let url_flag_parts_png = format!("{dir_url}/vanilla/flag_parts.png");
+        let url_flag_parts_txt = format!("{dir_url}/vanilla/flag_parts.txt");
+        let url_flag_frames_png = format!("{dir_url}/vanilla/flag_frames.png");
 
         let screen_bg = client
             .get_image(&url_screen_bg, image::ImageFormat::Png)
@@ -68,10 +76,26 @@ impl StatsImageAssets {
             .get_image(&url_resource_icons, image::ImageFormat::Png)
             .await?
             .to_rgba8();
+        let flag_parts_png = client
+            .get_image(&url_flag_parts_png, image::ImageFormat::Png)
+            .await?
+            .to_rgba8();
+        let flag_parts_txt = client.get_200(&url_flag_parts_txt).await?.text().await?;
+        let flag_parts = FlagParts::new(
+            flag_parts_png,
+            flag_parts_txt.lines().map(str::to_string).collect(),
+        );
+        let flag_frames_png = client
+            .get_image(&url_flag_frames_png, image::ImageFormat::Png)
+            .await?
+            .to_rgba8();
+        let flag_frames = FlagFrames::new(flag_frames_png);
 
         return Ok(StatsImageAssets {
             screen_bg,
             resource_icons,
+            flag_parts,
+            flag_frames,
         });
     }
 }

@@ -93,6 +93,13 @@ pub fn convert_flag_colors(gamefiles: &std::path::Path, target: &std::path::Path
     return Ok(());
 }
 
+fn load_dds<P: AsRef<std::path::Path>>(path: P) -> Result<RgbaImage> {
+    let image = std::fs::File::open(path)?;
+    let image = ddsfile::Dds::read(image)?;
+    let image = image_dds::image_from_dds(&image, 0)?;
+    return Ok(image);
+}
+
 /// Makes `flag_parts.png` and `flag_parts.txt`
 pub fn pack_flag_imgs(gamefiles: &std::path::Path, target: &std::path::Path) -> Result<()> {
     let source = gamefiles.join("flags");
@@ -119,9 +126,7 @@ pub fn pack_flag_imgs(gamefiles: &std::path::Path, target: &std::path::Path) -> 
                 continue;
             }
 
-            let image = std::fs::File::open(entry.path())?;
-            let image = ddsfile::Dds::read(image)?;
-            let image = image_dds::image_from_dds(&image, 0)?;
+            let image = load_dds(entry.path())?;
             let image = if image.dimensions() != (128, 128) {
                 image::imageops::resize(&image, 128, 128, image::imageops::FilterType::Triangle)
             } else {
@@ -145,5 +150,20 @@ pub fn pack_flag_imgs(gamefiles: &std::path::Path, target: &std::path::Path) -> 
 
     let txt_destination = target.join("flag_parts.txt");
     std::fs::write(txt_destination, &names.join("\n"))?;
+    return Ok(());
+}
+
+pub fn pack_flag_frames(gamefiles: &std::path::Path, target: &std::path::Path) -> Result<()> {
+    let source = gamefiles.join("gfx/interface/flags");
+
+    let default_frame_path = source.join("empire_flag_200_frame.dds");
+    let default_frame = load_dds(default_frame_path)?;
+    let default_frame =
+        image::imageops::resize(&default_frame, 128, 128, image::imageops::Triangle);
+
+    // TODO: when we have more, pack others
+
+    let png_destination = target.join("flag_frames.png");
+    default_frame.save(png_destination)?;
     return Ok(());
 }
