@@ -23,13 +23,20 @@ jobs:
       - name: Build WASM
         working-directory: ./cartographer_web
         run: wasm-pack build --target web --release
-      - name: Creating artifact
+      - uses: actions/setup-node@v4
+      - name: Install node dependencies
         working-directory: ./cartographer_web
-        run: tar -cvf artifact.tar pkg/ resources/ index.html main.css history/ output.css
+        run: npm install
+      - name: Build Vue
+        working-directory: ./cartographer_web
+        run: npm run build
+      - name: Creating artifact
+        working-directory: ./cartographer_web/dist
+        run: tar -cvf artifact.tar *
       - uses: actions/upload-artifact@v4
         with:
           name: "github-pages"
-          path: "./cartographer_web/artifact.tar"
+          path: "./cartographer_web/dist/artifact.tar"
           retention-days: 1
           if-no-files-found: error
       - name: Deploy to GitHub Pages
