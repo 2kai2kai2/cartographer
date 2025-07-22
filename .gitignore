@@ -23,6 +23,7 @@ Secrets*.toml
 *.zip
 *.tar
 .wrangler
+**/dist/
 
 #Shortcuts
 save games.lnk
