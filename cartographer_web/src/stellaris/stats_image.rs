@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::stellaris::asset_loaders::StatsImageAssets;
 
 use super::STELLARIS_MAP_IMAGE_SIZE;
@@ -124,6 +126,7 @@ pub fn make_final_image(
     font: &impl Font,
     assets: &StatsImageAssets,
     save: &SaveGame,
+    colors: &HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
 ) -> Result<RgbImage> {
     if map_image.dimensions() != (STELLARIS_MAP_IMAGE_SIZE, STELLARIS_MAP_IMAGE_SIZE) {
         return Err(anyhow!(
@@ -199,7 +202,21 @@ pub fn make_final_image(
         );
 
         // flag
-        // TODO
+        let flag = crate::stellaris::flags::render_flag(
+            &country.flag,
+            &assets.flag_parts,
+            &assets.flag_frames,
+            colors,
+        )?;
+        let flag = imageops::resize(&flag, 160, 160, imageops::Triangle);
+        imageops::overlay(
+            &mut stats_img.0,
+            &flag,
+            base_x as i64 + (PLAYER_BOX_HEIGHT - 160) / 2,
+            base_y as i64 + (PLAYER_BOX_HEIGHT - 160) / 2,
+        );
+
+        // Player Name
         drawing::draw_text_mut(
             &mut stats_img,
             Rgba::white(),
@@ -216,7 +233,7 @@ pub fn make_final_image(
             (base_y + 16 + 48) as i32,
             30.0,
             font,
-            "My Country Name",
+            "<country name>",
         );
 
         const ICON_SIZE: i64 = 32;

@@ -53,6 +53,7 @@ pub fn stellaris_main(args: StellarisArgs) -> Result<()> {
     flags::convert_flag_colors(&gamefiles, &destination_web)
         .context("While collecting flag colors")?;
     flags::pack_flag_imgs(&gamefiles, &destination_web).context("While packing flag icons")?;
+    flags::pack_flag_frames(&gamefiles, &destination_web).context("While packing flag frames")?;
 
     return Ok(());
 }
