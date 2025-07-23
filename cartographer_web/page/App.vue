@@ -124,7 +124,7 @@ async function on_player_edit_confirm() {
                 <img :src="img_value" ref="img" />
                 <div class="absolute right-1 top-1 flex gap-1">
                     <button
-                        class="p-1 bg-gray-100 border rounded-sm border-solid border-gray-500 hover:bg-gray-300 hover:border-gray-600 flex cursor-pointer"
+                        class="p-1 bg-gray-100 border-2 rounded-sm border-solid border-gray-500 hover:border-gray-600 flex cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
                         title="Copy to Clipboard"
                         @click="on_click_copy_img"
                     >
@@ -138,7 +138,7 @@ async function on_player_edit_confirm() {
                         />
                     </button>
                     <a
-                        class="p-1 bg-gray-100 border rounded-sm border-solid border-gray-500 hover:bg-gray-300 hover:border-gray-600 flex cursor-pointer"
+                        class="p-1 bg-gray-100 border-2 rounded-sm border-solid border-gray-500 hover:border-gray-600 flex cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
                         title="Download"
                         :href="img_value"
                         :download="`cartographer_${new Date().toLocaleDateString()}`"
