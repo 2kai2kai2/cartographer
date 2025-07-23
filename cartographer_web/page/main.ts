@@ -12,6 +12,7 @@ import {
     FaFileDownload,
     HiClipboardCopy,
     HiClipboardCheck,
+    MdPersonremoveRound,
 } from "oh-vue-icons/icons";
 
 import init_wasm from "../pkg/cartographer_web";
@@ -25,7 +26,8 @@ addIcons(
     FaSpinner,
     FaFileDownload,
     HiClipboardCopy,
-    HiClipboardCheck
+    HiClipboardCheck,
+    MdPersonremoveRound
 );
 
 const app = createApp(App);

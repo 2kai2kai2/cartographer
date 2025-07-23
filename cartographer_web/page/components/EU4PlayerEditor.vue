@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { EU4SaveGame } from "../types";
+import { OhVueIcon } from "oh-vue-icons";
 
 const emits = defineEmits<{
     confirm: [];
@@ -22,35 +23,40 @@ function on_click_add() {
 </script>
 <template>
     <div>
-        <div class="grid grid-cols-3">
+        <div class="grid" style="grid-template-columns: auto auto auto">
             <div class="p-1">Player</div>
             <div class="p-1">Tag</div>
             <div></div>
             <template v-for="[tag, player] of model.player_tags" :key="player">
-                <div class="p-1">
-                    {{ player }}
+                <div class="contents has-[button:hover]:*:bg-red-300">
+                    <p class="p-1">
+                        {{ player }}
+                    </p>
+                    <p class="p-1">
+                        {{ tag }}
+                    </p>
+                    <button
+                        @click="model.player_tags.delete(tag)"
+                        class="cursor-pointer p-1"
+                        title="Remove Player"
+                    >
+                        <OhVueIcon name="md-personremove-round" />
+                    </button>
                 </div>
-                <div class="p-1">
-                    {{ tag }}
-                </div>
-                <button
-                    @click="model.player_tags.delete(player)"
-                    class="cursor-pointer"
-                    title="Remove Player"
-                >
-                    X
-                </button>
             </template>
             <input
                 type="text"
                 v-model="add_name"
                 placeholder="Username"
+                minlength="1"
                 class="p-1"
             />
             <input
                 type="text"
                 v-model="add_tag"
                 placeholder="Tag"
+                minlength="3"
+                maxlength="3"
                 class="p-1"
             />
             <button
