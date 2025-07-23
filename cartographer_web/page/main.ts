@@ -9,12 +9,24 @@ import {
     FaPlus,
     FaUpload,
     FaSpinner,
+    FaFileDownload,
+    HiClipboardCopy,
+    HiClipboardCheck,
 } from "oh-vue-icons/icons";
 
 import init_wasm from "../pkg/cartographer_web";
 init_wasm();
 
-addIcons(FaGithub, FaDiscord, FaPlus, FaUpload, FaSpinner);
+addIcons(
+    FaGithub,
+    FaDiscord,
+    FaPlus,
+    FaUpload,
+    FaSpinner,
+    FaFileDownload,
+    HiClipboardCopy,
+    HiClipboardCheck
+);
 
 const app = createApp(App);
 app.component("v-icon", OhVueIcon);
