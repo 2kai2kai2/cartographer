@@ -8,6 +8,7 @@ import {
     render_stats_image_stellaris,
 } from "../pkg/cartographer_web";
 import type { EU4SaveGame, StellarisSaveGame } from "./types";
+import { OhVueIcon } from "oh-vue-icons";
 
 const img_value = ref<string>("");
 const save_game = ref<
@@ -28,6 +29,17 @@ const as_eu4_save = computed({
         }
     },
 });
+const clicked_copy_img = ref(false);
+async function on_click_copy_img() {
+    const res = await fetch(img_value.value);
+    await navigator.clipboard.write([
+        new ClipboardItem({
+            "image/png": res.blob(),
+        }),
+    ]);
+    clicked_copy_img.value = true;
+}
+
 async function do_rendering() {
     switch (save_game.value?.[0]) {
         case "EU4": {
@@ -85,7 +97,7 @@ async function on_player_edit_confirm() {
             v-if="stage == 'file_upload'"
         />
         <template v-else-if="stage == 'parsing'">
-            <v-icon
+            <OhVueIcon
                 name="fa-spinner"
                 animation="spin-pulse"
                 scale="4"
@@ -100,7 +112,7 @@ async function on_player_edit_confirm() {
             />
         </template>
         <template v-else-if="stage == 'rendering'">
-            <v-icon
+            <OhVueIcon
                 name="fa-spinner"
                 animation="spin-pulse"
                 scale="4"
@@ -108,7 +120,36 @@ async function on_player_edit_confirm() {
             />
         </template>
         <template v-else-if="stage == 'img_display'">
-            <img :src="img_value" />
+            <div class="relative">
+                <img :src="img_value" ref="img" />
+                <div class="absolute right-1 top-1 flex gap-1">
+                    <button
+                        class="p-1 bg-gray-100 border rounded-sm border-solid border-gray-500 hover:bg-gray-300 hover:border-gray-600 flex cursor-pointer"
+                        title="Copy to Clipboard"
+                        @click="on_click_copy_img"
+                    >
+                        <OhVueIcon
+                            :name="
+                                clicked_copy_img
+                                    ? 'hi-clipboard-check'
+                                    : 'hi-clipboard-copy'
+                            "
+                            class="stroke-gray-500 aspect-square w-auto"
+                        />
+                    </button>
+                    <a
+                        class="p-1 bg-gray-100 border rounded-sm border-solid border-gray-500 hover:bg-gray-300 hover:border-gray-600 flex cursor-pointer"
+                        title="Download"
+                        :href="img_value"
+                        :download="`cartographer_${new Date().toLocaleDateString()}`"
+                    >
+                        <OhVueIcon
+                            name="fa-file-download"
+                            class="fill-gray-500 aspect-square w-auto"
+                        />
+                    </a>
+                </div>
+            </div>
         </template>
     </main>
     <footer class="bg-blue-950 flex p-4">
@@ -116,7 +157,7 @@ async function on_player_edit_confirm() {
             title="The Cartographer - GitHub Repository"
             href="https://github.com/2kai2kai2/cartographer"
         >
-            <v-icon name="fa-github" class="fill-gray-100" />
+            <OhVueIcon name="fa-github" class="fill-gray-100" />
         </a>
     </footer>
 </template>
