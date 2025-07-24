@@ -121,6 +121,7 @@ pub fn make_final_image(
         .player_tags
         .iter()
         .filter_map(|(tag, player)| Some((save.all_nations.get(tag)?, player)))
+        .filter(|(nation, _)| nation.development != 0)
         .collect();
     player_nations.sort_by_key(|(nation, _)| Reverse(nation.development));
     for (i, (nation, player)) in player_nations.iter().enumerate().take(16) {
