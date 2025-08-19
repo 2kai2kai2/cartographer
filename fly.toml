@@ -1,0 +1,6 @@
+app = "thecartographer"
+primary_region = "sea"
+swap_size_mb = 512
+
+[build]
+dockerfile = "Dockerfile"

@@ -9,12 +9,17 @@ use serenity::{
     builder::*,
     Client,
 };
-use shuttle_runtime::SecretStore;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
 mod db_types;
 mod reservations;
+
+#[derive(serde::Deserialize, Debug)]
+struct Env {
+    discord_token: String,
+    postgres_string: String,
+}
 
 const PNG_MAP_1444: &[u8] = include_bytes!("../assets/vanilla/1444.png");
 const PNG_ICON_X: &[u8] = include_bytes!("../assets/vanilla/xIcon.png");
@@ -399,20 +404,17 @@ impl EventHandler for Handler {
     }
 }
 
-#[shuttle_runtime::main]
-async fn serenity(
-    #[shuttle_runtime::Secrets] secrets: SecretStore,
-    #[shuttle_shared_db::Postgres] pool: PgPool,
-) -> shuttle_serenity::ShuttleSerenity {
-    let token = secrets
-        .get("DISCORD_TOKEN")
-        .context("'DISCORD_TOKEN' was not found")?;
-
-    let client = Client::builder(&token, GatewayIntents::empty())
-        .event_handler(Handler { db: pool })
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    if let Ok(_) = dotenvy::dotenv() {
+        println!("Loaded .env");
+    }
+    let env: Env = envy::from_env()?;
+    let db = PgPool::connect_lazy(&env.postgres_string)?;
+    let mut client = Client::builder(&env.discord_token, GatewayIntents::empty())
+        .event_handler(Handler { db })
         .activity(ActivityData::custom("Taking EU4 Reservations"))
         .await
-        .context("Err creating client")?;
-
-    return Ok(client.into());
+        .context("While creating client.")?;
+    return client.start().await.context("While running the client.");
 }
