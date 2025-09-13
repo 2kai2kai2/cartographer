@@ -21,12 +21,12 @@ struct Env {
     postgres_string: String,
 }
 
-const PNG_MAP_1444: &[u8] = include_bytes!("../assets/vanilla/1444.png");
-const PNG_ICON_X: &[u8] = include_bytes!("../assets/vanilla/xIcon.png");
+const PNG_MAP_1444: &[u8] = include_bytes!("../assets/eu4/vanilla/1444.png");
+const PNG_ICON_X: &[u8] = include_bytes!("../assets/eu4/xIcon.png");
 
 lazy_static! {
     pub static ref TAGS: HashMap<String, Vec<String>> = {
-        let tags = include_str!("../../cartographer_web/resources/vanilla/tags.txt");
+        let tags = include_str!("../../cartographer_web/resources/eu4/vanilla/tags.txt");
         tags.lines()
             .map(|line| {
                 let mut it = line.split(';');
@@ -36,7 +36,7 @@ lazy_static! {
             .collect()
     };
     pub static ref CAPITAL_LOCATIONS: HashMap<String, (f64, f64)> = {
-        let locations = include_str!("../assets/vanilla/capitals.txt");
+        let locations = include_str!("../assets/eu4/vanilla/capitals.txt");
         locations
             .lines()
             .map(|line| {

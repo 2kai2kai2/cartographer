@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use anyhow::anyhow;
-
 use crate::{eu4_date::EU4Date, stellaris_date::StellarisDate};
 
 #[inline]

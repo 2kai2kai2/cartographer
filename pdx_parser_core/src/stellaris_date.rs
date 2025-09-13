@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
@@ -132,6 +132,9 @@ impl FromStr for StellarisDate {
 
 impl Display for StellarisDate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return f.write_fmt(format_args!("{}.{:02}.{:02}", self.year, self.month, self.day));
+        return f.write_fmt(format_args!(
+            "{}.{:02}.{:02}",
+            self.year, self.month, self.day
+        ));
     }
 }

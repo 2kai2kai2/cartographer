@@ -1,0 +1,1268 @@
+A01;Lorent
+A02;Deranne
+A03;Redglades
+A04;Wesdam
+A05;Reveria
+A06;Nimscodd
+A07;North Viswall
+A08;South Viswall
+A09;Sorncóst;Sorncpst
+A10;Minaran Temple
+A11;Pearlsedge
+A12;Beepeck
+A13;Gawed
+A14;Madelaire
+A15;Eilísin;Eilisin
+A16;Wineport
+A17;Great Ording
+A18;Rubenaire
+A19;Portnamm
+A20;Rubyhold
+A21;Venáil;Venail
+A22;Neckcliffe
+A23;Vertesk
+A24;Westmoors
+A25;Damescrown
+A26;Redscale
+A27;Bluescale
+A28;Greenscale
+A29;Busilar
+A30;Wex
+A31;Moonhaven
+A32;Ibevar
+A33;Verne
+A34;Bisan
+A35;Konwell
+A36;Derwing
+A37;Terr
+A38;Anbenncóst;Anbenncpst
+A39;Bennon
+A40;Exwes
+A41;Damish Temple
+A42;Silvelar
+A43;Ryalan Temple
+A44;Esmarainé;Esmaraine
+A45;Istralore
+A46;Arbaran
+A47;Eborthíl;Eborthil
+A48;Sugamber
+A49;Xanzerbexis
+A50;Greatmarch
+A51;Ginnfield
+A52;Eaglecrest
+A53;Aramari Temple
+A54;Crothán;Crothan
+A55;Menibór;Menibpr
+A56;Celliande
+A57;Toarnen
+A58;Dameria
+A59;Corvuria
+A60;Asheniande
+A61;Bluehart
+A62;Telgeir
+A63;Cowskeep
+A64;Appleton
+A65;Pearview
+A66;Butterburn
+A67;Bigwheat
+A68;Thomsbridge
+A69;Coppertown
+A70;Elkmarch
+A71;Greymill
+A72;Arannen
+A73;Silverforge
+A74;Nathalaire
+A75;Gisden
+A76;Uelaire
+A77;Orda Aldresia
+A78;Roilsard
+A79;Gnomish Hierarchy
+A80;Iochand
+A81;Giberd
+A82;Napesbay
+A83;Silent Repose
+A84;Galéinn;Galeinn
+A85;Magisterium
+A86;Tellum
+A87;Saloren
+A88;Woodwell
+A89;Aranmas
+A90;Seinathíl;Seinathil
+A91;Deamóine;Deampine
+A92;Leslinpár;Leslinpar
+A93;Estallen
+A94;Gabmórionn;Gabmprionn
+A95;Themarenn
+A96;Laseán;Lasean
+A97;Small Country
+A98;Cestirande
+A99;Varainé;Varaine
+B01;The Greentide
+B02;Corintar
+B03;Cobalt Company
+B04;Order of the Ashen Rose
+B05;Pioneer's Guild
+B06;Warriors of Ancard
+B07;Sons of Dameria
+B08;Gallant Friends
+B09;House of Riches
+B10;Small Fellows
+B11;Company of the Thorn
+B12;Brave Brothers
+B13;Stalwart Band
+B14;Raven Banner
+B15;New Wanderers
+B16;Freeflower Vanguard
+B17;Asra Expedition
+B18;Iron Hammers
+B19;Sword Covenant
+B20;Order of the Iron Sceptre
+B21;Heartgrinder
+B22;Venomtooth
+B23;Rotcleaver
+B24;Clouded Eye
+B25;Bladebreaker
+B26;Severed Ear
+B27;Bonecarver
+B28;Dogeater
+B29;Deadfang
+B30;Bloodgorger
+B31;Castellyr
+B32;Castanor
+B33;Blademarches
+B34;Luciande
+B35;Ancardia
+B36;Marrhold
+B37;Rogieria
+B38;Elikhand
+B39;Wyvernheart
+B40;Alenor
+B41;Earworm
+B42;Groundhawk
+B43;Flying Hound
+B44;Flung Head
+B45;Headwearer
+B46;Grasshopper Muncher
+B47;Stalbór;Stalbpr
+B48;Ravenmarch
+B49;Araionn
+B50;Newshire
+B51;Estaire
+B52;Cael'Deinn
+B53;Núrcestir;Nurcestir
+B54;Esthíl;Esthil
+B55;Count's League
+B56;Silvermere
+B57;Cardest
+B58;Adenica
+B59;Pashainé;Pashaine
+B60;Farraneán;Farranean
+B61;The Edhardrachon
+B62;Moredhal
+B63;Grudgeknights
+B64;Passionates
+B65;Devotees
+B66;Havoral
+B67;Honderaak
+B68;Kyliande
+B69;Crovania
+B71;Southroy
+B72;Ionnidar
+B73;Darom
+B74;Wesmar
+B75;Ainethán;Ainethan
+B76;Horsegarden
+B77;Saddleglade
+B78;Carneter
+B79;Jazhkredu
+B80;Windtower
+B81;Hortosare
+B82;Petalmasher
+B83;Gerwick
+B84;Westmounts
+B85;Varlosen
+B86;Havorton
+B87;Byshade
+B88;Cannleigh
+B89;Eastbright
+B90;Elensbridge
+B91;Thanallen
+B92;Esmaryan Temple
+B93;Ildumár;Ildumar
+B94;Milcorissia
+B95;Uanced
+B96;Salceran
+B97;Ravenhill
+B98;The Reach
+B99;Aranthíl;Aranthil
+F21;Birzartanšes;Birzartanses
+F22;Dartaxâgerdim;Dartaxagerdim
+F23;Ovdal Tûngr;Ovdal Tungr
+F24;Brasan
+F25;Sareyand
+F26;Gelkalis
+F27;Ayarallen
+F28;Tluukt
+F29;Zokka
+F30;Kumarkand
+F31;Eduz-Vacyn
+F32;Drolakand
+F33;Akalšes;Akalses
+F34;Azka-Evran
+F35;Azkabar
+F36;Harklum
+F37;Irrliam
+F38;Phoenix Empire
+F39;Bulwar
+F40;Anzabad
+F41;Zanbar
+F42;Varamhar
+F43;Zanšap;Zansap
+F44;Kalib
+F45;Hašr;Hasr
+F46;Jaddari
+F47;Verkal Gulan
+F48;Siádan;Siadan
+F49;Elaiénna;Elaienna
+F50;Mulén;Mulen
+F51;Jadd Empire
+F52;Surakeš;Surakes
+F53;Mušaskalam;Musaskalam
+F54;Koggraffa
+F55;Kogzalla
+F56;Dasmatuš;Dasmatus
+F57;Khasa
+F58;Akasik
+F60;Samsumbat
+F61;Muhaqaar
+F62;Duwarkani
+F63;Aramoole
+F64;Prakheta
+F65;Tzilekal
+F66;Konolkhatep
+F67;Zinhakan
+F68;Rombeni
+F69;Irkorzik
+F70;Mattabo
+F71;Rakkaz
+F72;Haraagtseda
+F73;Mokatanga
+F74;Anzarzax
+F75;Avamezan
+F76;Medurubar
+F77;Kuzaram
+F78;The Overclan
+F79;Sihrušam;Sihrusam
+F80;Nanšalen;Nansalen
+F81;Hytiranyalen
+F82;Firanyalen
+F83;Setadazar
+F84;Kinvefirel
+F85;Annail
+F86;Krahahga
+F87;Panušes;Panuses
+F88;Lawaššar;Lawassar
+F89;Arkašul;Arkasul
+F90;Mišarallen;Misarallen
+F91;Jixobix
+F93;Arrtukerr
+F94;Zhavekal
+F95;Iškurthid;Iskurthid
+F96;Xhurekal
+F97;Phoenix Empire
+F99;Jadd Civil War
+G00;Nákyra;Nakyra
+G01;Boek
+G02;Mayte
+G03;Kooras
+G04;Yanek
+G05;Kwineh
+G06;Cheshoshoanta
+G07;Dokanto
+G08;Shofa
+G09;Soru
+G15;Sel'parura
+G16;Ae'n Saldayno
+G17;Xoti'Guao
+G18;Kamaraka
+G19;Ingani
+G20;Aráya;Araya
+G21;Pomvasonn
+G22;Svemel
+G23;Juzondezan
+G24;Gomosengha
+G25;Stantirshalas
+G26;Amacimst
+G27;Brelar
+G28;Grebniesth
+G29;Drevkenuc
+G30;Mocvare
+G31;Vareynn
+G32;Malacnar
+G33;Bosancovac
+G34;Arganjuzorn
+G35;Arverynn
+G36;Trompolere
+G37;Fadhevych
+G38;Vels Fadhecai
+G39;Adbrabohvi
+G40;Tehanek
+G41;Jayek
+G42;Inek
+G43;Haraf
+G44;Leptone
+G45;Benter
+G46;Degakheion
+G47;Oktikheion
+G48;Kherka
+G49;Lokemeion
+G50;Ormam
+G51;Arpedifér;Arpedifer
+G52;Ameion
+G53;Empkeios
+G54;Besolakí;Besolaki
+G55;Eneion
+G56;Deyeion
+G57;Apikhoxí;Apikhoxi
+G58;Keyolíon;Keyolion
+G59;Anisíkheion;Anisikheion
+G60;Eltikan
+G61;Kimánis;Kimanis
+G62;Amgremós;Amgremps
+G63;Mteibhara
+G64;Larankar
+G65;Sedregenhi
+G66;Clematar
+G67;Royakottar
+G68;Nakar Mlerek
+G69;Nakar Kilaiek
+G70;Nakar Kriadvai
+G71;Orenkoraim
+G72;Enlarmai
+G73;Ahartadyam
+G74;Gophira
+G75;Sibisimra
+G76;Tirsin
+G77;Marhed Rayodana
+G78;Ethanamara
+G79;Vuls Tenvach
+G80;Imarchend
+G81;Sthanan ith Vussam
+G82;Nagar Vyechei
+G83;Korrimutren
+G84;Vels Bacar
+G85;Thromshana
+G86;Stanyrhrada
+G87;Chaqway
+G88;Árapache;arapache
+G89;Imeqitahp
+G90;Asraport
+G91;Isobelin
+G92;Saamiršes;Saamirses
+G93;Mykx
+G94;Argezvale
+G95;Marlliande
+G96;Thílvis;Thilvis
+G97;Vanbury Guild
+G98;Calasanni Trading Company
+G99;Deranne Trade Company
+H00;Saerraeg
+H01;Arakeprun
+H02;Murdkather
+H03;Dearktir
+H04;Elchos
+H05;Kairncal
+H06;Sidpar
+H07;Bagcatir
+H08;Pelomar
+H09;Iadth
+H10;Einnsag
+H11;Sglard
+H12;Raithtall
+H13;Jhorgashirr
+H14;Eighard
+H15;Slegcal
+H16;Gemradcurt
+H17;Reotcrab
+H18;Gelcolle
+H19;Strutmar
+H20;Trimgarb
+H21;Eordand
+H22;Kheiós;Kheips
+H23;Kaeorg
+H24;Dragon Dominion
+H25;Stenurynn
+H26;Vels Domfan
+H27;Ynnic Empire
+H28;Durasyar
+H29;Tsidarok
+H30;Gommoport
+H31;Zurzumexia
+H32;Mestikardu
+H33;Cestirmark
+H34;Ebenmas
+H35;Corinsfield
+H36;Valorpoint
+H37;Themaria
+H38;Zanlib
+H39;Ozgarom
+H40;Sornic Sons
+H41;Sornicande
+H42;Onyx Legion
+H43;Neratica
+H44;Shining Circle
+H45;Beggaston
+H46;Istralorian Crusaders
+H47;Istranar
+H48;Menibór Free Company;Menibpr Free Company
+H49;Tiru Móine;Tiru Mpine
+H50;Varbuk's Freemen
+H51;Freemarches
+H52;House of Reflection
+H53;Elathael
+H54;Tipney Pioneers
+H55;West Tipney
+H56;Havoral Band
+H57;New Havoral
+H58;Chipped Tooth Company
+H59;Chippengard
+H60;Plumwall Expedition
+H61;Plumstead
+H62;Brigade Magnificent
+H63;Núr Dhánaenn;Nur Dhanaenn
+H64;Bardswood Band
+H65;Tellumtir
+H66;Jaherian Exemplars
+H67;Rezankand
+H68;Ruby Company
+H69;Forgemaster Union
+H70;Company of Duran Blueshield
+H71;Blackbeard Cartel
+H72;Shattered Crown
+H73;Skewered Drake
+H74;Chaingrasper
+H75;Railskulker
+H76;Arg-Ôrdstun;Arg-qrdstun
+H77;Ovdal Lodhum
+H78;Seghdihr
+H79;Ovdal Kanzad
+H80;Siegebreaker
+H81;Masked Butcher
+H82;Greedy Grin
+H83;Shadowdreamer
+H84;Mountainshark
+H85;Truedagger
+H86;Wretched Skull
+H87;Thieving Arrow
+H88;Ambersniffer
+H89;Snotfinger
+H90;Spiderwretch
+H91;Roadwarrior
+H92;Poisoned Rock
+H93;Dirtwater
+H94;Obsidian Legion
+H95;Began's Expedition
+H96;Mithril-Arm Cartel
+H97;Company of the Grudgebearers
+H98;Axebellow Cartel
+H99;Feyslicer
+I01;Amldihr
+I02;Krakdhûmvror;Krakdhumvror
+I03;Dûr-Vazhatun;Dur-Vazhatun
+I04;Orlazam-az-dihr
+I05;Mithradhûm;Mithradhum
+I06;Er-Natvir
+I07;Khugdihr
+I08;Haraz Orldhûm;Haraz Orldhum
+I09;Verkal Kozenad
+I10;Hul-Jorkad
+I11;Shazstundihr
+I12;Orlghelovar
+I13;Verkal Skomdihr
+I14;Gor Vazumbrog
+I15;Hehodovar
+I16;Gor Bûrad;Gor Burad
+I17;Gor Ozumbrog
+I18;Grôzumdihr;Grqzumdihr
+I19;Ovdal-az-Ân;Ovdal-az-an
+I20;Hul-az-Krakazol
+I21;Tuwad-Dhûmankon;Tuwad-Dhumankon
+I22;Grônstunad;Grqnstunad
+I23;Haraz Dhûmankon;Haraz Dhumankon
+I24;Aul-Dwarov
+I25;Verkal Dromak
+I26;Salla Elyn
+I27;Salla Myna
+I28;Salla Drennen
+I29;Salla Cenág;Salla Cenag
+I30;Salla Fealgarn
+I31;Salla Scotha
+I32;Salla Ahain
+I33;Salla Ayeth
+I34;Salla Ghúl;Salla Ghul
+I35;Brambleskinner
+I36;Spiked Log
+I37;Verminhusk
+I38;Beasteater
+I39;Blightseed
+I40;Cursed Howl
+I41;Sapchopper
+I42;Blackmoon
+I43;Silentblade
+I44;Silvertusk
+I45;Cyranvar
+I46;Tugund-Darakh
+I47;Northern Wind
+I48;Silent Quake
+I49;Thunderborn
+I50;Ruin Bringer
+I51;Battlesong
+I52;Winged Blade
+I53;White Shadow
+I54;Moon Tracker
+I55;Black Herd
+I56;Lightning Wielder
+I57;Golden Tremor
+I58;Warsight
+I59;Glorious Charge
+I60;Skyblot
+I61;Serpent Shadow
+I62;Lakefoe
+I63;Thousand Voices
+I64;Blazing Sky
+I65;Burning Hooves
+I66;Cloudbane
+I67;Endless Arrows
+I68;Quiet Hoof
+I69;Star Rider
+I70;Crashing Wave
+I71;Hundred Hooves
+I72;City Razer
+I73;Nightmare
+I74;Bloodbringer
+I75;Great Rally
+I76;Silence Breaker
+I77;Mensbane
+I78;Wild Hunt
+I79;Silvermane
+I80;Great Storm
+I81;Green Flame
+I82;Red Stallion
+I83;Sunrider
+I84;Doomhorde
+I85;Stormsinger
+I86;Blackcharge
+I87;Great Hoof
+I88;Blood Spear
+I89;Khüraen Ulaeg;Khuraen Ulaeg
+I90;Maghargma
+I91;Burning Spear
+I92;Verdant Bliss
+I93;Tiger Bane
+I94;Desert Mane
+I95;Raging Blizzard
+I96;Rosen Rider
+I97;Vine Tearer
+I98;Ves Udzenklan
+I99;Nizhn Korvesto
+J01;Kovtalzar
+J02;Zurkanrek
+J03;Yarumudh
+J04;Khirntozgon
+J05;Haraigizenhi Bulrek
+J06;Khugatseig
+J07;Tzidoilhol
+J08;Kozuurigür;Kozuurigur
+J09;Länkuuhsta;Lankuuhsta
+J10;Vahjevgiiv
+J11;Bazur Qarshtuluu
+J12;Zurka Qarshtuluu
+J13;Negechimudh
+J14;Orilgbulrek
+J15;Yizuqkeyil
+J16;Tolgusrek
+J17;Mizaqtoch
+J18;Narkel
+J19;Jungyukaroy
+J20;Bozkuqayla
+J21;Märekiiv;Marekiiv
+J22;Tayerigliq
+J23;Yikashlay
+J24;Zabyos'tlar
+J25;Buruvaqoyla
+J26;Raattakod
+J27;Sinesadma
+J28;Valralahdi
+J29;Vantnhasadma
+J30;Länkinä;Lankina
+J31;Akuutengen
+J32;Mire Maw
+J33;Kalsyto
+J34;Qarshtuluu
+J35;Iltklerd
+J36;Kvakolba
+J37;Olkhajukh
+J38;Remlygenjrot
+J39;Achtejardon
+J40;Garsvulshim
+J41;Bronzegut
+J42;Grey Fist
+J43;Ironclaw
+J44;Skull Gnasher
+J45;Trunk Basher
+J46;Frosthide
+J47;Skurkokli
+J48;Ghavamregh
+J49;Qorondulyuz
+J50;Sunijalla
+J51;Ponjögde;Ponjogde
+J52;Ikögshaantus;Ikogshaantus
+J53;Zabutodask
+J54;Altorzamh
+J55;Lejdazamh
+J56;Taryeanzamh
+J70;Oremvand
+J71;Sarihaddu
+J72;Darkalyndar
+J73;Zaernmaera
+J74;Caergaraen
+J75;Rakkabuttai
+J76;Banderuttai
+J77;Kattisangamar
+J78;Uesrennu
+J79;Katelperai
+J80;Vettakaramai
+J81;Parahechend
+J82;Varamraya
+J83;Airoa Naditari
+J84;Taychendi Empire
+J85;Nanru Nakar
+J86;Inifoeyu
+J87;Tanafali
+J88;Údralach;udralach
+J89;Chapárun;Chaparun
+J90;Cara Lafquén;Cara Lafquen
+J91;Irúasawid;Iruasawid
+J92;Trígica;Trigica
+J93;Hinediú Yulas;Hinediu Yulas
+J95;Rhasáil;Rhasail
+J96;Lamentaire
+J97;Trollshaunt
+J98;Port Palegold
+J99;Validaunéa;Validaunea
+L01;Kuiika
+L02;Jagab Faru
+L03;Isagumze
+L04;Saqraxat
+L05;Iqhekabi
+L06;Zena
+L07;Imbushid
+L08;Kulugiash
+L09;Zuvavim
+L10;Kunolo
+L11;Chibuswa
+L12;Gomuvuri
+L13;Samishesha
+L14;Negefaama
+L15;Bokiya
+L16;Atijoko
+L17;Taafisi
+L18;Mausarjirad
+L19;Adaru
+L20;Maikirow
+L21;Dendugma
+L22;Binwarji
+L23;Fangaula
+L24;Nenfi Remuj
+L25;Sakul
+L26;Irsmahap
+L27;Shasoura
+L28;Koroshesh
+L29;Kartakhet
+L30;Vurebindika
+L31;Irsukumbha
+L32;Vadokizy
+L33;Afakoyuzemby
+L34;Tvarateram
+L35;Mpirelmasi
+L36;Lelanàn;Lelanan
+L37;Mihitarab
+L38;Rayafo
+L39;Jakannakazy
+L40;Maranakavi
+L41;Hasakely
+L42;Tibokbo
+L43;Sisinybohi
+L44;Anàniltra;Ananiltra
+L45;Oronsinoma
+L46;Amezajik
+L47;Mazanosy
+L48;Ataturozi
+L49;Kaino Federation
+L50;Tsanizadai
+L51;Vumarano
+L52;Bamdikizy
+L53;Tiboktsamo
+L54;Berihrica
+L55;Naléni;Naleni
+L56;Dakmender
+L57;Boyebareti
+L58;Yetmesira
+L59;Bwa Tanizu
+L60;Keledugu
+L61;Irkan Eparta
+L62;Vandipha
+L63;Butuguzi
+L64;Pegosi
+L65;Melakmengi
+L66;Simegasa
+L67;Kidsit Yiti
+L68;Karassk
+L69;Zerat
+L70;Khugra
+L71;Nazhni
+L72;Zatsuti
+L73;Karashan
+L74;Zatal
+L75;Kakhazajar
+L76;Gasha
+L77;Karach
+L78;Charach
+L79;Rshak
+L80;Zulbur
+L81;Yassa
+L82;Way Pointing Tchoken
+L83;Shangra
+L84;Shalazar
+L85;Ashakani
+L86;Ishyaga
+L87;Adzalan
+L88;Abussa
+L89;Tsuz
+L90;Ashkha
+L91;Alashkatsa
+L92;Tsurin
+L93;Lata
+L94;Shagadyrra
+L95;Rayaz
+L96;Asarta
+L97;Arazin
+L98;Yushyn
+L99;Katsanada
+M01;Grizehûd;Grizehud
+M02;Dûrsikari;Dursikari
+M03;Svaikzenszel
+M04;Tarakar
+M05;Burnt Skin
+M50;
+M51;
+M52;
+M53;
+M54;
+M55;
+M56;
+M57;
+M58;
+M59;
+M60;
+M61;
+M62;
+M63;
+M64;
+M65;
+M66;
+M67;
+M68;
+M69;
+M70;
+M71;
+M72;
+M73;
+M74;
+M75;
+M76;
+M77;
+M78;
+NAT;Natives
+NPC;NPC
+PAP;The Papal State
+PIR;Pirates
+R00;Lohanparayan
+R01;Avhavubhiya
+R02;Sarkhashabid
+R03;Davharral
+R04;Iyarhashar
+R05;Tughayasa
+R06;Babhagama
+R07;Rajnadhaga
+R08;Tiltaghar
+R09;Parraj
+R10;Sarnavan
+R11;Khadisrapur
+R12;Tilathi
+R13;Ghavaghuundakhan
+R14;Maldeelakhan
+R15;Nundujisbid
+R16;Banjisbid
+R17;Banjiraal
+R18;Buhaanjirghal
+R19;Sharaajaghal
+R20;Pordhatti
+R21;Sarisung
+R22;Khirnadhiman
+R23;Keyattordha
+R24;Thadarsaghol
+R25;Rayavhatimana
+R26;Khiraspid
+R27;Tekharal Makhan
+R28;Dakhilamvi
+R29;Shekivad
+R30;Alkayivad
+R31;Sheramvi
+R32;Dagari
+R33;Ghattub
+R34;Kamapar
+R35;Banjibang
+R36;Endhuvi
+R37;Kethur
+R38;Bhuvauri
+R39;Amtarim
+R40;Ghundagar
+R41;Amtujsaat
+R42;Tudhina
+R43;Tujgal
+R44;Shenral
+R45;Umdaj
+R46;Setarudhar
+R47;Setarbul
+R48;Setapsim
+R49;Parusad Bhola
+R50;Rabaghekhur
+R51;Dhenijanraj
+R52;Rabhidaraj
+R53;Dhenijansar
+R54;Parusahan Saya
+R55;Dhurajaghan
+R56;Saddathar
+R57;Parus Panasur
+R58;Sardiphadin
+R59;Khappur
+R60;Sarkhani
+R61;Pasiragha
+R62;The Command
+R63;Thunderfist
+R64;Bloodsong
+R65;Blackstep
+R66;Stolen Gem
+R67;Tiger Command
+R68;Elephant Command
+R69;Dragon Command
+R70;Harimraj
+R71;Rahenraj
+R72;Dhugajir
+R73;Nadimraj
+R74;Ghankedhen
+R75;Dhujat
+R76;Sardhasi
+R77;Vanrahar
+R78;Sir
+R79;Ghatasak
+R80;Sarilavhan
+R81;Jade March
+R82;Xerdgonfa
+R83;Semifírë;Semifire
+R84;Phabar
+R85;Udapana
+R86;Lingyuk
+R87;Petamuya
+R88;Sharaja
+R89;Nadiral
+R90;Li Btei
+R91;Tanyatta
+R92;Reanthung
+R93;Bieng Phang
+R94;Boar Command
+R95;Lion Command
+R96;Wolf Command
+R97;Raghajandi
+R98;Sanghariyar
+R99;Suryavar
+REB;Rebels
+S11;Sea Roaming Inyubi
+S12;Foul Mouthed Kazatsa
+S13;Golkhi
+S14;Ishalani
+S15;Karshyr
+S16;Uwakila Baashi
+S17;Baddabi
+S18;Beeragga
+S19;Weggabiga
+S20;Dadubakha
+S21;Gawakhiza
+S22;Hisraad
+S23;Hisost Yamok
+S24;Fuulmana
+S25;Fetengoni
+S26;Saposakosa
+S27;Kaziradoka
+S28;Inshibonde
+S29;Degumwamba
+S30;Death Bringing Cobra
+S31;Eusiwuni
+S32;Gumti
+S33;Red Fanged Gorilla
+S34;Cunning River Kyil
+S35;Well Fed Elephant
+S36;Stealthy Duiker
+S37;Swift Legged Bongo
+S38;Work Doing Hippo
+S39;Hut Building Weaver Bird
+S40;Forest Hiding Okapi
+S41;Prey Finding Leopard
+S42;Friend Helping Parrot
+S43;Violent Hearted Goose
+S44;Matamot
+S45;Huugeta
+S46;Dugiti
+S47;Dubishan
+S48;Tikur Adanyi
+S49;Poson
+S50;Yemotaferi
+S51;Sedarketema
+S52;Teleksemayi
+S53;Averilibet
+S54;Layinret
+S55;Ketemcaka
+S56;Enikmesiki
+S57;Shelokmengi
+S58;Werikgeta
+S59;Wezingoa
+S60;Meretgeban
+S61;Ibekisedara
+S62;Kadamuu
+S63;Bosonkikon
+S64;Lipmekat
+S65;Mukis
+S66;Mewomender
+S67;Manta
+S68;Kirksan
+S69;Mewojala
+S70;Yezel Mora
+S71;Fahvanosy
+S72;Vyoronsi
+S73;Selodarch
+S74;Tnismot
+S75;Biribitid
+S76;Gnidi
+S77;Amiratsamo
+S78;Maakhibkhii
+S79;Umoji Baashidi
+S81;Khatalashya
+S82;Munzeri
+S83;Katidariga
+S84;Bwa Dakinshi
+S85;Qasriga
+S86;Wattoi
+S87;Amubariz
+S88;Rijalsahil
+S89;Yehatirha
+S90;Umbral Covenant
+S92;Jinnakah
+S93;Alefisol
+S94;Jarafarin
+S95;Kuraoko
+S96;Maymunah
+S97;Damisi
+S98;Bibyobi
+S99;Bankartineni
+SS0;Romutha
+SS1;Agradent
+SS2;Zulkanez
+SS3;Shagatan
+SS4;Teinglios
+SS5;Zangea
+SS6;Atamumba
+SS7;Rakh
+U01;Kheterata
+U02;Nirat
+U04;Aakheta
+U05;Elizna
+U06;Deshak
+U07;Viakkoc
+U08;Ekha
+U09;Gnollakaz
+U10;Brrtekuh
+U11;Landshark
+U12;Oubbligschild
+U13;Greysheep
+U14;Mountainhugger
+U15;Marblehead
+U16;Ourdia
+U17;Crathánor;Crathanor
+U18;Re-Uyel
+U19;Aqatbahar
+U20;Azka-Sur
+U21;Veykoda
+U22;Veykodirzag
+U23;Selocshana
+U24;Arvezl
+U25;Adbraseloc
+U26;Lisicalrevo
+U27;Theínós;Theinps
+U28;Kooyaahse
+U29;Kaiinpi
+U30;Quitl
+U31;The Triarchy
+U32;Lesnikpansvo
+U33;Vizkaladr
+U34;Solansash
+U35;Qashdeam
+U36;Zmandfaes
+U37;Behzmukijabu
+U38;Ordejwad
+U39;Orenvalyam
+U40;Drisleak
+U41;Ghrannblath
+U42;Urdea Samrad
+U43;Seraeddun
+U44;Snecdath
+U45;Daraela
+U46;Sidmargbal
+U47;Shyarayan
+U48;Cataboek
+U52;Endralliande
+U55;Noruin
+U56;Bloodgroves
+U57;Cheshoshmar
+U60;Soruin
+U66;Nortiochand
+U67;Daughters of the Hills
+U68;Kiohalen
+U69;Sarda
+U70;Dolindha
+U71;Rzenta
+U72;Vrendzan
+U76;Horizona
+V01;Oinukhudi
+V02;Dolontugiin
+V03;Khezkhagak
+V04;Hakuukulga
+V05;Cangji
+V06;Bazuneizar
+V07;Olkhalsu
+V08;Sudokli
+V09;Shevhedil
+V10;Motelisamok
+V11;Zugi Yusan
+V12;Kuenan Nirokyu
+V13;Nunsan Banbe
+V14;Nutean Kezen
+V15;Anarkhudi
+V16;Samisalik Bolki
+V17;Nirenun Syul
+V18;Samthalsu
+V19;Yanszin
+V20;Zoherin Apunsorya
+V21;Chinhu
+V22;Jianlin
+V23;Luzhong
+V24;Ashag Kuulgo
+V25;Hus Bhal
+V26;Zunk Kuulgo
+V27;Nuwenara
+V28;Baztungh Khayus
+V98;Shaman-Home
+Y00;Sunrise Empire
+Y01;Azjakuma
+Y02;Jinqiu
+Y03;Hubao
+Y04;Anjiang
+Y05;Lanjinhui
+Y06;Yangcheng
+Y07;Guhe
+Y08;Yanzhong
+Y09;Bianfang
+Y10;Yingzhen
+Y11;Wudikmen
+Y12;Fengzhaobu
+Y13;Jiangdu
+Y14;Zhiqian
+Y15;Beikdugang
+Y16;Jiantsiang
+Y17;Gushuokguan
+Y18;Sziangnu
+Y19;Tianlou
+Y20;Feiten
+Y21;Xiyun
+Y22;Chajin
+Y23;Zyujyut
+Y24;Luoyip
+Y25;Zongji
+Y26;Yinquan
+Y27;Kohai
+Y28;Jiangliusi
+Y29;Jilin
+Y30;Aoshan
+Y31;Rang Nartak
+Y32;Yumaomen
+Y33;Vidvakhoka
+Y34;Nay Kwhan
+Y35;Liukhexingzhe
+Y36;Lo Pashong
+Y37;Mudrabagha
+Y38;Bommak
+Y39;P'ezarang
+Y40;He Preahsang
+Y41;Xaram
+Y42;Linquanzhuang
+Y43;Tsiancukmen
+Y44;Shanyutian
+Y45;Jinhusi
+Y46;Jianxusi
+Y47;Yizeikwu
+Y48;Yantrakari
+Y49;Qiansimiao
+Y50;Phangban
+Y51;Bim Lau
+Y52;Semphrerong
+Y53;Prukakhin
+Y54;Risbek
+Y55;Khabtei Teleni
+Y56;Pheuon Duan
+Y57;Phaethmen Di
+Y58;Lot Dekkhang
+Y59;Thirabnir
+Y60;Lo Ngoen
+Y61;Rongbek
+Y62;Khao Elnak
+Y63;Verkal Ozovar
+Y64;Pinghoi
+Y65;Arawkelin
+Y66;Hon Sai
+Y67;Mo Hoang
+Y68;Nagon
+Y69;Brenulan
+Y70;Phonan
+Y71;Kudet Kai
+Y72;Chien Binhrung
+Y73;Sirtan
+Y74;Pelimkana
+Y75;Tlagapatung
+Y76;Jaya Raya
+Y77;Kaplakawan
+Y78;Bukit Bantay
+Y79;Lelak
+Y80;Menek Poko
+Y81;Kuplukamba
+Y82;Labanyak
+Y83;Kuta
+Y84;Lembingtana
+Y85;Balrijin
+Y86;Azkare
+Y87;Tidtam
+Y88;Hinphat
+Y89;Yuanszi
+Y90;Tsuista Khul
+Y91;Nuugdan Tsarai
+Y92;Rüng Igedch;Rung Igedch
+Y93;Danggun
+Y94;Dalmangaji
+Y95;Baegye
+Y96;Guwaamud
+Y97;Baihon Xinh
+Y98;Daxugo
+Y99;One Xia
+Z01;Empire of Anbennar
+Z02;Magdalaire
+Z03;Bellacaire
+Z04;Indlebury
+Z05;Tretun
+Z06;Brinkmarches
+Z07;Dostanor
+Z08;Bjarnrík;Bjarnrik
+Z09;Skaldskola
+Z10;Revrhavn
+Z11;Sidaett
+Z12;Naugsvol
+Z13;Redgarhavn
+Z14;Avnkaup
+Z15;Urviksten
+Z16;Olavlund
+Z17;Obrtrol
+Z18;Frozenmaw
+Z19;Broken Jaw
+Z20;Hideguzzler
+Z21;Serpentgard
+Z22;Celmaldor
+Z23;Esald
+Z24;Envermarck
+Z25;Dinesck
+Z26;Adshaw
+Z27;Cedevik
+Z28;Bayvic
+Z29;Coldmarket
+Z30;Everwharf
+Z31;Reachspier
+Z32;Alencay
+Z33;Frostwall
+Z34;Black Castanor
+Z35;Rósande;Rpsande
+Z36;Hammerhome
+Z37;Covenblad
+Z38;Kobildzan
+Z39;Viswall
+Z40;Acromton
+Z41;Plumwall
+Z42;Varivar
+Z43;Aelnar
+Z44;Orda Silblaidd
+Z45;Vrorenmarch
+Z46;Esmaria
+Z47;Doombringer
+Z48;Rivsby
+Z49;Eskerborg
+Z50;Grombar
+Z51;Khozrugan
+Z52;Unguldavor
+Z53;Barumand
+Z54;Karakhanbar
+Z55;Darkscale
+Z56;Kuxheztë;Kuxhezte
+Z57;Karashar
+Z58;Lamwun
+Z59;Szicheng
+Z60;Tsukqiao
+Z61;Xiongxiap
+Z62;Thàngoya;Thangoya
+Z63;Thidinkai
+Z64;Damoh Yangla
+Z65;Yanshen
+Z66;Dahui
+Z67;Lianzhou
+Z68;Toarnaire
+Z69;Lithiel Oathguardians
+Z70;Kayd Hands
+Z71;Aelthanas Followers
+Z72;Sicrheior Spears
+Z73;Dahvar Zealots
+Z74;Gerudaghot
+Z75;First Acolyte
+Z76;Second Acolyte
+Z77;Third Acolyte
+Z78;Fourth Acolyte
+Z79;Fifth Acolyte
+Z80;Sixth Acolyte
+Z81;Seventh Acolyte
+Z82;Kar-Ankash
+Z83;Blodfjell
+Z84;Várheim;Varheim
+Z85;Frostbrygja
+Z86;Soyzkaru Cartel
+Z87;Akluztajo
+Z88;Vængheim;Vaengheim
+Z89;Ðigoveða;Digoveoa
+Z90;Turnwell
+Z91;Jarvema
+Z92;Cagodor
+Z97;Ravelian State
+Z99;Black Demesne

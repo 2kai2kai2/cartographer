@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::DecodeReaderBytesBuilder;
+use futures::TryFutureExt;
 use image::{GenericImageView, ImageBuffer, Luma, Rgb, RgbImage, RgbaImage};
 use std::{collections::HashMap, io::Read, num::ParseIntError};
 
@@ -122,7 +123,7 @@ impl MapAssets {
         });
     }
 
-    /// `dir_url` should be, for example, `"{}/vanilla"`
+    /// `dir_url` should be, for example, `"{}/eu4/vanilla"`
     pub async fn load(dir_url: &str) -> anyhow::Result<MapAssets> {
         let url_definition_csv = format!("{dir_url}/definition.csv");
         let url_wasteland_txt = format!("{dir_url}/wasteland.txt");
@@ -133,7 +134,9 @@ impl MapAssets {
 
         let client = Fetcher::new();
         let (csv_file_text, wasteland, water, flagfiles_txt, flagfiles_png, base_map) = futures::try_join!(
-            client.get_with_encoding(&url_definition_csv),
+            client
+                .get_utf8(&url_definition_csv)
+                .map_err(anyhow::Error::msg),
             client.get_with_encoding(&url_wasteland_txt),
             client.get_with_encoding(&url_water_txt),
             client.get_with_encoding(&url_flagfiles_txt),

@@ -118,17 +118,13 @@ impl Fetcher {
         return Fetcher(reqwest::Client::new());
     }
 
-    pub async fn get(&self, url: &str) -> anyhow::Result<reqwest::Response> {
-        return self.0.get(url).send().await.map_err(anyhow::Error::msg);
+    pub async fn get(&self, url: &str) -> reqwest::Result<reqwest::Response> {
+        return self.0.get(url).send().await;
     }
 
     /** Gets and throws an error if the status is an error code */
-    pub async fn get_200(&self, url: &str) -> anyhow::Result<reqwest::Response> {
-        return self
-            .get(url)
-            .await?
-            .error_for_status()
-            .map_err(anyhow::Error::msg);
+    pub async fn get_200(&self, url: &str) -> reqwest::Result<reqwest::Response> {
+        return self.get(url).await?.error_for_status();
     }
 
     pub async fn get_image(
@@ -146,6 +142,11 @@ impl Fetcher {
         let bytes = response.bytes().await.map_err(anyhow::Error::msg)?;
         return from_cp1252(Cursor::new(bytes)).map_err(anyhow::Error::msg);
     }
+
+    pub async fn get_utf8(&self, url: &str) -> reqwest::Result<String> {
+        let response = self.get_200(url).await?;
+        return response.text().await;
+    }
 }
 
 #[wasm_bindgen]
@@ -156,7 +157,8 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
     let base_url = window.location().origin()? + &window.location().pathname()?;
 
     let url_default_assets = base_url.clone();
-    let url_map_assets = format!("{base_url}/vanilla");
+    log!("Detected game mod is {}", save.game_mod.id());
+    let url_map_assets = format!("{base_url}/eu4/{}", save.game_mod.id());
     let (default_assets, map_assets) = futures::try_join!(
         StatsImageDefaultAssets::load(&url_default_assets),
         eu4::map_parsers::MapAssets::load(&url_map_assets),
@@ -164,7 +166,7 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
     .map_err(map_error)?;
 
     let garamond =
-        FontRef::try_from_slice(include_bytes!("../resources/GARA.TTF")).map_err(map_error)?;
+        FontRef::try_from_slice(include_bytes!("../resources/eu4/GARA.TTF")).map_err(map_error)?;
 
     log!("Generating map...");
     let color_map = eu4_map_core::generate_save_map_colors_config(

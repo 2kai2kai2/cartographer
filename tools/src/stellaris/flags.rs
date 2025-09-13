@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use image::{GenericImageView, RgbaImage};
-use pdx_parser_core::raw_parser::{RawPDXObjectItem, RawPDXScalar, RawPDXValue};
-use std::fs::File;
+use image::RgbaImage;
+use pdx_parser_core::raw_parser::{RawPDXScalar, RawPDXValue};
 
 pub fn convert_flag_colors(gamefiles: &std::path::Path, target: &std::path::Path) -> Result<()> {
     let source = gamefiles.join("flags/colors.txt");

@@ -45,6 +45,7 @@ pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<St
     return out;
 }
 
+/// For assets that don't vary by mod/version
 pub struct StatsImageDefaultAssets {
     pub(crate) army: RgbaImage,
     pub(crate) navy: RgbaImage,
@@ -57,19 +58,21 @@ pub struct StatsImageDefaultAssets {
     pub(crate) base_template: RgbaImage,
 }
 impl StatsImageDefaultAssets {
-    /// `dir_url` should be, for example, `"{}/resources"`
+    /// `dir_url` should refer to the path where, `cartographer_web/resources` is made public
     pub async fn load(dir_url: &str) -> anyhow::Result<StatsImageDefaultAssets> {
         let client = Fetcher::new();
 
-        let url_army_png = format!("{dir_url}/army.png");
-        let url_navy_png = format!("{dir_url}/navy.png");
-        let url_development_png = format!("{dir_url}/development.png");
-        let url_income_png = format!("{dir_url}/income.png");
-        let url_bodycount_attacker_button_png = format!("{dir_url}/bodycount_attacker_button.png");
-        let url_bodycount_defender_button_png = format!("{dir_url}/bodycount_defender_button.png");
-        let url_star_png = format!("{dir_url}/star.png");
-        let url_icon_peace_png = format!("{dir_url}/icon_peace.png");
-        let url_final_template_png = format!("{dir_url}/finalTemplate.png");
+        let url_army_png = format!("{dir_url}/eu4/army.png");
+        let url_navy_png = format!("{dir_url}/eu4/navy.png");
+        let url_development_png = format!("{dir_url}/eu4/development.png");
+        let url_income_png = format!("{dir_url}/eu4/income.png");
+        let url_bodycount_attacker_button_png =
+            format!("{dir_url}/eu4/bodycount_attacker_button.png");
+        let url_bodycount_defender_button_png =
+            format!("{dir_url}/eu4/bodycount_defender_button.png");
+        let url_star_png = format!("{dir_url}/eu4/star.png");
+        let url_icon_peace_png = format!("{dir_url}/eu4/icon_peace.png");
+        let url_final_template_png = format!("{dir_url}/eu4/finalTemplate.png");
         let (army, navy, development, income, attacker, defender, star, white_peace, base_template) =
             futures::try_join!(
                 client.get_image(&url_army_png, image::ImageFormat::Png),
@@ -132,7 +135,7 @@ pub fn make_final_image(
         out.copy_from(
             &*flag_images
                 .get_normal_flag(&nation.tag)
-                .ok_or(anyhow!("Couldn't find flag"))?,
+                .ok_or(anyhow!("Couldn't find flag for {}", nation.tag))?,
             x as u32,
             y as u32,
         )?;

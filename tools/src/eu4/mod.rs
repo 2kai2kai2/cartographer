@@ -1,4 +1,4 @@
-use crate::utils::stdin_line;
+use crate::utils::{moddable_read_cp1252, moddable_read_dir, moddable_read_image, stdin_line};
 use decancer::cure;
 use image::{GenericImage, GenericImageView};
 use map::{parse_wasteland_provinces, parse_water_provinces};
@@ -7,7 +7,9 @@ use crate::utils::read_cp1252;
 use anyhow::Result;
 use std::{
     fs::File,
-    io::{stdout, Read, Write},
+    io::{stdout, Write},
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 mod history;
@@ -18,8 +20,11 @@ mod map;
 pub struct Eu4Args {}
 
 /// Returns a vector of tags
-fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<Vec<String>> {
-    let flagfiles_txt = read_cp1252(&format!("{documents_dir}/gfx/flags/flagfiles.txt"))?;
+fn load_flagfiles(
+    documents_dir: impl AsRef<Path>,
+    destination_dir: impl AsRef<Path>,
+) -> Result<Vec<String>> {
+    let flagfiles_txt = read_cp1252(documents_dir.as_ref().join("gfx/flags/flagfiles.txt"))?;
     let mut flagfiles_tags: Vec<String> = flagfiles_txt
         .split_ascii_whitespace()
         .skip(1)
@@ -32,7 +37,7 @@ fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<Vec<Stri
     }
     let flag_image_lines = flagfiles_tags.len().div_ceil(16);
 
-    File::create(format!("{destination_dir}/flagfiles.txt"))?.write(
+    File::create(destination_dir.as_ref().join("flagfiles.txt"))?.write(
         flagfiles_tags
             .iter()
             .map(|p| format!("{p}\n"))
@@ -45,9 +50,13 @@ fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<Vec<Stri
     let mut combined_flag_image =
         image::RgbImage::new(128 * 16, 128 * 16 * flag_image_files as u32);
     for i in 0..flag_image_files {
-        let img = image::open(format!("{documents_dir}/gfx/flags/flagfiles_{i}.tga"))
-            .unwrap()
-            .to_rgb8();
+        let img = image::open(
+            documents_dir
+                .as_ref()
+                .join(format!("gfx/flags/flagfiles_{i}.tga")),
+        )
+        .unwrap()
+        .to_rgb8();
         assert_eq!(img.width(), 128 * 16);
         assert!(
             img.height() == 128 * 16 || (i + 1 >= flag_image_files && img.height() % 128 == 0),
@@ -63,7 +72,7 @@ fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<Vec<Stri
         .view(0, 0, 128 * 16, flag_image_lines as u32 * 128)
         .to_image()
         .save_with_format(
-            format!("{destination_dir}/flagfiles.png"),
+            destination_dir.as_ref().join("flagfiles.png"),
             image::ImageFormat::Png,
         )
         .unwrap();
@@ -72,7 +81,11 @@ fn load_flagfiles(documents_dir: &str, destination_dir: &str) -> Result<Vec<Stri
 }
 
 /// Returns a hashmap `tag -> name`
-pub fn load_tag_names(steam_dir: &str, tags: &Vec<String>) -> Result<Vec<(String, Vec<String>)>> {
+pub fn load_tag_names(
+    steam_dir: impl AsRef<Path>,
+    mod_dir: Option<impl AsRef<Path>>,
+    tags: &Vec<String>,
+) -> Result<Vec<(String, Vec<String>)>> {
     fn parse_line<'a>(line: &'a str) -> Option<(&'a str, &'a str)> {
         let line = line.strip_prefix(" ")?;
         let (key, line) = line.split_once(':')?;
@@ -96,17 +109,13 @@ pub fn load_tag_names(steam_dir: &str, tags: &Vec<String>) -> Result<Vec<(String
 
         return Ok(names);
     }
-    let mut items = std::fs::read_dir(format!("{steam_dir}/localisation"))?
-        .filter_map(|file| Some(file.ok()?.file_name().to_str()?.to_string()))
-        .filter(|filename| filename.ends_with("_l_english.yml"))
-        .flat_map(|filename| {
-            let mut file = File::open(format!("{steam_dir}/localisation/{filename}"))
-                .expect("Failed to open file");
-            let text = {
-                let mut text = String::new();
-                file.read_to_string(&mut text).expect("Failed to read file");
-                text
-            };
+
+    let items = moddable_read_dir("localisation", steam_dir, mod_dir)?;
+    let mut items = items
+        .into_iter()
+        .filter(|entry| entry.name.ends_with("_l_english.yml"))
+        .flat_map(|entry| {
+            let text = std::fs::read_to_string(entry.path).expect("Failed to open file");
             return text
                 .lines()
                 .filter_map(parse_line)
@@ -129,31 +138,44 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     let target_name = stdin_line()?;
     let target_name = target_name.trim_matches(trim_cli);
 
-    let destination_web = format!("../cartographer_web/resources/{target_name}");
-    let destination_bot = format!("../cartographer_bot/assets/{target_name}");
+    let destination_web = format!("../cartographer_web/resources/eu4/{target_name}");
+    let destination_bot = format!("../cartographer_bot/assets/eu4/{target_name}");
 
     print!("Steam files directory: ");
     stdout().flush()?;
     let steam_dir = stdin_line()?;
     let steam_dir = steam_dir.trim_matches(trim_cli);
+    let steam_dir = PathBuf::from_str(steam_dir)?;
+
+    print!("(optional) Mod files directory: ");
+    stdout().flush()?;
+    let mod_dir = stdin_line()?;
+    let mod_dir = mod_dir.trim_matches(trim_cli);
+    let mod_dir = if mod_dir.trim_ascii().is_empty() {
+        None
+    } else {
+        Some(PathBuf::from_str(mod_dir)?)
+    };
 
     print!("EU4 documents directory: ");
     stdout().flush()?;
     let documents_dir = stdin_line()?;
     let documents_dir = documents_dir.trim_matches(trim_cli);
+    let documents_dir = PathBuf::from_str(documents_dir)?;
 
     // ====
 
+    std::fs::create_dir_all(&destination_web)?;
+    std::fs::create_dir_all(&destination_bot)?;
+
     // definition.csv is unchanged
-    std::fs::copy(
-        &format!("{steam_dir}/map/definition.csv"),
-        format!("{destination_web}/definition.csv"),
-    )?;
-    let definition_csv = read_cp1252(&format!("{destination_web}/definition.csv")).unwrap();
+    let definition_csv = moddable_read_cp1252("map/definition.csv", &steam_dir, mod_dir.as_ref())?;
+    std::fs::write(format!("{destination_web}/definition.csv"), &definition_csv)?;
     let definition_csv = map::read_definition_csv(&definition_csv).unwrap();
 
     // convert provinces.bmp to provinces.png
-    let provinces_img = image::open(format!("{steam_dir}/map/provinces.bmp")).unwrap();
+    let provinces_img =
+        moddable_read_image("map/provinces.bmp", &steam_dir, mod_dir.as_ref()).unwrap();
     provinces_img
         .save_with_format(
             format!("{destination_web}/provinces.png"),
@@ -162,7 +184,7 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
         .unwrap();
 
     // read water tiles from default.map
-    let default_map = read_cp1252(&format!("{steam_dir}/map/default.map"))?;
+    let default_map = moddable_read_cp1252("map/default.map", &steam_dir, mod_dir.as_ref())?;
     let water_provinces = parse_water_provinces(&default_map)?;
     File::create(format!("{destination_web}/water.txt"))?.write(
         water_provinces
@@ -173,7 +195,7 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     )?;
 
     // read impassible terrain from climate.txt and write to wasteland.txt
-    let climate_txt = read_cp1252(&format!("{steam_dir}/map/climate.txt"))?;
+    let climate_txt = moddable_read_cp1252("map/climate.txt", &steam_dir, mod_dir.as_ref())?;
     let wasteland_provinces = parse_wasteland_provinces(&climate_txt)?;
     map::calculate_wasteland_adjacencies(
         &wasteland_provinces,
@@ -184,8 +206,9 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     );
 
     // Read country history for capitals
-    let country_history = history::CountryHistory::read_all_countries(steam_dir)?;
-    let positions_txt = read_cp1252(&format!("{steam_dir}/map/positions.txt"))?;
+    let country_history =
+        history::CountryHistory::read_all_countries(&steam_dir, mod_dir.as_ref())?;
+    let positions_txt = moddable_read_cp1252("map/positions.txt", &steam_dir, mod_dir.as_ref())?;
     let city_positions = map::parse_province_city_positions(&positions_txt)?;
     let mut capitals_txt = File::create(format!("{destination_bot}/capitals.txt"))?;
     for (tag, country) in country_history {
@@ -198,7 +221,7 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     // ====
     let tags = load_flagfiles(documents_dir, &destination_web)?;
 
-    let country_names = load_tag_names(steam_dir, &tags)?;
+    let country_names = load_tag_names(&steam_dir, mod_dir.as_ref(), &tags)?;
     let country_names: Vec<u8> = country_names
         .iter()
         .flat_map(|(tag, name)| format!("{tag};{}\n", name.join(";")).into_bytes())

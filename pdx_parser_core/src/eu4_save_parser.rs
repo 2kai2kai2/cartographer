@@ -5,11 +5,21 @@ use crate::{
     eu4_date::EU4Date,
     raw_parser::{RawPDXObject, RawPDXScalar, RawPDXValue},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mod {
     Vanilla,
+    Anbennar,
+}
+impl Mod {
+    /// The id of the mod, used for example in the path of resources or assets.
+    pub fn id(&self) -> &'static str {
+        return match self {
+            Mod::Vanilla => "vanilla",
+            Mod::Anbennar => "anbennar",
+        };
+    }
 }
 
 fn eu4_obj_as_color<'a>(value: &RawPDXObject<'a>) -> Result<[u8; 3]> {
@@ -404,6 +414,12 @@ impl SaveGame {
         let great_powers = Vec::new();
         let date = raw_save.get_first_scalar("date");
 
+        let game_mod = if SaveGame::is_anbennar(raw_save)? {
+            Mod::Anbennar
+        } else {
+            Mod::Vanilla
+        };
+
         return Some(SaveGame {
             all_nations,
             player_tags,
@@ -439,7 +455,36 @@ impl SaveGame {
                 .into_iter()
                 .filter_map(|a| a)
                 .collect(),
-            game_mod: Mod::Vanilla,
+            game_mod,
         });
+    }
+
+    /// Using option, should probably actually be a `Result`
+    fn is_anbennar(raw_save: &RawPDXObject) -> Option<bool> {
+        let trade = raw_save.get_first_obj("trade")?;
+
+        let mut has_anbenncost = false;
+        let mut has_bay_of_wines = false;
+        let mut has_broken_sea = false;
+        let mut has_damescrown = false;
+
+        for (_, node) in trade.iter_all_KVs() {
+            let node = node.as_object()?;
+            let name = node.get_first_as_string("definitions")?;
+
+            match name.as_str() {
+                "anbenncost" => has_anbenncost = true,
+                "bay_of_wines" => has_bay_of_wines = true,
+                "broken_sea" => has_broken_sea = true,
+                "damescrown" => has_damescrown = true,
+                _ => continue,
+            }
+
+            if has_anbenncost && has_bay_of_wines && has_broken_sea && has_damescrown {
+                return Some(true);
+            }
+        }
+
+        return Some(false);
     }
 }

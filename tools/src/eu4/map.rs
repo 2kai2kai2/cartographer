@@ -73,7 +73,7 @@ pub fn calculate_wasteland_adjacencies(
         if y != 0 {
             check_neighbor(x, y - 1);
         }
-        if y + 1 < provinces.width() {
+        if y + 1 < provinces.height() {
             check_neighbor(x, y + 1);
         }
         if x != 0 {

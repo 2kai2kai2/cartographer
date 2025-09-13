@@ -1,8 +1,12 @@
-use std::{collections::HashMap, fs::File};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use anyhow::{anyhow, Context};
+use pdx_parser_core::raw_parser::RawPDXObject;
 
-use crate::utils::{from_cp1252, lines_without_comments};
+use crate::utils::{lines_without_comments, moddable_read_dir, read_cp1252};
 
 /// A file in steamfiles `Europa Universalis IV/history/countries`
 #[derive(Debug, Clone)]
@@ -23,28 +27,90 @@ pub struct CountryHistory {
     // historical events
 }
 impl CountryHistory {
-    pub fn read_all_countries(steam_dir: &str) -> anyhow::Result<HashMap<String, CountryHistory>> {
-        let directory = std::fs::read_dir(format!("{steam_dir}/history/countries"))?;
-        let mut out: HashMap<String, CountryHistory> = HashMap::new();
-        for file in directory {
-            let file = file?;
-            let file_name = file.file_name();
-            let Some(file_name) = file_name.to_str() else {
-                return Err(anyhow!("Failed to decode file name"));
-            };
-            let (tag, _) = file_name.split_at(3);
-            if !tag.chars().all(|c| c.is_ascii_uppercase()) {
-                return Err(anyhow!("Invalid tag '{tag}' in file name '{file_name}'"));
+    fn get_all_tags(
+        steam_dir: impl AsRef<Path>,
+        mod_dir: Option<impl AsRef<Path>>,
+    ) -> anyhow::Result<HashSet<String>> {
+        let steam_common = steam_dir.as_ref().join("common");
+        let mod_common = mod_dir
+            .as_ref()
+            .map(|mod_dir| mod_dir.as_ref().join("common"));
+        let mut out: HashSet<String> = HashSet::new();
+
+        let tags_directory = moddable_read_dir("country_tags", &steam_common, mod_common.as_ref())?;
+
+        for tags_file in tags_directory {
+            let tags = read_cp1252(&tags_file.path)?;
+            let tags: String = lines_without_comments(&tags).collect();
+            let (_, tags) = RawPDXObject::parse_object_inner(&tags).ok_or(anyhow!(
+                "Failed to parse country_tags file {}",
+                &tags_file.name
+            ))?;
+            for (k, _) in tags.iter_all_KVs() {
+                let k = k.as_string();
+                if k.len() != 3 || !k.is_ascii() {
+                    eprintln!(
+                        "WARNING: Skipping line in {} as the tag {k} was not 3 ascii characters long.",
+                        &tags_file.path.display()
+                    );
+                }
+
+                if k == "REB" || k == "PIR" || k == "NAT" || k == "SYN" {
+                    continue;
+                }
+
+                out.insert(k);
             }
-            if tag == "REB" || tag == "PIR" || tag == "NAT" || tag == "SYN" {
+        }
+
+        return Ok(out);
+    }
+    pub fn read_all_countries(
+        steam_dir: impl AsRef<Path>,
+        mod_dir: Option<impl AsRef<Path>>,
+    ) -> anyhow::Result<HashMap<String, CountryHistory>> {
+        let all_tags = CountryHistory::get_all_tags(&steam_dir, mod_dir.as_ref()).context(
+            "While checking `country_tags` to determine the set of valid tags in this target.",
+        )?;
+        let mut out: HashMap<String, CountryHistory> = HashMap::new();
+
+        // defines tags and what they refer to
+        let country_history_files =
+            moddable_read_dir("history/countries", &steam_dir, mod_dir.as_ref())?;
+
+        for country_file in country_history_files {
+            let Some((tag, _)) = country_file.name.split_at_checked(3) else {
+                eprintln!("WARNING: country history file name not long enough, skipping.");
+                continue;
+            };
+            if !tag.is_ascii() || tag.to_ascii_uppercase() != tag {
+                eprintln!("WARNING: country history tag {tag} invalid, skipping.");
+                continue;
+            }
+            if !all_tags.contains(tag) {
+                // should mean modded game that excludes vanilla tags
                 continue;
             }
 
-            let file_text = from_cp1252(File::open(file.path())?)?;
-            let country = CountryHistory::parse_file(&file_text)
-                .context(format!("While reading {file_name}"))?;
-            out.insert(tag.to_string(), country);
+            let country_history = read_cp1252(country_file.path)?;
+            let country_history = match CountryHistory::parse_file(&country_history) {
+                Ok(country_history) => country_history,
+                Err(err) => {
+                    // while vanilla always has all out expected fields set, that is not required and some mods do not.
+                    // for now just skip the bad ones and hope they're not important
+                    eprintln!(
+                        "WARNING: failed to parse country history file for {}, skipping it:",
+                        country_file.name
+                    );
+                    for cause in err.chain() {
+                        eprintln!("\t{cause}");
+                    }
+                    continue;
+                }
+            };
+            out.insert(tag.to_string(), country_history);
         }
+
         return Ok(out);
     }
     pub fn parse_file(text: &str) -> anyhow::Result<CountryHistory> {
