@@ -12,6 +12,7 @@
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.1.11",
+        "@types/umami-browser": "^2.18.0",
         "oh-vue-icons": "^1.0.0-rc3",
         "tailwindcss": "^4.1.11",
         "vue": "^3.5.17"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/// <reference types="umami-browser" />
 import { computed, ref } from "vue";
 import FileUploadPage from "./components/FileUploadPage.vue";
 import EU4PlayerEditor from "./components/EU4PlayerEditor.vue";
@@ -11,9 +12,8 @@ import type { EU4SaveGame, StellarisSaveGame } from "./types";
 import { OhVueIcon } from "oh-vue-icons";
 
 const img_value = ref<string>("");
-const save_game = ref<
-    ["EU4", EU4SaveGame] | ["Stellaris", StellarisSaveGame] | undefined
->();
+type SaveGameT = ["EU4", EU4SaveGame] | ["Stellaris", StellarisSaveGame];
+const save_game = ref<SaveGameT | undefined>();
 const stage = ref<
     "file_upload" | "parsing" | "player_edit" | "rendering" | "img_display"
 >("file_upload");
@@ -37,6 +37,10 @@ async function on_click_copy_img() {
             "image/png": res.blob(),
         }),
     ]);
+    if (!clicked_copy_img.value) {
+        // unless it's broken, we don't care about multiple clicks
+        umami.track("clicked-copy-image");
+    }
     clicked_copy_img.value = true;
 }
 
@@ -44,6 +48,7 @@ async function do_rendering() {
     switch (save_game.value?.[0]) {
         case "EU4": {
             const img_b64 = await render_stats_image_eu4(save_game.value[1]);
+            umami.track("render-completed");
             img_value.value = `data:image/png;base64,${img_b64}`;
             save_game.value = undefined; // free up memory
             stage.value = "img_display";
@@ -53,6 +58,7 @@ async function do_rendering() {
             const img_b64 = await render_stats_image_stellaris(
                 save_game.value[1]
             );
+            umami.track("render-completed");
             img_value.value = `data:image/png;base64,${img_b64}`;
             save_game.value = undefined; // free up memory
             stage.value = "img_display";
@@ -66,8 +72,26 @@ async function on_file_picked(file: File) {
     stage.value = "parsing";
     const bytes = new Uint8Array(await file.arrayBuffer());
     try {
-        save_game.value = parse_save_file(bytes, file.name);
-        if (save_game.value?.[0] == "EU4") {
+        const _save: SaveGameT = parse_save_file(bytes, file.name);
+        save_game.value = _save;
+
+        let player_count: number;
+        switch (_save[0]) {
+            case "EU4":
+                player_count = _save[1].player_tags.size;
+                break;
+            case "Stellaris":
+                player_count = _save[1].player_nations.size;
+                break;
+        }
+        umami.track("file-upload", {
+            game: _save[0],
+            mod: _save[1].game_mod,
+            player_count,
+            date: JSON.stringify(_save[1].date),
+        });
+
+        if (_save[0] == "EU4") {
             stage.value = "player_edit";
         } else {
             // TODO: do we need Stellaris player edit?
@@ -82,6 +106,7 @@ async function on_file_picked(file: File) {
     }
 }
 async function on_player_edit_confirm() {
+    umami.track("player-edit-confirm");
     stage.value = "rendering";
     do_rendering();
 }
