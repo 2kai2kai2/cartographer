@@ -16,7 +16,7 @@ export interface EU4SaveGame {
 
 export interface StellarisSaveGame {
     all_nations: Map<number, object>;
-    player_nations: Map<number, string>;
+    player_tags: Map<number, string>;
     galactic_objects: object[];
     dlc: string[];
     date: object;

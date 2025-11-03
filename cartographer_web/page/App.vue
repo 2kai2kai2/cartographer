@@ -75,15 +75,7 @@ async function on_file_picked(file: File) {
         const _save: SaveGameT = parse_save_file(bytes, file.name);
         save_game.value = _save;
 
-        let player_count: number;
-        switch (_save[0]) {
-            case "EU4":
-                player_count = _save[1].player_tags.size;
-                break;
-            case "Stellaris":
-                player_count = _save[1].player_nations.size;
-                break;
-        }
+        const player_count = _save[1].player_tags.size;
         umami.track("file-upload", {
             game: _save[0],
             mod: _save[1].game_mod,
