@@ -7,7 +7,7 @@ use crate::{
 };
 use ab_glyph::{Font, FontRef};
 use anyhow::{anyhow, Result};
-use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
+use image::{GenericImage, GenericImageView, RgbImage, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
 use imageproc::drawing;
 use pdx_parser_core::eu4_save_parser::{Nation, SaveGame, WarResult};
@@ -337,7 +337,7 @@ pub fn make_final_image(
 pub async fn render_stats_image(
     fetcher: &impl Fetcher,
     save: SaveGame,
-) -> anyhow::Result<RgbaImage> {
+) -> anyhow::Result<RgbImage> {
     // log!("Loading assets...");
     // log!("Detected game mod is {}", save.game_mod.id());
     let (default_assets, map_assets) = futures::try_join!(
@@ -370,5 +370,5 @@ pub async fn render_stats_image(
         &save,
     )?;
 
-    return Ok(final_img);
+    return Ok(image::DynamicImage::ImageRgba8(final_img).to_rgb8());
 }

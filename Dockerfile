@@ -16,4 +16,5 @@ RUN cargo build --release --bin cartographer_bot
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/cartographer_bot /usr/local/bin
+COPY cartographer_web/resources /app/resources
 ENTRYPOINT ["/usr/local/bin/cartographer_bot"]

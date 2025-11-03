@@ -26,6 +26,15 @@ pub enum SomeSaveGame {
     EU4(eu4_save_parser::SaveGame),
     Stellaris(stellaris_save_parser::SaveGame),
 }
+impl SomeSaveGame {
+    /// String representation of the game (e.g. `eu4` or `stellaris`)
+    pub fn id(&self) -> &'static str {
+        return match self {
+            SomeSaveGame::EU4(_) => "eu4",
+            SomeSaveGame::Stellaris(_) => "stellaris",
+        };
+    }
+}
 
 pub fn parse_save_file(array: &[u8], filename: &str) -> anyhow::Result<SomeSaveGame> {
     // Need to figure out what game this file is for

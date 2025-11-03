@@ -1,7 +1,7 @@
 use anyhow::Context;
 use lazy_static::lazy_static;
 use reservations::{Reservation, ReservationsData};
-use serenity::all::{ActivityData, Ready};
+use serenity::all::{ActivityData, CacheHttp, Ready};
 use serenity::async_trait;
 use serenity::model::application::*;
 use serenity::{
@@ -11,6 +11,7 @@ use serenity::{
 };
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::io::Cursor;
 
 mod db_types;
 mod reservations;
@@ -77,11 +78,24 @@ fn make_error_msg(text: impl Into<String>) -> CreateInteractionResponse {
     );
 }
 
+struct LocalFetcher;
+impl LocalFetcher {
+    // const LOCAL_PATH: &'static str = "./cartographer_web/resources";
+    const LOCAL_PATH: &'static str = "/app/resources";
+}
+impl stats_core::Fetcher for LocalFetcher {
+    async fn get(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+        let path = std::path::PathBuf::from(LocalFetcher::LOCAL_PATH).join(path);
+        return std::fs::read(path).context("While trying to read file.");
+    }
+}
+
 struct Handler {
     db: PgPool,
 }
+/// For reservations
 impl Handler {
-    async fn reservations_command(
+    async fn handle_reservations_command(
         &self,
         interaction: &CommandInteraction,
     ) -> Result<CreateInteractionResponse, Option<String>> {
@@ -194,52 +208,6 @@ impl Handler {
         return Ok(CreateInteractionResponse::UpdateMessage(msg));
     }
 
-    async fn handle_command_interaction(
-        &self,
-        ctx: &serenity::client::Context,
-        interaction: &CommandInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
-        match interaction.data.name.as_str() {
-            "reservations" => self.reservations_command(interaction).await,
-            "stats" => Ok(CreateInteractionResponse::Message(
-                CreateInteractionResponseMessage::new()
-                    .content(
-                        "\
-                        Stats functionality is currently moved to https://2kai2kai2.github.io/cartographer/
-                        You can upload any non-ironman save to generate an image you can upload to Discord.\
-                        ",
-                    )
-                    .ephemeral(true),
-            )),
-            _ => Err(Some("Unsupported command".to_string())),
-        }
-    }
-    async fn handle_component_interaction(
-        &self,
-        ctx: &serenity::client::Context,
-        interaction: &ComponentInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
-        return match (
-            &interaction.data.kind,
-            interaction.data.custom_id.split_once(':'),
-        ) {
-            (ComponentInteractionDataKind::Button, Some(("reserve", game_id))) => {
-                let Ok(game_id) = game_id.parse::<u64>() else {
-                    return Err(Some("ERROR: failed to parse game id".to_string()));
-                };
-                self.handle_reserve_button(interaction, game_id).await
-            }
-            (ComponentInteractionDataKind::Button, Some(("unreserve", game_id))) => {
-                let Ok(game_id) = game_id.parse::<u64>() else {
-                    return Err(Some("ERROR: failed to parse game id".to_string()));
-                };
-                self.handle_unreserve_interaction(interaction, game_id)
-                    .await
-            }
-            _ => Err(None),
-        };
-    }
-
     async fn handle_reserve_modal(
         &self,
         interaction: &ModalInteraction,
@@ -329,6 +297,126 @@ impl Handler {
         };
         return Ok(CreateInteractionResponse::UpdateMessage(msg));
     }
+}
+
+/// For stats
+impl Handler {
+    async fn handle_stats_command(
+        &self,
+        ctx: &serenity::client::Context,
+        interaction: &CommandInteraction,
+    ) -> Result<CreateInteractionResponse, Option<String>> {
+        let options = interaction.data.options();
+        let save_file = options
+            .iter()
+            .find(|option| option.name == "save_file")
+            .ok_or(Some("A save file must be specified.".to_string()))?;
+        let ResolvedValue::Attachment(attachment) = save_file.value else {
+            return Err(Some(
+                "Unexpected option value type. `save_file` should be an attachment.".to_string(),
+            ));
+        };
+
+        let _ = interaction
+            .create_response(
+                ctx.http(),
+                CreateInteractionResponse::Defer(CreateInteractionResponseMessage::new()),
+            )
+            .await;
+
+        let time_download_start = std::time::Instant::now();
+        let save_file_name = attachment.filename.clone();
+        let save_file = attachment
+            .download()
+            .await
+            .map_err(|err| Some(err.to_string()))?;
+
+        let time_parse_start = std::time::Instant::now();
+        let parsed_save = stats_core::parse_save_file(&save_file, &save_file_name)
+            .map_err(|err| Some(err.to_string()))?;
+
+        let time_render_start = std::time::Instant::now();
+        let game_id = parsed_save.id();
+        let img = match parsed_save {
+            stats_core::SomeSaveGame::EU4(save_game) => {
+                stats_core::eu4::render_stats_image(&LocalFetcher, save_game).await
+            }
+            stats_core::SomeSaveGame::Stellaris(save_game) => {
+                stats_core::stellaris::render_stats_image_stellaris(&LocalFetcher, save_game).await
+            }
+        }
+        .map_err(|err| Some(err.to_string()))?;
+
+        let time_upload_start = std::time::Instant::now();
+        let mut png_buffer: Vec<u8> = Vec::new();
+        img.write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
+            .map_err(|_| Some("Failed to save image to PNG.".to_string()))?;
+
+        let _ = interaction
+            .edit_response(
+                ctx.http(),
+                EditInteractionResponse::new()
+                    .new_attachment(CreateAttachment::bytes(png_buffer, "image.png")),
+            )
+            .await;
+
+        let time_done = std::time::Instant::now();
+        println!(
+            "Stats for {game_id:9} | download {:5.2}s | parse {:5.2}s | render {:5.2}s | upload {:5.2}s",
+            time_parse_start
+                .duration_since(time_download_start)
+                .as_secs_f32(),
+            time_render_start
+                .duration_since(time_parse_start)
+                .as_secs_f32(),
+            time_upload_start
+                .duration_since(time_render_start)
+                .as_secs_f32(),
+            time_done.duration_since(time_upload_start).as_secs_f32()
+        );
+
+        return Err(None); // we handle responses internally since we have updating messages
+    }
+}
+
+impl Handler {
+    async fn handle_command_interaction(
+        &self,
+        ctx: &serenity::client::Context,
+        interaction: &CommandInteraction,
+    ) -> Result<CreateInteractionResponse, Option<String>> {
+        match interaction.data.name.as_str() {
+            "reservations" => self.handle_reservations_command(interaction).await,
+            "stats" => self.handle_stats_command(ctx, interaction).await,
+            _ => Err(Some("Unsupported command".to_string())),
+        }
+    }
+
+    async fn handle_component_interaction(
+        &self,
+        ctx: &serenity::client::Context,
+        interaction: &ComponentInteraction,
+    ) -> Result<CreateInteractionResponse, Option<String>> {
+        return match (
+            &interaction.data.kind,
+            interaction.data.custom_id.split_once(':'),
+        ) {
+            (ComponentInteractionDataKind::Button, Some(("reserve", game_id))) => {
+                let Ok(game_id) = game_id.parse::<u64>() else {
+                    return Err(Some("ERROR: failed to parse game id".to_string()));
+                };
+                self.handle_reserve_button(interaction, game_id).await
+            }
+            (ComponentInteractionDataKind::Button, Some(("unreserve", game_id))) => {
+                let Ok(game_id) = game_id.parse::<u64>() else {
+                    return Err(Some("ERROR: failed to parse game id".to_string()));
+                };
+                self.handle_unreserve_interaction(interaction, game_id)
+                    .await
+            }
+            _ => Err(None),
+        };
+    }
 
     async fn handle_modal_interaction(
         &self,
@@ -400,8 +488,30 @@ impl EventHandler for Handler {
         };
     }
     async fn ready(&self, ctx: serenity::client::Context, ready: Ready) {
+        register_commands(&ctx.http).await;
         println!("Ready!");
     }
+}
+
+async fn register_commands(http: &impl serenity::http::CacheHttp) {
+    let reservations_command = CreateCommand::new("reservations")
+        .description("Creates a new Cartographer EU4 reservations message.");
+    let _ = Command::create_global_command(&http, reservations_command)
+        .await
+        .unwrap();
+    let stats_command = CreateCommand::new("stats")
+        .description("Creates a stats image from a save file.")
+        .add_option(
+            CreateCommandOption::new(
+                CommandOptionType::Attachment,
+                "save_file",
+                "The save file to use",
+            )
+            .required(true),
+        );
+    let _ = Command::create_global_command(&http, stats_command)
+        .await
+        .unwrap();
 }
 
 #[tokio::main]
@@ -416,5 +526,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .activity(ActivityData::custom("Taking EU4 Reservations"))
         .await
         .context("While creating client.")?;
+
     return client.start().await.context("While running the client.");
 }
