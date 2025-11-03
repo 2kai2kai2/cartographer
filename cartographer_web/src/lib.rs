@@ -9,7 +9,7 @@ use eu4::webgl::webgl_draw_map;
 use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
 use serde::{Deserialize, Serialize};
-use stats_core::from_cp1252;
+use stats_core::{from_cp1252, PreprocessedSaveGame};
 use wasm_bindgen::prelude::*;
 
 mod eu4;
@@ -38,7 +38,8 @@ pub enum GameSaveType {
 /// Should take in a `UInt8Array`
 #[wasm_bindgen]
 pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue> {
-    return match stats_core::parse_save_file(array, filename) {
+    let preprocessed_save = PreprocessedSaveGame::preprocess(array, filename).map_err(map_error)?;
+    return match preprocessed_save.to_parsed() {
         Ok(stats_core::SomeSaveGame::EU4(eu4_save)) => {
             serde_wasm_bindgen::to_value(&(GameSaveType::EU4, eu4_save)).map_err(map_error)
         }

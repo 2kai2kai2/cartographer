@@ -7,7 +7,7 @@ use crate::{
 };
 use ab_glyph::{Font, FontRef};
 use anyhow::{anyhow, Result};
-use image::{GenericImage, GenericImageView, RgbImage, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImage, GenericImageView, RgbImage, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
 use imageproc::drawing;
 use pdx_parser_core::eu4_save_parser::{Nation, SaveGame, WarResult};
@@ -48,24 +48,19 @@ pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<St
     return out;
 }
 
-pub fn make_final_image(
-    map_image: &RgbaImage,
+/// Makes the part that is not the map.
+pub fn make_image_top(
     flag_images: &FlagImages,
     font: &impl Font,
-    default_assets: &StatsImageDefaultAssets,
+    default_assets: StatsImageDefaultAssets,
     save: &SaveGame,
-) -> Result<RgbaImage> {
-    const BASE_SIZE: (u32, u32) = (5632, 3168);
-    const MAP_SIZE: (u32, u32) = (5632, 2048);
-    if default_assets.base_template.dimensions() != BASE_SIZE {
-        return Err(anyhow!("Base image had the incorrect dimensions"));
+) -> Result<RgbImage> {
+    const TOP_SIZE: (u32, u32) = (5632, 1120);
+    if default_assets.base_template.dimensions() != TOP_SIZE {
+        return Err(anyhow!("Template image had the incorrect dimensions"));
     }
-    if map_image.dimensions() != MAP_SIZE {
-        return Err(anyhow!("Map image had the incorrect dimensions"));
-    }
-    let mut out = default_assets.base_template.clone();
 
-    out.copy_from(map_image, 0, BASE_SIZE.1 - MAP_SIZE.1)?;
+    let mut out = default_assets.base_template;
 
     // ==== PLAYER LIST ====
     let mut player_nations: Vec<(&Nation, &String)> = save
@@ -331,6 +326,21 @@ pub fn make_final_image(
         &date_str,
     );
 
+    return Ok(DynamicImage::ImageRgba8(out).to_rgb8());
+}
+
+/// Just combines the two parts
+pub fn make_final_image(map_image: RgbImage, top_image: RgbImage) -> Result<RgbImage> {
+    const BASE_SIZE: (u32, u32) = (5632, 3168);
+    // const MAP_SIZE: (u32, u32) = (5632, 2048);
+    const TOP_SIZE: (u32, u32) = (5632, 1120);
+
+    let mut out = RgbImage::new(BASE_SIZE.0, BASE_SIZE.1);
+
+    out.copy_from(&map_image, 0, TOP_SIZE.1)?;
+    drop(map_image);
+
+    out.copy_from(&top_image, 0, 0)?;
     return Ok(out);
 }
 
@@ -340,35 +350,39 @@ pub async fn render_stats_image(
 ) -> anyhow::Result<RgbImage> {
     // log!("Loading assets...");
     // log!("Detected game mod is {}", save.game_mod.id());
-    let (default_assets, map_assets) = futures::try_join!(
-        StatsImageDefaultAssets::load(fetcher),
-        MapAssets::load(fetcher, save.game_mod.id()),
-    )?;
-
-    let garamond = FontRef::try_from_slice(super::GARAMOND_TTF)?;
+    let MapAssets {
+        provinces_len,
+        wasteland,
+        water,
+        flags,
+        base_map,
+    } = MapAssets::load(fetcher, save.game_mod.id()).await?;
 
     // log!("Generating map...");
-    let color_map = super::generate_save_map_colors_config(
-        map_assets.provinces_len,
-        &map_assets.water,
-        &map_assets.wasteland,
-        &save,
-    );
-    let base_map = super::make_base_map(&map_assets.base_map, &color_map);
+    let color_map =
+        super::generate_save_map_colors_config(provinces_len, &water, &wasteland, &save);
+    drop(water);
+    drop(wasteland);
+
+    let political_map = super::make_base_map(&base_map, &color_map);
+    drop(base_map);
+    drop(color_map);
 
     // log!("Drawing borders...");
     let borders_config = super::generate_player_borders_config(&save);
-    let map_image = super::apply_borders(&base_map, &borders_config);
+    let map_image = super::apply_borders(&political_map, &borders_config);
+    drop(political_map);
+    drop(borders_config);
 
     // log!("Drawing stats...");
 
-    let final_img = super::make_final_image(
-        &image::DynamicImage::ImageRgb8(map_image).to_rgba8(),
-        &map_assets.flags,
-        &garamond,
-        &default_assets,
-        &save,
-    )?;
+    let garamond = FontRef::try_from_slice(super::GARAMOND_TTF)?;
+    let default_assets = StatsImageDefaultAssets::load(fetcher).await?;
+    let top_image = super::make_image_top(&flags, &garamond, default_assets, &save)?;
+    drop(flags);
+    drop(garamond);
+    drop(save);
 
-    return Ok(image::DynamicImage::ImageRgba8(final_img).to_rgb8());
+    let final_img = super::make_final_image(map_image, top_image)?;
+    return Ok(final_img);
 }

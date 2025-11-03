@@ -36,43 +36,62 @@ impl SomeSaveGame {
     }
 }
 
-pub fn parse_save_file(array: &[u8], filename: &str) -> anyhow::Result<SomeSaveGame> {
-    // Need to figure out what game this file is for
-    let filename_lower = filename.to_ascii_lowercase();
-    if filename_lower.ends_with(".eu4") {
-        let save = if array.starts_with("EU4txt".as_bytes()) {
-            // log!("Detected uncompressed eu4 save file");
-            from_cp1252(array)?
-        } else if array.starts_with("PK\x03\x04".as_bytes()) {
-            // log!("Detected compressed file");
-            decompress_eu4txt(array)?
+pub enum PreprocessedSaveGame {
+    EU4(String),
+    Stellaris(String),
+}
+impl PreprocessedSaveGame {
+    pub fn preprocess_eu4(file_buf: &[u8]) -> anyhow::Result<String> {
+        if file_buf.starts_with("EU4txt".as_bytes()) {
+            return Ok(from_cp1252(file_buf)?);
+        } else if file_buf.starts_with("PK\x03\x04".as_bytes()) {
+            return decompress_eu4txt(file_buf);
         } else {
             return Err(
                 anyhow!("Initial check shows file does not seem to be a valid eu4 format",).into(),
             );
         };
-        let (_, save) = RawPDXObject::parse_object_inner(&save)
-            .ok_or(anyhow!("Failed to parse save file (at step 1)"))?;
-        let save = eu4_save_parser::SaveGame::new_parser(&save)
-            .ok_or(anyhow!("Failed to parse save file (at step 2)"))?;
-        return Ok(SomeSaveGame::EU4(save));
-    } else if filename_lower.ends_with(".sav") {
-        // seems like all stellaris saves are compressed
-        if !array.starts_with("PK\x03\x04".as_bytes()) {
+    }
+    pub fn preprocess_stellaris(file_buf: &[u8]) -> anyhow::Result<String> {
+        if !file_buf.starts_with("PK\x03\x04".as_bytes()) {
             return Err(anyhow!(
                 "Stellaris save was not a proper zip-compressed file."
             ));
         }
-        let save = decompress_stellaris(array)?;
-        let (_, save) = RawPDXObject::parse_object_inner(&save)
-            .ok_or(anyhow!("Failed to parse save file (at step 1)"))?;
-        let save = stellaris_save_parser::SaveGame::new_parser(&save)?;
-
-        return Ok(SomeSaveGame::Stellaris(save));
-    } else {
-        // TODO: try to figure it out from context.
-        return Err(anyhow!(
-            "Could not determine the save format. Did you change the file extension?",
-        ));
+        return decompress_stellaris(file_buf);
+    }
+    /// Normalizes into the decompressed, utf8-based text format.
+    pub fn preprocess(file_buf: &[u8], filename: &str) -> anyhow::Result<PreprocessedSaveGame> {
+        let filename_lower = filename.to_ascii_lowercase();
+        if filename_lower.ends_with(".eu4") {
+            let text_save = PreprocessedSaveGame::preprocess_eu4(file_buf)?;
+            return Ok(PreprocessedSaveGame::EU4(text_save));
+        } else if filename_lower.ends_with(".sav") {
+            let text_save = PreprocessedSaveGame::preprocess_stellaris(file_buf)?;
+            return Ok(PreprocessedSaveGame::Stellaris(text_save));
+        } else {
+            // TODO: try to figure it out from context.
+            return Err(anyhow!(
+                "Could not determine the save format. Did you change the file extension?",
+            ));
+        }
+    }
+    /// Converts the string in the `PreprocessedSaveGame` into a fully parsed save.
+    pub fn to_parsed(self) -> anyhow::Result<SomeSaveGame> {
+        match self {
+            PreprocessedSaveGame::EU4(save) => {
+                let (_, save) = RawPDXObject::parse_object_inner(&save)
+                    .ok_or(anyhow!("Failed to parse save file (at step 1)"))?;
+                let save = eu4_save_parser::SaveGame::new_parser(&save)
+                    .ok_or(anyhow!("Failed to parse save file (at step 2)"))?;
+                return Ok(SomeSaveGame::EU4(save));
+            }
+            PreprocessedSaveGame::Stellaris(save) => {
+                let (_, save) = RawPDXObject::parse_object_inner(&save)
+                    .ok_or(anyhow!("Failed to parse save file (at step 1)"))?;
+                let save = stellaris_save_parser::SaveGame::new_parser(&save)?;
+                return Ok(SomeSaveGame::Stellaris(save));
+            }
+        }
     }
 }

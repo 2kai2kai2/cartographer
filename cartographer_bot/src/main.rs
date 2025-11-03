@@ -10,6 +10,7 @@ use serenity::{
     Client,
 };
 use sqlx::PgPool;
+use stats_core::PreprocessedSaveGame;
 use std::collections::HashMap;
 use std::io::Cursor;
 
@@ -326,13 +327,17 @@ impl Handler {
 
         let time_download_start = std::time::Instant::now();
         let save_file_name = attachment.filename.clone();
-        let save_file = attachment
+        let raw_save = attachment
             .download()
             .await
             .map_err(|err| Some(err.to_string()))?;
 
         let time_parse_start = std::time::Instant::now();
-        let parsed_save = stats_core::parse_save_file(&save_file, &save_file_name)
+        let preprocessed_save = PreprocessedSaveGame::preprocess(&raw_save, &save_file_name)
+            .map_err(|err| Some(err.to_string()))?;
+        drop(raw_save);
+        let parsed_save = preprocessed_save
+            .to_parsed()
             .map_err(|err| Some(err.to_string()))?;
 
         let time_render_start = std::time::Instant::now();
