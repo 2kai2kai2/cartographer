@@ -3,8 +3,7 @@ resolver = "2"
 members = [
     "tools",
     "pdx_parser_core",
-    "eu4_map_core",
     "cartographer_bot",
     "cartographer_web",
-    "stellaris_map_core",
+    "stats_core",
 ]

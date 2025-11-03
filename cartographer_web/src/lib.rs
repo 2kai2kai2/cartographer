@@ -169,17 +169,17 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
         FontRef::try_from_slice(include_bytes!("../resources/eu4/GARA.TTF")).map_err(map_error)?;
 
     log!("Generating map...");
-    let color_map = eu4_map_core::generate_save_map_colors_config(
+    let color_map = stats_core::eu4::generate_save_map_colors_config(
         map_assets.provinces_len,
         &map_assets.water,
         &map_assets.wasteland,
         &save,
     );
-    let base_map = eu4_map_core::make_base_map(&map_assets.base_map, &color_map);
+    let base_map = stats_core::eu4::make_base_map(&map_assets.base_map, &color_map);
 
     log!("Drawing borders...");
-    let borders_config = eu4_map_core::generate_player_borders_config(&save);
-    let map_image = eu4_map_core::apply_borders(&base_map, &borders_config);
+    let borders_config = stats_core::eu4::generate_player_borders_config(&save);
+    let map_image = stats_core::eu4::apply_borders(&base_map, &borders_config);
 
     log!("Drawing stats...");
 
@@ -225,9 +225,9 @@ pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsVa
         stellaris::STELLARIS_MAP_IMAGE_SIZE,
         Rgb([0, 0, 0]),
     );
-    let map_image = stellaris_map_core::draw_political_map(map_image, &save, &map_assets.colors);
-    let map_image = stellaris_map_core::draw_hyperlanes(map_image, &save);
-    let map_image = stellaris_map_core::draw_systems(map_image, &save);
+    let map_image = stats_core::stellaris::draw_political_map(map_image, &save, &map_assets.colors);
+    let map_image = stats_core::stellaris::draw_hyperlanes(map_image, &save);
+    let map_image = stats_core::stellaris::draw_systems(map_image, &save);
 
     log!("Drawing stats...");
 

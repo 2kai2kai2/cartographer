@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use bitstream_io::{BigEndian, ByteRead, ByteReader};
-use eu4_map_core::{generate_map_colors_config, UNCLAIMED_COLOR};
 use image::Rgb;
 use imageproc::definitions::HasBlack;
 use pdx_parser_core::{
@@ -10,6 +9,7 @@ use pdx_parser_core::{
     EU4Date, Month,
 };
 use serde::{Deserialize, Serialize};
+use stats_core::eu4::{generate_map_colors_config, UNCLAIMED_COLOR};
 
 use super::{
     country_history::{CountryHistoryEvent, WarHistoryEvent},
