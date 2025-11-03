@@ -1,8 +1,11 @@
 use std::cmp::Reverse;
 
-use super::map_parsers::FlagImages;
-use crate::Fetcher;
-use ab_glyph::Font;
+use super::assets::FlagImages;
+use crate::{
+    eu4::assets::{MapAssets, StatsImageDefaultAssets},
+    Fetcher,
+};
+use ab_glyph::{Font, FontRef};
 use anyhow::{anyhow, Result};
 use image::{GenericImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
@@ -43,61 +46,6 @@ pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<St
         out.push(line);
     }
     return out;
-}
-
-/// For assets that don't vary by mod/version
-pub struct StatsImageDefaultAssets {
-    pub(crate) army: RgbaImage,
-    pub(crate) navy: RgbaImage,
-    pub(crate) development: RgbaImage,
-    pub(crate) income: RgbaImage,
-    pub(crate) attacker: RgbaImage,
-    pub(crate) defender: RgbaImage,
-    pub(crate) star: RgbaImage,
-    pub(crate) white_peace: RgbaImage,
-    pub(crate) base_template: RgbaImage,
-}
-impl StatsImageDefaultAssets {
-    /// `dir_url` should refer to the path where, `cartographer_web/resources` is made public
-    pub async fn load(dir_url: &str) -> anyhow::Result<StatsImageDefaultAssets> {
-        let client = Fetcher::new();
-
-        let url_army_png = format!("{dir_url}/eu4/army.png");
-        let url_navy_png = format!("{dir_url}/eu4/navy.png");
-        let url_development_png = format!("{dir_url}/eu4/development.png");
-        let url_income_png = format!("{dir_url}/eu4/income.png");
-        let url_bodycount_attacker_button_png =
-            format!("{dir_url}/eu4/bodycount_attacker_button.png");
-        let url_bodycount_defender_button_png =
-            format!("{dir_url}/eu4/bodycount_defender_button.png");
-        let url_star_png = format!("{dir_url}/eu4/star.png");
-        let url_icon_peace_png = format!("{dir_url}/eu4/icon_peace.png");
-        let url_final_template_png = format!("{dir_url}/eu4/finalTemplate.png");
-        let (army, navy, development, income, attacker, defender, star, white_peace, base_template) =
-            futures::try_join!(
-                client.get_image(&url_army_png, image::ImageFormat::Png),
-                client.get_image(&url_navy_png, image::ImageFormat::Png),
-                client.get_image(&url_development_png, image::ImageFormat::Png),
-                client.get_image(&url_income_png, image::ImageFormat::Png),
-                client.get_image(&url_bodycount_attacker_button_png, image::ImageFormat::Png),
-                client.get_image(&url_bodycount_defender_button_png, image::ImageFormat::Png),
-                client.get_image(&url_star_png, image::ImageFormat::Png),
-                client.get_image(&url_icon_peace_png, image::ImageFormat::Png),
-                client.get_image(&url_final_template_png, image::ImageFormat::Png),
-            )?;
-
-        return Ok(StatsImageDefaultAssets {
-            army: army.to_rgba8(),
-            navy: navy.to_rgba8(),
-            development: development.to_rgba8(),
-            income: income.to_rgba8(),
-            attacker: attacker.to_rgba8(),
-            defender: defender.to_rgba8(),
-            star: star.to_rgba8(),
-            white_peace: white_peace.to_rgba8(),
-            base_template: base_template.to_rgba8(),
-        });
-    }
 }
 
 pub fn make_final_image(
@@ -384,4 +332,43 @@ pub fn make_final_image(
     );
 
     return Ok(out);
+}
+
+pub async fn render_stats_image(
+    fetcher: &impl Fetcher,
+    save: SaveGame,
+) -> anyhow::Result<RgbaImage> {
+    // log!("Loading assets...");
+    // log!("Detected game mod is {}", save.game_mod.id());
+    let (default_assets, map_assets) = futures::try_join!(
+        StatsImageDefaultAssets::load(fetcher),
+        MapAssets::load(fetcher, save.game_mod.id()),
+    )?;
+
+    let garamond = FontRef::try_from_slice(super::GARAMOND_TTF)?;
+
+    // log!("Generating map...");
+    let color_map = super::generate_save_map_colors_config(
+        map_assets.provinces_len,
+        &map_assets.water,
+        &map_assets.wasteland,
+        &save,
+    );
+    let base_map = super::make_base_map(&map_assets.base_map, &color_map);
+
+    // log!("Drawing borders...");
+    let borders_config = super::generate_player_borders_config(&save);
+    let map_image = super::apply_borders(&base_map, &borders_config);
+
+    // log!("Drawing stats...");
+
+    let final_img = super::make_final_image(
+        &image::DynamicImage::ImageRgb8(map_image).to_rgba8(),
+        &map_assets.flags,
+        &garamond,
+        &default_assets,
+        &save,
+    )?;
+
+    return Ok(final_img);
 }

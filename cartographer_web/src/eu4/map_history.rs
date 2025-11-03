@@ -11,10 +11,8 @@ use pdx_parser_core::{
 use serde::{Deserialize, Serialize};
 use stats_core::eu4::{generate_map_colors_config, UNCLAIMED_COLOR};
 
-use super::{
-    country_history::{CountryHistoryEvent, WarHistoryEvent},
-    map_parsers::MapAssets,
-};
+use super::country_history::{CountryHistoryEvent, WarHistoryEvent};
+use stats_core::eu4::assets::MapAssets;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProvinceHistoryEvent {

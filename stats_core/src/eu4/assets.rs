@@ -1,21 +1,61 @@
-use anyhow::{anyhow, Result};
-use encoding_rs::WINDOWS_1252;
-use encoding_rs_io::DecodeReaderBytesBuilder;
-use futures::TryFutureExt;
-use image::{GenericImageView, ImageBuffer, Luma, Rgb, RgbImage, RgbaImage};
-use std::{collections::HashMap, io::Read, num::ParseIntError};
+use std::{collections::HashMap, num::ParseIntError};
 
 use crate::Fetcher;
+use anyhow::{anyhow, Result};
+use image::{GenericImageView, ImageBuffer, Luma, Rgb, RgbImage, RgbaImage};
 
-pub fn from_cp1252<T: Read>(buffer: T) -> Result<String, std::io::Error> {
-    let mut text = "".to_string();
-    DecodeReaderBytesBuilder::new()
-        .encoding(Some(WINDOWS_1252))
-        .build(buffer)
-        .read_to_string(&mut text)?;
-    return Ok(text);
+/// Stats assets that don't change based on mods
+pub struct StatsImageDefaultAssets {
+    pub(crate) army: RgbaImage,
+    pub(crate) navy: RgbaImage,
+    pub(crate) development: RgbaImage,
+    pub(crate) income: RgbaImage,
+    pub(crate) attacker: RgbaImage,
+    pub(crate) defender: RgbaImage,
+    pub(crate) star: RgbaImage,
+    pub(crate) white_peace: RgbaImage,
+    pub(crate) base_template: RgbaImage,
+}
+impl StatsImageDefaultAssets {
+    /// `dir_url` should refer to the path where, `cartographer_web/resources` is made public
+    pub async fn load(fetcher: &impl Fetcher) -> anyhow::Result<StatsImageDefaultAssets> {
+        let url_army_png = "eu4/army.png";
+        let url_navy_png = "eu4/navy.png";
+        let url_development_png = "eu4/development.png";
+        let url_income_png = "eu4/income.png";
+        let url_bodycount_attacker_button_png = "eu4/bodycount_attacker_button.png";
+        let url_bodycount_defender_button_png = "eu4/bodycount_defender_button.png";
+        let url_star_png = "eu4/star.png";
+        let url_icon_peace_png = "eu4/icon_peace.png";
+        let url_final_template_png = "eu4/finalTemplate.png";
+        let (army, navy, development, income, attacker, defender, star, white_peace, base_template) =
+            futures::try_join!(
+                fetcher.get_image(&url_army_png),
+                fetcher.get_image(&url_navy_png),
+                fetcher.get_image(&url_development_png),
+                fetcher.get_image(&url_income_png),
+                fetcher.get_image(&url_bodycount_attacker_button_png),
+                fetcher.get_image(&url_bodycount_defender_button_png),
+                fetcher.get_image(&url_star_png),
+                fetcher.get_image(&url_icon_peace_png),
+                fetcher.get_image(&url_final_template_png),
+            )?;
+
+        return Ok(StatsImageDefaultAssets {
+            army: army.to_rgba8(),
+            navy: navy.to_rgba8(),
+            development: development.to_rgba8(),
+            income: income.to_rgba8(),
+            attacker: attacker.to_rgba8(),
+            defender: defender.to_rgba8(),
+            star: star.to_rgba8(),
+            white_peace: white_peace.to_rgba8(),
+            base_template: base_template.to_rgba8(),
+        });
+    }
 }
 
+/// Flags, specific to the game mod
 pub struct FlagImages {
     tags: HashMap<String, usize>,
     images: image::RgbaImage,
@@ -45,14 +85,15 @@ impl FlagImages {
     }
 }
 
+/// Map data, specific to the game mod
 pub struct MapAssets {
     /// Will include skipped spaces. Equal to the highest province id + 1
-    pub(crate) provinces_len: u64,
-    pub(crate) wasteland: HashMap<u64, Vec<u64>>,
-    pub(crate) water: Vec<u64>,
-    pub(crate) flags: FlagImages,
+    pub provinces_len: u64,
+    pub wasteland: HashMap<u64, Vec<u64>>,
+    pub water: Vec<u64>,
+    pub flags: FlagImages,
     /// Generated from `provinces.png` and `definition.csv`, each pixel is a `u16` corresponding to the province id.
-    pub(crate) base_map: ImageBuffer<Luma<u16>, Vec<u16>>,
+    pub base_map: ImageBuffer<Luma<u16>, Vec<u16>>,
 }
 impl MapAssets {
     pub fn read_definition_csv(text: &str) -> Result<HashMap<Rgb<u8>, u64>> {
@@ -124,24 +165,21 @@ impl MapAssets {
     }
 
     /// `dir_url` should be, for example, `"{}/eu4/vanilla"`
-    pub async fn load(dir_url: &str) -> anyhow::Result<MapAssets> {
-        let url_definition_csv = format!("{dir_url}/definition.csv");
-        let url_wasteland_txt = format!("{dir_url}/wasteland.txt");
-        let url_water_txt = format!("{dir_url}/water.txt");
-        let url_flagfiles_txt = format!("{dir_url}/flagfiles.txt");
-        let url_flagfiles_png = format!("{dir_url}/flagfiles.png");
-        let url_provinces_png = format!("{dir_url}/provinces.png");
+    pub async fn load(fetcher: &impl Fetcher, mod_dir_path: &str) -> anyhow::Result<MapAssets> {
+        let url_definition_csv = format!("eu4/{mod_dir_path}/definition.csv");
+        let url_wasteland_txt = format!("eu4/{mod_dir_path}/wasteland.txt");
+        let url_water_txt = format!("eu4/{mod_dir_path}/water.txt");
+        let url_flagfiles_txt = format!("eu4/{mod_dir_path}/flagfiles.txt");
+        let url_flagfiles_png = format!("eu4/{mod_dir_path}/flagfiles.png");
+        let url_provinces_png = format!("eu4/{mod_dir_path}/provinces.png");
 
-        let client = Fetcher::new();
         let (csv_file_text, wasteland, water, flagfiles_txt, flagfiles_png, base_map) = futures::try_join!(
-            client
-                .get_utf8(&url_definition_csv)
-                .map_err(anyhow::Error::msg),
-            client.get_with_encoding(&url_wasteland_txt),
-            client.get_with_encoding(&url_water_txt),
-            client.get_with_encoding(&url_flagfiles_txt),
-            client.get_image(&url_flagfiles_png, image::ImageFormat::Png),
-            client.get_image(&url_provinces_png, image::ImageFormat::Png)
+            fetcher.get_cp1252(&url_definition_csv),
+            fetcher.get_cp1252(&url_wasteland_txt),
+            fetcher.get_cp1252(&url_water_txt),
+            fetcher.get_cp1252(&url_flagfiles_txt),
+            fetcher.get_image(&url_flagfiles_png),
+            fetcher.get_image(&url_provinces_png)
         )?;
 
         return MapAssets::new(

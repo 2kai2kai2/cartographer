@@ -1,52 +1,24 @@
-use std::io::{Cursor, Read};
+use std::io::Cursor;
+use std::str::FromStr;
 
-use ab_glyph::FontRef;
+use anyhow::Context;
 use base64::Engine;
 use eu4::country_history::WarHistoryEvent;
 use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
-use eu4::map_parsers::from_cp1252;
-use eu4::stats_image::StatsImageDefaultAssets;
 use eu4::webgl::webgl_draw_map;
-use image::Rgb;
 use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
 use serde::{Deserialize, Serialize};
+use stats_core::from_cp1252;
 use wasm_bindgen::prelude::*;
 
 mod eu4;
-mod stellaris;
 
 #[macro_export]
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into())
     }
-}
-
-fn decompress_eu4txt(array: &[u8]) -> anyhow::Result<String> {
-    let mut cursor = Cursor::new(array);
-    let mut unzipper = zip::read::ZipArchive::new(&mut cursor)?;
-
-    let unzipped_meta = unzipper.by_name("meta")?;
-    let meta = from_cp1252(unzipped_meta)?;
-
-    let unzipped_gamestate = unzipper.by_name("gamestate")?;
-    let gamestate = from_cp1252(unzipped_gamestate)?;
-    return Ok(meta + "\n" + &gamestate);
-}
-
-fn decompress_stellaris(array: &[u8]) -> anyhow::Result<String> {
-    let mut cursor = Cursor::new(array);
-    let mut unzipper = zip::read::ZipArchive::new(&mut cursor)?;
-
-    // let mut unzipped_meta = unzipper.by_name("meta")?;
-    // let mut meta = String::new();
-    // unzipped_meta.read_to_string(&mut meta)?;
-
-    let mut unzipped_gamestate = unzipper.by_name("gamestate")?;
-    let mut gamestate = String::new();
-    unzipped_gamestate.read_to_string(&mut gamestate)?;
-    return Ok(gamestate);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,136 +38,66 @@ pub enum GameSaveType {
 /// Should take in a `UInt8Array`
 #[wasm_bindgen]
 pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue> {
-    // Need to figure out what game this file is for
-    let filename_lower = filename.to_ascii_lowercase();
-    if filename_lower.ends_with(".eu4") {
-        let save = if array.starts_with("EU4txt".as_bytes()) {
-            log!("Detected uncompressed eu4 save file");
-            from_cp1252(array).map_err(map_error)?
-        } else if array.starts_with("PK\x03\x04".as_bytes()) {
-            log!("Detected compressed file");
-            decompress_eu4txt(array).map_err(map_error)?
-        } else {
-            return Err(JsError::new(
-                "Initial check shows file does not seem to be a valid eu4 format",
-            )
-            .into());
-        };
-        let (_, save) = RawPDXObject::parse_object_inner(&save)
-            .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
-        let save = eu4_save_parser::SaveGame::new_parser(&save)
-            .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 2)").into())?;
-        return serde_wasm_bindgen::to_value(&(GameSaveType::EU4, save)).map_err(map_error);
-    } else if filename_lower.ends_with(".sav") {
-        // seems like all stellaris saves are compressed
-        if !array.starts_with("PK\x03\x04".as_bytes()) {
-            return Err(
-                JsError::new("Stellaris save was not a proper zip-compressed file.").into(),
-            );
+    return match stats_core::parse_save_file(array, filename) {
+        Ok(stats_core::SomeSaveGame::EU4(eu4_save)) => {
+            serde_wasm_bindgen::to_value(&(GameSaveType::EU4, eu4_save)).map_err(map_error)
         }
-        let save = decompress_stellaris(array).map_err(map_error)?;
-        let (_, save) = RawPDXObject::parse_object_inner(&save)
-            .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
-        let save = stellaris_save_parser::SaveGame::new_parser(&save).map_err(map_error)?;
-
-        return serde_wasm_bindgen::to_value(&(GameSaveType::Stellaris, save)).map_err(map_error);
-    } else {
-        // TODO: try to figure it out from context.
-        return Err(JsError::new(
-            "Could not determine the save format. Did you change the file extension?",
-        )
-        .into());
-    }
+        Ok(stats_core::SomeSaveGame::Stellaris(stellaris_save)) => {
+            serde_wasm_bindgen::to_value(&(GameSaveType::Stellaris, stellaris_save))
+                .map_err(map_error)
+        }
+        Err(err) => Err(map_error(err)),
+    };
 }
 
 fn map_error<E: ToString>(err: E) -> JsValue {
     return js_sys::Error::new(&err.to_string()).into();
 }
 
-struct Fetcher(reqwest::Client);
-impl Fetcher {
-    pub fn new() -> Self {
-        return Fetcher(reqwest::Client::new());
+struct WebFetcher {
+    base_url: reqwest::Url,
+    client: reqwest::Client,
+}
+impl WebFetcher {
+    pub fn new(base_url: reqwest::Url) -> Self {
+        return WebFetcher {
+            base_url,
+            client: reqwest::Client::new(),
+        };
     }
-
-    pub async fn get(&self, url: &str) -> reqwest::Result<reqwest::Response> {
-        return self.0.get(url).send().await;
-    }
-
-    /** Gets and throws an error if the status is an error code */
-    pub async fn get_200(&self, url: &str) -> reqwest::Result<reqwest::Response> {
-        return self.get(url).await?.error_for_status();
-    }
-
-    pub async fn get_image(
-        &self,
-        url: &str,
-        format: image::ImageFormat,
-    ) -> anyhow::Result<image::DynamicImage> {
-        let response = self.get_200(url).await.map_err(anyhow::Error::msg)?;
-        let bytes = response.bytes().await?;
-        return image::load(Cursor::new(bytes), format).map_err(anyhow::Error::msg);
-    }
-
-    pub async fn get_with_encoding(&self, url: &str) -> anyhow::Result<String> {
-        let response = self.get_200(url).await.map_err(anyhow::Error::msg)?;
-        let bytes = response.bytes().await.map_err(anyhow::Error::msg)?;
-        return from_cp1252(Cursor::new(bytes)).map_err(anyhow::Error::msg);
-    }
-
-    pub async fn get_utf8(&self, url: &str) -> reqwest::Result<String> {
-        let response = self.get_200(url).await?;
-        return response.text().await;
+}
+impl stats_core::Fetcher for WebFetcher {
+    async fn get(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+        return self
+            .client
+            .get(self.base_url.join(path)?)
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await
+            .map(|bytes| bytes.to_vec())
+            .context("While getting the body of the response.");
     }
 }
 
 #[wasm_bindgen]
 pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
     let save: eu4_save_parser::SaveGame = serde_wasm_bindgen::from_value(save)?;
-    log!("Loading assets...");
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
     let base_url = window.location().origin()? + &window.location().pathname()?;
+    // typically `base_url == "https://2kai2kai2.github.io/cartographer"`
 
-    let url_default_assets = base_url.clone();
-    log!("Detected game mod is {}", save.game_mod.id());
-    let url_map_assets = format!("{base_url}/eu4/{}", save.game_mod.id());
-    let (default_assets, map_assets) = futures::try_join!(
-        StatsImageDefaultAssets::load(&url_default_assets),
-        eu4::map_parsers::MapAssets::load(&url_map_assets),
-    )
-    .map_err(map_error)?;
+    let fetcher = WebFetcher::new(reqwest::Url::from_str(&base_url).map_err(map_error)?);
+    log!("Rendering stats image...");
+    let final_img = stats_core::eu4::render_stats_image(&fetcher, save)
+        .await
+        .map_err(map_error)?;
 
-    let garamond =
-        FontRef::try_from_slice(include_bytes!("../resources/eu4/GARA.TTF")).map_err(map_error)?;
-
-    log!("Generating map...");
-    let color_map = stats_core::eu4::generate_save_map_colors_config(
-        map_assets.provinces_len,
-        &map_assets.water,
-        &map_assets.wasteland,
-        &save,
-    );
-    let base_map = stats_core::eu4::make_base_map(&map_assets.base_map, &color_map);
-
-    log!("Drawing borders...");
-    let borders_config = stats_core::eu4::generate_player_borders_config(&save);
-    let map_image = stats_core::eu4::apply_borders(&base_map, &borders_config);
-
-    log!("Drawing stats...");
-
-    let final_img = eu4::stats_image::make_final_image(
-        &image::DynamicImage::ImageRgb8(map_image).to_rgba8(),
-        &map_assets.flags,
-        &garamond,
-        &default_assets,
-        &save,
-    )
-    .map_err(map_error)?;
-
-    let img = image::DynamicImage::ImageRgba8(final_img);
-
+    log!("Converting to png...");
     let mut png_buffer: Vec<u8> = Vec::new();
-    img.write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
+    final_img
+        .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
         .map_err(map_error)?;
     return Ok(JsValue::from_str(
         &base64::engine::general_purpose::STANDARD.encode(png_buffer),
@@ -205,41 +107,17 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsValue> {
     let save: stellaris_save_parser::SaveGame = serde_wasm_bindgen::from_value(save)?;
-    log!("Loading assets...");
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
     let base_url = window.location().origin()? + &window.location().pathname()?;
+    // typically `base_url == "https://2kai2kai2.github.io/cartographer"`
 
-    let url_default_assets = format!("{base_url}/stellaris");
-    let url_map_assets = format!("{base_url}/stellaris/vanilla");
-    let (map_assets, stats_assets) = futures::try_join!(
-        stellaris::asset_loaders::MapAssets::load(&url_map_assets),
-        stellaris::asset_loaders::StatsImageAssets::load(&url_default_assets),
-    )
-    .map_err(map_error)?;
+    let fetcher = WebFetcher::new(reqwest::Url::from_str(&base_url).map_err(map_error)?);
+    log!("Rendering stats image...");
+    let final_img = stats_core::stellaris::render_stats_image_stellaris(&fetcher, save)
+        .await
+        .map_err(map_error)?;
 
-    let jura = FontRef::try_from_slice(stellaris::JURA_MEDIUM_TTF).map_err(map_error)?;
-
-    log!("Generating map...");
-    let map_image = image::RgbImage::from_pixel(
-        stellaris::STELLARIS_MAP_IMAGE_SIZE,
-        stellaris::STELLARIS_MAP_IMAGE_SIZE,
-        Rgb([0, 0, 0]),
-    );
-    let map_image = stats_core::stellaris::draw_political_map(map_image, &save, &map_assets.colors);
-    let map_image = stats_core::stellaris::draw_hyperlanes(map_image, &save);
-    let map_image = stats_core::stellaris::draw_systems(map_image, &save);
-
-    log!("Drawing stats...");
-
-    let final_img = stellaris::stats_image::make_final_image(
-        &map_image,
-        &jura,
-        &stats_assets,
-        &save,
-        &map_assets.colors,
-    )
-    .map_err(map_error)?;
-
+    log!("Converting to png...");
     let mut png_buffer: Vec<u8> = Vec::new();
     final_img
         .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
@@ -256,7 +134,7 @@ pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<St
         from_cp1252(save_file).map_err(map_error)?
     } else if save_file.starts_with("PK\x03\x04".as_bytes()) {
         log!("Detected compressed file");
-        decompress_eu4txt(save_file).map_err(map_error)?
+        stats_core::eu4::decompress_eu4txt(save_file).map_err(map_error)?
     } else {
         return Err(JsError::new("Could not determine the EU4 save format").into());
     };
@@ -264,8 +142,8 @@ pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<St
         .ok_or::<JsValue>(js_sys::Error::new("Failed to parse save file (at step 1)").into())?;
 
     log!("Loading assets...");
-    let url_map_assets = format!("{base_url}/../vanilla");
-    let assets = eu4::map_parsers::MapAssets::load(&url_map_assets)
+    let fetcher = WebFetcher::new(reqwest::Url::from_str(base_url).map_err(map_error)?);
+    let assets = stats_core::eu4::assets::MapAssets::load(&fetcher, "vanilla")
         .await
         .map_err(map_error)?;
 
@@ -295,9 +173,8 @@ pub async fn do_webgl(history: &str, base_url: &str) -> Result<JsValue, JsValue>
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
-    log!("Loading assets...");
-    let url_map_assets = format!("{base_url}/../vanilla");
-    let assets = eu4::map_parsers::MapAssets::load(&url_map_assets)
+    let fetcher = WebFetcher::new(reqwest::Url::from_str(base_url).map_err(map_error)?);
+    let assets = stats_core::eu4::assets::MapAssets::load(&fetcher, "vanilla")
         .await
         .map_err(map_error)?;
 

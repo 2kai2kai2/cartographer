@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use crate::stellaris::asset_loaders::StatsImageAssets;
+use crate::Fetcher;
 
+use super::assets::StatsImageAssets;
 use super::STELLARIS_MAP_IMAGE_SIZE;
-use ab_glyph::Font;
+use ab_glyph::{Font, FontRef};
 use anyhow::{anyhow, Result};
-use image::{imageops, GenericImageView, RgbImage, Rgba, RgbaImage};
+use image::{imageops, GenericImageView, Rgb, RgbImage, Rgba, RgbaImage};
 use imageproc::{
     definitions::{HasBlack, HasWhite},
     drawing,
@@ -431,4 +432,32 @@ pub fn make_final_image(
     );
     let img_out = image::DynamicImage::ImageRgba8(img_out).to_rgb8();
     return Ok(img_out);
+}
+
+pub async fn render_stats_image_stellaris(
+    fetcher: &impl Fetcher,
+    save: SaveGame,
+) -> anyhow::Result<RgbImage> {
+    // log!("Loading assets...");
+    let (map_assets, stats_assets) = futures::try_join!(
+        super::assets::MapAssets::load(fetcher, save.game_mod.id()),
+        super::assets::StatsImageAssets::load(fetcher, save.game_mod.id()),
+    )?;
+
+    let jura = FontRef::try_from_slice(super::JURA_MEDIUM_TTF)?;
+
+    // log!("Generating map...");
+    let map_image = image::RgbImage::from_pixel(
+        super::STELLARIS_MAP_IMAGE_SIZE,
+        super::STELLARIS_MAP_IMAGE_SIZE,
+        Rgb([0, 0, 0]),
+    );
+    let map_image = super::draw_political_map(map_image, &save, &map_assets.colors);
+    let map_image = super::draw_hyperlanes(map_image, &save);
+    let map_image = super::draw_systems(map_image, &save);
+
+    // log!("Drawing stats...");
+
+    let final_img = make_final_image(&map_image, &jura, &stats_assets, &save, &map_assets.colors)?;
+    return Ok(final_img);
 }

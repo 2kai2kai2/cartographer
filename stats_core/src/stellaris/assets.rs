@@ -32,11 +32,11 @@ impl MapAssets {
         }
         return csv.lines().map(do_entry).collect();
     }
-    pub async fn load(dir_url: &str) -> anyhow::Result<MapAssets> {
-        let client = Fetcher::new();
 
-        let url_colors = format!("{dir_url}/colors.csv");
-        let colors = client.get_200(&url_colors).await?.text().await?;
+    /// `game_mod_dir` is, for example, "vanilla"
+    pub async fn load(fetcher: &impl Fetcher, game_mod_dir: &str) -> anyhow::Result<MapAssets> {
+        let url_colors = format!("stellaris/{game_mod_dir}/colors.csv");
+        let colors = fetcher.get_utf8(&url_colors).await?;
         let colors = MapAssets::parse_colors_csv(&colors)?;
 
         return Ok(MapAssets { colors });
@@ -59,36 +59,25 @@ pub struct StatsImageAssets {
     pub(crate) flag_frames: FlagFrames,
 }
 impl StatsImageAssets {
-    pub async fn load(dir_url: &str) -> anyhow::Result<StatsImageAssets> {
-        let client = Fetcher::new();
+    pub async fn load(
+        fetcher: &impl Fetcher,
+        game_mod_dir: &str,
+    ) -> anyhow::Result<StatsImageAssets> {
+        let url_screen_bg = "stellaris/screen_bg.png";
+        let url_resource_icons = "stellaris/resource_icons.png";
+        let url_flag_parts_png = format!("stellaris/{game_mod_dir}/flag_parts.png");
+        let url_flag_parts_txt = format!("stellaris/{game_mod_dir}/flag_parts.txt");
+        let url_flag_frames_png = format!("stellaris/{game_mod_dir}/flag_frames.png");
 
-        let url_screen_bg = format!("{dir_url}/screen_bg.png");
-        let url_resource_icons = format!("{dir_url}/resource_icons.png");
-        let url_flag_parts_png = format!("{dir_url}/vanilla/flag_parts.png");
-        let url_flag_parts_txt = format!("{dir_url}/vanilla/flag_parts.txt");
-        let url_flag_frames_png = format!("{dir_url}/vanilla/flag_frames.png");
-
-        let screen_bg = client
-            .get_image(&url_screen_bg, image::ImageFormat::Png)
-            .await?
-            .to_rgba8();
-        let resource_icons = client
-            .get_image(&url_resource_icons, image::ImageFormat::Png)
-            .await?
-            .to_rgba8();
-        let flag_parts_png = client
-            .get_image(&url_flag_parts_png, image::ImageFormat::Png)
-            .await?
-            .to_rgba8();
-        let flag_parts_txt = client.get_200(&url_flag_parts_txt).await?.text().await?;
+        let screen_bg = fetcher.get_image(&url_screen_bg).await?.to_rgba8();
+        let resource_icons = fetcher.get_image(&url_resource_icons).await?.to_rgba8();
+        let flag_parts_png = fetcher.get_image(&url_flag_parts_png).await?.to_rgba8();
+        let flag_parts_txt = fetcher.get_utf8(&url_flag_parts_txt).await?;
         let flag_parts = FlagParts::new(
             flag_parts_png,
             flag_parts_txt.lines().map(str::to_string).collect(),
         );
-        let flag_frames_png = client
-            .get_image(&url_flag_frames_png, image::ImageFormat::Png)
-            .await?
-            .to_rgba8();
+        let flag_frames_png = fetcher.get_image(&url_flag_frames_png).await?.to_rgba8();
         let flag_frames = FlagFrames::new(flag_frames_png);
 
         return Ok(StatsImageAssets {

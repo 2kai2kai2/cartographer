@@ -11,6 +11,13 @@ use anyhow::{Context, Result, anyhow};
 pub enum Mod {
     Vanilla,
 }
+impl Mod {
+    pub fn id(&self) -> &'static str {
+        return match self {
+            Mod::Vanilla => "vanilla",
+        };
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GalacticObjectCoord {

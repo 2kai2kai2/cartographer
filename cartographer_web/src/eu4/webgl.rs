@@ -1,6 +1,6 @@
-use super::map_parsers::MapAssets;
 use crate::log;
 use js_sys::{Float32Array, Uint16Array};
+use stats_core::eu4::assets::MapAssets;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlProgram, WebGlShader};
 
