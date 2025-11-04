@@ -47,18 +47,36 @@ async function on_click_copy_img() {
 async function do_rendering() {
     switch (save_game.value?.[0]) {
         case "EU4": {
+            const time_render_start = performance.mark("render-start");
             const img_b64 = await render_stats_image_eu4(save_game.value[1]);
-            umami.track("render-completed");
+            const time_render_end = performance.mark("render-end");
+            const time_render_measure = performance.measure(
+                "render",
+                time_render_start.name,
+                time_render_end.name
+            );
+            umami.track("render-completed", {
+                render_duration: time_render_measure.duration,
+            });
             img_value.value = `data:image/png;base64,${img_b64}`;
             save_game.value = undefined; // free up memory
             stage.value = "img_display";
             break;
         }
         case "Stellaris":
+            const time_render_start = performance.mark("render-start");
             const img_b64 = await render_stats_image_stellaris(
                 save_game.value[1]
             );
-            umami.track("render-completed");
+            const time_render_end = performance.mark("render-end");
+            const time_render_measure = performance.measure(
+                "render",
+                time_render_start.name,
+                time_render_end.name
+            );
+            umami.track("render-completed", {
+                render_duration: time_render_measure.duration,
+            });
             img_value.value = `data:image/png;base64,${img_b64}`;
             save_game.value = undefined; // free up memory
             stage.value = "img_display";
@@ -72,7 +90,14 @@ async function on_file_picked(file: File) {
     stage.value = "parsing";
     const bytes = new Uint8Array(await file.arrayBuffer());
     try {
+        const time_parse_start = performance.mark("parse-start");
         const _save: SaveGameT = parse_save_file(bytes, file.name);
+        const time_parse_end = performance.mark("parse-end");
+        const time_parse_measure = performance.measure(
+            "parse",
+            time_parse_start.name,
+            time_parse_end.name
+        );
         save_game.value = _save;
 
         const player_count = _save[1].player_tags.size;
@@ -81,6 +106,7 @@ async function on_file_picked(file: File) {
             mod: _save[1].game_mod,
             player_count,
             date: JSON.stringify(_save[1].date),
+            parse_duration: time_parse_measure.duration,
         });
 
         if (_save[0] == "EU4") {

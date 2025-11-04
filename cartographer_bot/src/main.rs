@@ -1,5 +1,6 @@
 use anyhow::Context;
 use lazy_static::lazy_static;
+use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use reservations::{Reservation, ReservationsData};
 use serenity::all::{ActivityData, CacheHttp, Ready};
 use serenity::async_trait;
@@ -332,29 +333,54 @@ impl Handler {
             .await
             .map_err(|err| Some(err.to_string()))?;
 
-        let time_parse_start = std::time::Instant::now();
+        let time_parse_preprocess_start = std::time::Instant::now();
         let preprocessed_save = PreprocessedSaveGame::preprocess(&raw_save, &save_file_name)
             .map_err(|err| Some(err.to_string()))?;
         drop(raw_save);
-        let parsed_save = preprocessed_save
-            .to_parsed()
-            .map_err(|err| Some(err.to_string()))?;
 
-        let time_render_start = std::time::Instant::now();
-        let game_id = parsed_save.id();
-        let img = match parsed_save {
-            stats_core::SomeSaveGame::EU4(save_game) => {
-                stats_core::eu4::render_stats_image(&LocalFetcher, save_game).await
+        let time_parse_raw_start = std::time::Instant::now();
+        let time_parse_game_start;
+        let time_render_start;
+        let game_id;
+
+        let final_img = match preprocessed_save {
+            preprocessed_save @ PreprocessedSaveGame::EU4(_) => {
+                game_id = "eu4";
+                let raw_save = preprocessed_save
+                    .to_raw_parsed()
+                    .map_err(|err| Some(err.to_string()))?;
+
+                time_parse_game_start = std::time::Instant::now();
+                let game_save = eu4_save_parser::SaveGame::new_parser(&raw_save)
+                    .ok_or("Failed to parse save file (at step 2)".to_string())?;
+                drop(raw_save);
+                drop(preprocessed_save);
+
+                time_render_start = std::time::Instant::now();
+                stats_core::eu4::render_stats_image(&LocalFetcher, game_save).await
             }
-            stats_core::SomeSaveGame::Stellaris(save_game) => {
-                stats_core::stellaris::render_stats_image_stellaris(&LocalFetcher, save_game).await
+            preprocessed_save @ PreprocessedSaveGame::Stellaris(_) => {
+                game_id = "stellaris";
+                let raw_save = preprocessed_save
+                    .to_raw_parsed()
+                    .map_err(|err| Some(err.to_string()))?;
+
+                time_parse_game_start = std::time::Instant::now();
+                let game_save = stellaris_save_parser::SaveGame::new_parser(&raw_save)
+                    .map_err(|_| "Failed to parse save file (at step 2)".to_string())?;
+                drop(raw_save);
+                drop(preprocessed_save);
+
+                time_render_start = std::time::Instant::now();
+                stats_core::stellaris::render_stats_image_stellaris(&LocalFetcher, game_save).await
             }
         }
         .map_err(|err| Some(err.to_string()))?;
 
         let time_upload_start = std::time::Instant::now();
         let mut png_buffer: Vec<u8> = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
+        final_img
+            .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
             .map_err(|_| Some("Failed to save image to PNG.".to_string()))?;
 
         let _ = interaction
@@ -367,12 +393,18 @@ impl Handler {
 
         let time_done = std::time::Instant::now();
         println!(
-            "Stats for {game_id:9} | download {:5.2}s | parse {:5.2}s | render {:5.2}s | upload {:5.2}s",
-            time_parse_start
+            "Stats for {game_id:9} | download {:5.2}s | parse pre {:5.2}s | parse raw {:5.2}s | parse game {:5.2}s | render {:5.2}s | upload {:5.2}s",
+            time_parse_preprocess_start
                 .duration_since(time_download_start)
                 .as_secs_f32(),
+            time_parse_raw_start
+                .duration_since(time_parse_preprocess_start)
+                .as_secs_f32(),
+            time_parse_game_start
+                .duration_since(time_parse_raw_start)
+                .as_secs_f32(),
             time_render_start
-                .duration_since(time_parse_start)
+                .duration_since(time_parse_preprocess_start)
                 .as_secs_f32(),
             time_upload_start
                 .duration_since(time_render_start)

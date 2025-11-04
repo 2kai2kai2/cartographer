@@ -38,17 +38,57 @@ pub enum GameSaveType {
 /// Should take in a `UInt8Array`
 #[wasm_bindgen]
 pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue> {
+    let perf = web_sys::window().and_then(|window| window.performance());
+    perf.as_ref().inspect(|perf| {
+        let _ = perf.mark("parse_preprocess_start");
+    });
     let preprocessed_save = PreprocessedSaveGame::preprocess(array, filename).map_err(map_error)?;
-    return match preprocessed_save.to_parsed() {
-        Ok(stats_core::SomeSaveGame::EU4(eu4_save)) => {
-            serde_wasm_bindgen::to_value(&(GameSaveType::EU4, eu4_save)).map_err(map_error)
+    match preprocessed_save {
+        preprocessed_save @ PreprocessedSaveGame::EU4(_) => {
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_raw_start");
+            });
+            let raw_save = preprocessed_save
+                .to_raw_parsed()
+                .map_err(|err| Some(err.to_string()))?;
+
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_game_start");
+            });
+            let game_save = eu4_save_parser::SaveGame::new_parser(&raw_save)
+                .ok_or("Failed to parse save file (at step 2)".to_string())?;
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_game_end");
+            });
+
+            drop(raw_save);
+            drop(preprocessed_save);
+
+            serde_wasm_bindgen::to_value(&(GameSaveType::EU4, game_save)).map_err(map_error)
         }
-        Ok(stats_core::SomeSaveGame::Stellaris(stellaris_save)) => {
-            serde_wasm_bindgen::to_value(&(GameSaveType::Stellaris, stellaris_save))
-                .map_err(map_error)
+        preprocessed_save @ PreprocessedSaveGame::Stellaris(_) => {
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_raw_start");
+            });
+            let raw_save = preprocessed_save
+                .to_raw_parsed()
+                .map_err(|err| Some(err.to_string()))?;
+
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_game_start");
+            });
+            let game_save = stellaris_save_parser::SaveGame::new_parser(&raw_save)
+                .map_err(|_| "Failed to parse save file (at step 2)".to_string())?;
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_game_end");
+            });
+
+            drop(raw_save);
+            drop(preprocessed_save);
+
+            serde_wasm_bindgen::to_value(&(GameSaveType::Stellaris, game_save)).map_err(map_error)
         }
-        Err(err) => Err(map_error(err)),
-    };
+    }
 }
 
 fn map_error<E: ToString>(err: E) -> JsValue {

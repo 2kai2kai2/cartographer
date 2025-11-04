@@ -60,7 +60,7 @@ impl PreprocessedSaveGame {
         }
         return decompress_stellaris(file_buf);
     }
-    /// Normalizes into the decompressed, utf8-based text format.
+    /// Determines what game the file is for and normalizes into the decompressed, utf8-based text format.
     pub fn preprocess(file_buf: &[u8], filename: &str) -> anyhow::Result<PreprocessedSaveGame> {
         let filename_lower = filename.to_ascii_lowercase();
         if filename_lower.ends_with(".eu4") {
@@ -76,21 +76,23 @@ impl PreprocessedSaveGame {
             ));
         }
     }
-    /// Converts the string in the `PreprocessedSaveGame` into a fully parsed save.
-    pub fn to_parsed(self) -> anyhow::Result<SomeSaveGame> {
+    /// Converts the string in the `PreprocessedSaveGame` into a raw parsed save.
+    pub fn to_raw_parsed<'a>(&'a self) -> anyhow::Result<RawPDXObject<'a>> {
         match self {
             PreprocessedSaveGame::EU4(save) => {
                 let (_, save) = RawPDXObject::parse_object_inner(&save)
                     .ok_or(anyhow!("Failed to parse save file (at step 1)"))?;
-                let save = eu4_save_parser::SaveGame::new_parser(&save)
-                    .ok_or(anyhow!("Failed to parse save file (at step 2)"))?;
-                return Ok(SomeSaveGame::EU4(save));
+                return Ok(save);
+                // let save = eu4_save_parser::SaveGame::new_parser(&save)
+                //     .ok_or(anyhow!("Failed to parse save file (at step 2)"))?;
+                // return Ok(SomeSaveGame::EU4(save));
             }
             PreprocessedSaveGame::Stellaris(save) => {
                 let (_, save) = RawPDXObject::parse_object_inner(&save)
                     .ok_or(anyhow!("Failed to parse save file (at step 1)"))?;
-                let save = stellaris_save_parser::SaveGame::new_parser(&save)?;
-                return Ok(SomeSaveGame::Stellaris(save));
+                return Ok(save);
+                // let save = stellaris_save_parser::SaveGame::new_parser(&save)?;
+                // return Ok(SomeSaveGame::Stellaris(save));
             }
         }
     }
