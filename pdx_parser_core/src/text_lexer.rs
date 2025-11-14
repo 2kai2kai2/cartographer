@@ -1,0 +1,140 @@
+use crate::helpers::SplitAtFirst;
+use std::fmt::{Display, Write};
+
+#[derive(Debug, Clone, Copy)]
+pub enum TextToken<'a> {
+    Equal,
+    OpenBracket,
+    CloseBracket,
+    Int(i64),
+    /// Only used when the number cannot fit in an `i64`
+    UInt(u64),
+    Float(f64),
+    Bool(bool),
+    StringQuoted(&'a str),
+    StringUnquoted(&'a str),
+}
+
+impl<'a> Display for TextToken<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        return match self {
+            TextToken::Equal => f.write_char('='),
+            TextToken::OpenBracket => f.write_char('{'),
+            TextToken::CloseBracket => f.write_char('}'),
+            TextToken::Int(num) => write!(f, "{num}"),
+            TextToken::UInt(num) => write!(f, "{num}"),
+            TextToken::Float(num) => write!(f, "{num}"),
+            TextToken::Bool(value) => write!(f, "{value}"),
+            TextToken::StringQuoted(text) => f.write_fmt(format_args!("\"{text}\"")),
+            TextToken::StringUnquoted(text) => f.write_str(text),
+        };
+    }
+}
+
+#[derive(Clone)]
+pub struct TextLexer<'a>(&'a str);
+impl<'a> TextLexer<'a> {
+    pub fn new(buffer: &'a str) -> TextLexer<'a> {
+        return TextLexer(buffer);
+    }
+
+    pub fn print_to_string(self) -> String {
+        let mut depth = 0;
+        let mut out_buf = String::new();
+
+        for token in self {
+            if let TextToken::CloseBracket = token {
+                depth -= 4;
+            }
+            out_buf.push_str(&format!("{:depth$}{token}\n", ""));
+            if let TextToken::OpenBracket = token {
+                depth += 4;
+            }
+        }
+
+        return out_buf;
+    }
+}
+impl<'a> Iterator for TextLexer<'a> {
+    type Item = TextToken<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (peek, rest) = {
+            let mut it = self.0.trim_ascii_start().chars();
+            let peek = it.next()?;
+            (peek, it.as_str())
+        };
+        match peek {
+            '=' => {
+                self.0 = rest;
+                return Some(TextToken::Equal);
+            }
+            '{' => {
+                self.0 = rest;
+                return Some(TextToken::OpenBracket);
+            }
+            '}' => {
+                self.0 = rest;
+                return Some(TextToken::CloseBracket);
+            }
+            '"' => {
+                // TODO: escaped text?
+                let (string, rest) = rest.split_once('"')?;
+                self.0 = rest;
+                return Some(TextToken::StringQuoted(string));
+            }
+            '#' => {
+                // escape comment
+                // may cause internal state change even if it
+                // doesn't find a token (if comments at end of file)
+                // but this doesn't really matter since it's just comments being skipped.
+                let (_, rest) = rest.split_once('\n')?;
+                self.0 = rest;
+                return self.next();
+            }
+            _ => {}
+        }
+
+        // Otherwise, it is some scalar but we need to figure it out:
+        // Use `self.0` instead of `rest` since we want to include `peek`
+        let (value, rest) = self
+            .0
+            .trim_ascii_start()
+            .split_at_first_inclusive(|b| {
+                *b == '=' || *b == '{' || *b == '}' || b.is_ascii_whitespace()
+            })
+            .unwrap_or(rest.split_at(rest.len()));
+
+        if value == "yes" {
+            self.0 = rest;
+            return Some(TextToken::Bool(true));
+        } else if value == "no" {
+            self.0 = rest;
+            return Some(TextToken::Bool(false));
+        }
+
+        let mut dot_count: usize = 0;
+        let mut signed: bool = false;
+        for (i, b) in value.bytes().enumerate() {
+            if b == b'-' && i == 0 {
+                signed = true;
+            } else if b == b'.' {
+                dot_count += 1;
+                continue;
+            } else if b.is_ascii_digit() {
+                continue;
+            } else {
+                self.0 = rest;
+                return Some(TextToken::StringUnquoted(value));
+            }
+        }
+        let value = match dot_count {
+            0 if signed => TextToken::Int(value.parse().ok()?),
+            0 if !signed => TextToken::UInt(value.parse().ok()?),
+            1 => TextToken::Float(value.parse().ok()?),
+            _ => TextToken::StringUnquoted(value),
+        };
+        self.0 = rest;
+        return Some(value);
+    }
+}

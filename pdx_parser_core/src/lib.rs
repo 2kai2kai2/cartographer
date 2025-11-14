@@ -1,8 +1,72 @@
+// pub mod bin_tokenizer;
+pub mod bin_deserialize;
+pub mod bin_lexer;
 pub mod eu4_date;
 pub mod eu4_save_parser;
+pub(crate) mod helpers;
+pub mod modern_header;
 pub mod raw_parser;
 pub mod stellaris_date;
 pub mod stellaris_save_parser;
+pub mod text_lexer;
 
 pub use eu4_date::{EU4Date, Month};
+pub use pdx_parser_macros::{BinDeserialize, eu5_token};
 pub use stellaris_date::StellarisDate;
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::bin_deserialize::{BinDeserialize, BinDeserializer};
+
+    use super::*;
+
+    #[test]
+    fn thingy_text() {
+        #[derive(pdx_parser_macros::BinDeserialize)]
+        struct Thingy {
+            asdf: u32,
+            true_false_maybe: Option<bool>,
+        }
+
+        let input1 = b"\x03\x00\
+        \x17\x00\x04\x00asdf\x01\x00\x14\x00\x37\x13\x00\x00\
+        \x04\x00";
+        let (thingy, rest) = Thingy::take(BinDeserializer::from_bytes(input1)).unwrap();
+        assert_eq!(thingy.asdf, 0x1337);
+        assert_eq!(thingy.true_false_maybe, None);
+
+        let input2 = b"\x03\x00\
+        \x17\x00\x04\x00asdf\x01\x00\x14\x00\x37\x13\x00\x00\
+        \x17\x00\x10\x00true_false_maybe\x01\x00\x0e\x00\x01\
+        \x04\x00";
+        let (thingy, rest) = Thingy::take(BinDeserializer::from_bytes(input2)).unwrap();
+        assert_eq!(thingy.asdf, 0x1337);
+        assert_eq!(thingy.true_false_maybe, Some(true));
+    }
+    #[test]
+    fn thingy_bin() {
+        #[derive(pdx_parser_macros::BinDeserialize)]
+        struct Thingy {
+            #[bin_token("test")]
+            asdf: u32,
+            #[bin_token("test")]
+            true_false_maybe: Option<bool>,
+        }
+
+        let input = b"\x03\x00\
+        \x17\x00\x04\x00\x01\x01\x01\x00\x14\x00\x37\x13\x00\x00\
+        \x04\x00";
+        let (thingy, rest) = Thingy::take(BinDeserializer::from_bytes(input)).unwrap();
+        assert_eq!(thingy.asdf, 0x1337);
+
+        let input2 = b"\x03\x00\
+        \x01\x01\x01\x00\x14\x00\x37\x13\x00\x00\
+        \x34\x12\x01\x00\x0e\x00\x01\
+        \x04\x00";
+        let (thingy, rest) = Thingy::take(BinDeserializer::from_bytes(input2)).unwrap();
+        assert_eq!(thingy.asdf, 0x1337);
+        assert_eq!(thingy.true_false_maybe, Some(true));
+    }
+}

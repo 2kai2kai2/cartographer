@@ -1,0 +1,15 @@
+[package]
+name = "pdx_parser_macros"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+lazy_static = "1.5.0"
+proc-macro-crate = "3.4.0"
+proc-macro2 = "1.0.95"
+quote = "1.0.38"
+syn = { version = "2.0.96", features = ["parsing"] }
