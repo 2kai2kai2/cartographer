@@ -16,6 +16,7 @@ pub struct ModernHeader<'a> {
     pub meta: &'a [u8],
 }
 impl<'a> ModernHeader<'a> {
+    /// Returns `(gamestate, header)` if successful
     pub fn take(buffer: &'a [u8]) -> Option<(&'a [u8], Self)> {
         let buffer = buffer.strip_prefix(b"SAV0")?;
         let (_, buffer) = buffer.split_first()?;

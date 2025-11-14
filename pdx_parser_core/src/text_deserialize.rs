@@ -22,6 +22,7 @@ pub enum TextError {
     IntegerOverflow,
 }
 
+#[derive(Clone)]
 pub struct TextDeserializer<'de> {
     input: Peekable<TextLexer<'de>>,
 }
@@ -59,6 +60,12 @@ impl<'de> TextDeserializer<'de> {
         } else {
             return Err(TextError::UnexpectedToken);
         }
+    }
+
+    pub fn parse<T: TextDeserialize<'de>>(&mut self) -> Result<T, TextError> {
+        let (value, rest) = T::take(self.clone())?;
+        self.input = rest.input;
+        return Ok(value);
     }
 }
 
