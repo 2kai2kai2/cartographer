@@ -181,9 +181,6 @@ impl<'de, K: BinDeserialize<'de> + Eq + Hash, V: BinDeserialize<'de>> BinDeseria
     for HashMap<K, V>
 {
     /// Strict: will error if a non-KV or non-matching type is found.
-    ///
-    /// Note that while we *can* parse with a non-scalar-based key,
-    /// that should never occur in game-related files.
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
         let mut out: Vec<(K, V)> = Vec::new();
@@ -217,14 +214,12 @@ impl SkipValue {
         loop {
             let peek = stream.peek_token().ok_or(BinError::EOF)?;
             match peek {
-                BinToken::ID_CLOSE_BRACKET => return Ok(stream),
-                BinToken::ID_OPEN_BRACKET => {
-                    // is object, cannot be KV
-                    stream = SkipValue::take(stream)?.1;
+                BinToken::ID_CLOSE_BRACKET => {
+                    stream.eat_token();
+                    return Ok(stream);
                 }
                 BinToken::ID_EQUAL => return Err(BinError::UnexpectedToken),
-                _scalar_token => {
-                    // assumes that named types can't be keys
+                _ => {
                     stream = SkipValue::take(stream)?.1;
                     if let Some(BinToken::ID_EQUAL) = stream.peek_token() {
                         stream.eat_token();
