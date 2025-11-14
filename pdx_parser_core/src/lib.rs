@@ -8,6 +8,7 @@ pub mod modern_header;
 pub mod raw_parser;
 pub mod stellaris_date;
 pub mod stellaris_save_parser;
+pub mod text_deserialize;
 pub mod text_lexer;
 
 pub use eu4_date::{EU4Date, Month};

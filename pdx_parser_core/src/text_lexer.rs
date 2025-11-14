@@ -1,7 +1,7 @@
 use crate::helpers::SplitAtFirst;
 use std::fmt::{Display, Write};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TextToken<'a> {
     Equal,
     OpenBracket,
