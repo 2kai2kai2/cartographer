@@ -20,6 +20,8 @@ pub enum TextError {
     MissingExpectedField,
     #[error("An integer overflow (or underflow) has occurred.")]
     IntegerOverflow,
+    #[error("{0}")]
+    Custom(String),
 }
 
 #[derive(Clone)]
@@ -45,6 +47,11 @@ impl<'de> TextDeserializer<'de> {
         return self.input.next();
     }
 
+    /// `peek_token` except it returns [`Error::EOF`] if not found
+    pub fn expect_peek_token(&mut self) -> Result<TextToken<'de>, TextError> {
+        return self.peek_token().ok_or(TextError::EOF);
+    }
+
     /// `next_token` except it returns [`Error::EOF`] if not found
     pub fn expect_token(&mut self) -> Result<TextToken<'de>, TextError> {
         return self.next_token().ok_or(TextError::EOF);
@@ -63,19 +70,22 @@ impl<'de> TextDeserializer<'de> {
     }
 
     pub fn parse<T: TextDeserialize<'de>>(&mut self) -> Result<T, TextError> {
-        let (value, rest) = T::take(self.clone())?;
+        let (value, rest) = T::take_text(self.clone())?;
         self.input = rest.input;
         return Ok(value);
     }
 }
 
 pub trait TextDeserialize<'de>: Sized {
-    fn take(stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError>;
+    fn take_text(stream: TextDeserializer<'de>)
+    -> Result<(Self, TextDeserializer<'de>), TextError>;
 }
 
 impl<'de> TextDeserialize<'de> for bool {
     #[inline]
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         return match stream.expect_token()? {
             TextToken::Bool(out) => Ok((out, stream)),
             _ => Err(TextError::UnexpectedToken),
@@ -84,7 +94,9 @@ impl<'de> TextDeserialize<'de> for bool {
 }
 
 impl<'de> TextDeserialize<'de> for i32 {
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         return match stream.expect_token()? {
             TextToken::Int(out) => Ok((
                 out.try_into().map_err(|_| TextError::IntegerOverflow)?,
@@ -100,7 +112,9 @@ impl<'de> TextDeserialize<'de> for i32 {
 }
 
 impl<'de> TextDeserialize<'de> for i64 {
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         return match stream.expect_token()? {
             TextToken::Int(out) => Ok((
                 out.try_into().map_err(|_| TextError::IntegerOverflow)?,
@@ -116,7 +130,9 @@ impl<'de> TextDeserialize<'de> for i64 {
 }
 
 impl<'de> TextDeserialize<'de> for u32 {
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         return match stream.expect_token()? {
             TextToken::Int(out) => Ok((
                 out.try_into().map_err(|_| TextError::IntegerOverflow)?,
@@ -132,7 +148,9 @@ impl<'de> TextDeserialize<'de> for u32 {
 }
 
 impl<'de> TextDeserialize<'de> for u64 {
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         return match stream.expect_token()? {
             TextToken::Int(out) => Ok((
                 out.try_into().map_err(|_| TextError::IntegerOverflow)?,
@@ -147,8 +165,36 @@ impl<'de> TextDeserialize<'de> for u64 {
     }
 }
 
+impl<'de> TextDeserialize<'de> for f32 {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        return match stream.expect_token()? {
+            TextToken::Int(out) => Ok((out as f32, stream)),
+            TextToken::UInt(out) => Ok((out as f32, stream)),
+            TextToken::Float(out) => Ok((out as f32, stream)),
+            _ => Err(TextError::UnexpectedToken),
+        };
+    }
+}
+
+impl<'de> TextDeserialize<'de> for f64 {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        return match stream.expect_token()? {
+            TextToken::Int(out) => Ok((out as f64, stream)),
+            TextToken::UInt(out) => Ok((out as f64, stream)),
+            TextToken::Float(out) => Ok((out, stream)),
+            _ => Err(TextError::UnexpectedToken),
+        };
+    }
+}
+
 impl<'de> TextDeserialize<'de> for &'de str {
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         return match stream.expect_token()? {
             TextToken::StringQuoted(out) | TextToken::StringUnquoted(out) => Ok((out, stream)),
             _ => Err(TextError::UnexpectedToken),
@@ -156,9 +202,20 @@ impl<'de> TextDeserialize<'de> for &'de str {
     }
 }
 
+impl<'de> TextDeserialize<'de> for String {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        let text: &'de str = stream.parse()?;
+        return Ok((text.to_string(), stream));
+    }
+}
+
 impl<'de, T: TextDeserialize<'de>> TextDeserialize<'de> for Vec<T> {
     /// Strict: will error if a KV or non-matching type is found.
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         stream.parse_token(TextToken::OpenBracket)?;
         let mut out = Vec::new();
 
@@ -167,7 +224,7 @@ impl<'de, T: TextDeserialize<'de>> TextDeserialize<'de> for Vec<T> {
                 stream.eat_token();
                 return Ok((out, stream));
             }
-            let (item, rest) = T::take(stream)?;
+            let (item, rest) = T::take_text(stream)?;
             out.push(item);
             stream = rest;
         }
@@ -178,7 +235,9 @@ impl<'de, K: TextDeserialize<'de> + Eq + Hash, V: TextDeserialize<'de>> TextDese
     for HashMap<K, V>
 {
     /// Strict: will error if a non-KV or non-matching type is found.
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         stream.parse_token(TextToken::OpenBracket)?;
         let mut out: Vec<(K, V)> = Vec::new();
 
@@ -187,9 +246,9 @@ impl<'de, K: TextDeserialize<'de> + Eq + Hash, V: TextDeserialize<'de>> TextDese
                 stream.eat_token();
                 return Ok((HashMap::from_iter(out), stream));
             }
-            let (key, mut rest) = K::take(stream)?;
+            let (key, mut rest) = K::take_text(stream)?;
             rest.parse_token(TextToken::Equal)?;
-            let (value, rest) = V::take(rest)?;
+            let (value, rest) = V::take_text(rest)?;
             out.push((key, value));
             stream = rest;
         }
@@ -217,10 +276,10 @@ impl SkipValue {
                 }
                 TextToken::Equal => return Err(TextError::UnexpectedToken),
                 _ => {
-                    stream = SkipValue::take(stream)?.1;
+                    stream = SkipValue::take_text(stream)?.1;
                     if let Some(TextToken::Equal) = stream.peek_token() {
                         stream.eat_token();
-                        stream = SkipValue::take(stream)?.1;
+                        stream = SkipValue::take_text(stream)?.1;
                     }
                 }
             }
@@ -228,7 +287,9 @@ impl SkipValue {
     }
 }
 impl<'de> TextDeserialize<'de> for SkipValue {
-    fn take(mut stream: TextDeserializer<'de>) -> Result<(Self, TextDeserializer<'de>), TextError> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         match stream.expect_token()? {
             TextToken::OpenBracket => {
                 stream = SkipValue::finish_object(stream)?;

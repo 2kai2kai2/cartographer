@@ -4,6 +4,8 @@ use lazy_static::lazy_static;
 use quote::quote;
 
 mod bin_deserialize;
+mod common;
+mod text_deserialize;
 
 /// For parsing games
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,4 +60,18 @@ pub fn eu5_token(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
 
     return quote! { #token }.into();
+}
+
+/// ## Structs
+/// - the `multiple` attribute causes a `Vec` to be considered a multimap field rather than a single list.
+///   for example, `{ item = 1 item = 2 item = 3 }` instead of `{ item = { 1 2 3 } }`
+/// - the `no_brackets` attribute means no outer brackets should be expected around the parsed object, used for the root of the file.
+/// - the `default(value: T)` attribute means the field will be initialized to the given value if it is not present in the file.
+///   The field should be single, so not an `Option` or using the `multiple` attribute.
+///
+/// ## Generics
+/// If the struct needs a lifetime repesenting the original text, it must be named `de`.
+#[proc_macro_derive(TextDeserialize, attributes(multiple, no_brackets, default))]
+pub fn derive_text_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    text_deserialize::derive_text_deserialize(stream)
 }

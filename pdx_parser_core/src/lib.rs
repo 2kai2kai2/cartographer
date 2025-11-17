@@ -19,13 +19,16 @@ pub use stellaris_date::StellarisDate;
 mod tests {
     use std::collections::HashMap;
 
-    use crate::bin_deserialize::{BinDeserialize, BinDeserializer};
+    use crate::{
+        bin_deserialize::{BinDeserialize, BinDeserializer},
+        text_deserialize::{TextDeserialize, TextDeserializer},
+    };
 
     use super::*;
 
     #[test]
     fn thingy_text() {
-        #[derive(pdx_parser_macros::BinDeserialize)]
+        #[derive(pdx_parser_macros::BinDeserialize, pdx_parser_macros::TextDeserialize)]
         struct Thingy {
             asdf: u32,
             true_false_maybe: Option<bool>,
@@ -43,6 +46,16 @@ mod tests {
         \x17\x00\x10\x00true_false_maybe\x01\x00\x0e\x00\x01\
         \x04\x00";
         let (thingy, rest) = Thingy::take(BinDeserializer::from_bytes(input2)).unwrap();
+        assert_eq!(thingy.asdf, 0x1337);
+        assert_eq!(thingy.true_false_maybe, Some(true));
+
+        let input3 = format!("{{ asdf = {} }}", 0x1337);
+        let (thingy, rest) = Thingy::take_text(TextDeserializer::from_str(&input3)).unwrap();
+        assert_eq!(thingy.asdf, 0x1337);
+        assert_eq!(thingy.true_false_maybe, None);
+
+        let input4 = format!("{{asdf = {} true_false_maybe = yes}}", 0x1337);
+        let (thingy, rest) = Thingy::take_text(TextDeserializer::from_str(&input4)).unwrap();
         assert_eq!(thingy.asdf, 0x1337);
         assert_eq!(thingy.true_false_maybe, Some(true));
     }

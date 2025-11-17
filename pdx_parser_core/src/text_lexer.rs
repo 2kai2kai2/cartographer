@@ -14,7 +14,19 @@ pub enum TextToken<'a> {
     StringQuoted(&'a str),
     StringUnquoted(&'a str),
 }
-
+impl<'a> TextToken<'a> {
+    pub fn is_base_scalar(&self) -> bool {
+        return matches!(
+            self,
+            TextToken::Int(_)
+                | TextToken::UInt(_)
+                | TextToken::Float(_)
+                | TextToken::Bool(_)
+                | TextToken::StringQuoted(_)
+                | TextToken::StringUnquoted(_)
+        );
+    }
+}
 impl<'a> Display for TextToken<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         return match self {
