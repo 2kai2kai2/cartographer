@@ -6,7 +6,7 @@ use std::{
 use anyhow::{anyhow, Context};
 use pdx_parser_core::raw_parser::RawPDXObject;
 
-use crate::utils::{lines_without_comments, moddable_read_dir, read_cp1252};
+use crate::utils::{lines_without_comments, read_cp1252, ModdableDir};
 
 /// A file in steamfiles `Europa Universalis IV/history/countries`
 #[derive(Debug, Clone)]
@@ -27,17 +27,10 @@ pub struct CountryHistory {
     // historical events
 }
 impl CountryHistory {
-    fn get_all_tags(
-        steam_dir: impl AsRef<Path>,
-        mod_dir: Option<impl AsRef<Path>>,
-    ) -> anyhow::Result<HashSet<String>> {
-        let steam_common = steam_dir.as_ref().join("common");
-        let mod_common = mod_dir
-            .as_ref()
-            .map(|mod_dir| mod_dir.as_ref().join("common"));
+    fn get_all_tags(dir: &ModdableDir) -> anyhow::Result<HashSet<String>> {
         let mut out: HashSet<String> = HashSet::new();
 
-        let tags_directory = moddable_read_dir("country_tags", &steam_common, mod_common.as_ref())?;
+        let tags_directory = dir.moddable_read_dir("common/country_tags")?;
 
         for tags_file in tags_directory {
             let tags = read_cp1252(&tags_file.path)?;
@@ -66,17 +59,15 @@ impl CountryHistory {
         return Ok(out);
     }
     pub fn read_all_countries(
-        steam_dir: impl AsRef<Path>,
-        mod_dir: Option<impl AsRef<Path>>,
+        dir: &ModdableDir,
     ) -> anyhow::Result<HashMap<String, CountryHistory>> {
-        let all_tags = CountryHistory::get_all_tags(&steam_dir, mod_dir.as_ref()).context(
+        let all_tags = CountryHistory::get_all_tags(dir).context(
             "While checking `country_tags` to determine the set of valid tags in this target.",
         )?;
         let mut out: HashMap<String, CountryHistory> = HashMap::new();
 
         // defines tags and what they refer to
-        let country_history_files =
-            moddable_read_dir("history/countries", &steam_dir, mod_dir.as_ref())?;
+        let country_history_files = dir.moddable_read_dir("history/countries")?;
 
         for country_file in country_history_files {
             let Some((tag, _)) = country_file.name.split_at_checked(3) else {

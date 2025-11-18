@@ -1,4 +1,4 @@
-use crate::utils::{moddable_read_cp1252, moddable_read_dir, moddable_read_image, stdin_line};
+use crate::utils::{stdin_line, ModdableDir};
 use decancer::cure;
 use image::{GenericImage, GenericImageView};
 use map::{parse_wasteland_provinces, parse_water_provinces};
@@ -81,11 +81,7 @@ fn load_flagfiles(
 }
 
 /// Returns a hashmap `tag -> name`
-pub fn load_tag_names(
-    steam_dir: impl AsRef<Path>,
-    mod_dir: Option<impl AsRef<Path>>,
-    tags: &Vec<String>,
-) -> Result<Vec<(String, Vec<String>)>> {
+pub fn load_tag_names(dir: &ModdableDir, tags: &Vec<String>) -> Result<Vec<(String, Vec<String>)>> {
     fn parse_line<'a>(line: &'a str) -> Option<(&'a str, &'a str)> {
         let line = line.strip_prefix(" ")?;
         let (key, line) = line.split_once(':')?;
@@ -110,7 +106,7 @@ pub fn load_tag_names(
         return Ok(names);
     }
 
-    let items = moddable_read_dir("localisation", steam_dir, mod_dir)?;
+    let items = dir.moddable_read_dir("localisation")?;
     let mut items = items
         .into_iter()
         .filter(|entry| entry.name.ends_with("_l_english.yml"))
@@ -167,15 +163,15 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
 
     std::fs::create_dir_all(&destination_web)?;
     std::fs::create_dir_all(&destination_bot)?;
+    let dir = ModdableDir::new(steam_dir, mod_dir);
 
     // definition.csv is unchanged
-    let definition_csv = moddable_read_cp1252("map/definition.csv", &steam_dir, mod_dir.as_ref())?;
+    let definition_csv = dir.moddable_read_cp1252("map/definition.csv")?;
     std::fs::write(format!("{destination_web}/definition.csv"), &definition_csv)?;
     let definition_csv = map::read_definition_csv(&definition_csv).unwrap();
 
     // convert provinces.bmp to provinces.png
-    let provinces_img =
-        moddable_read_image("map/provinces.bmp", &steam_dir, mod_dir.as_ref()).unwrap();
+    let provinces_img = dir.moddable_read_image("map/provinces.bmp").unwrap();
     provinces_img
         .save_with_format(
             format!("{destination_web}/provinces.png"),
@@ -184,7 +180,7 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
         .unwrap();
 
     // read water tiles from default.map
-    let default_map = moddable_read_cp1252("map/default.map", &steam_dir, mod_dir.as_ref())?;
+    let default_map = dir.moddable_read_cp1252("map/default.map")?;
     let water_provinces = parse_water_provinces(&default_map)?;
     File::create(format!("{destination_web}/water.txt"))?.write(
         water_provinces
@@ -195,7 +191,7 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     )?;
 
     // read impassible terrain from climate.txt and write to wasteland.txt
-    let climate_txt = moddable_read_cp1252("map/climate.txt", &steam_dir, mod_dir.as_ref())?;
+    let climate_txt = dir.moddable_read_cp1252("map/climate.txt")?;
     let wasteland_provinces = parse_wasteland_provinces(&climate_txt)?;
     map::calculate_wasteland_adjacencies(
         &wasteland_provinces,
@@ -206,9 +202,8 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     );
 
     // Read country history for capitals
-    let country_history =
-        history::CountryHistory::read_all_countries(&steam_dir, mod_dir.as_ref())?;
-    let positions_txt = moddable_read_cp1252("map/positions.txt", &steam_dir, mod_dir.as_ref())?;
+    let country_history = history::CountryHistory::read_all_countries(&dir)?;
+    let positions_txt = dir.moddable_read_cp1252("map/positions.txt")?;
     let city_positions = map::parse_province_city_positions(&positions_txt)?;
     let mut capitals_txt = File::create(format!("{destination_bot}/capitals.txt"))?;
     for (tag, country) in country_history {
@@ -221,7 +216,7 @@ pub fn eu4_main(args: Eu4Args) -> Result<()> {
     // ====
     let tags = load_flagfiles(documents_dir, &destination_web)?;
 
-    let country_names = load_tag_names(&steam_dir, mod_dir.as_ref(), &tags)?;
+    let country_names = load_tag_names(&dir, &tags)?;
     let country_names: Vec<u8> = country_names
         .iter()
         .flat_map(|(tag, name)| format!("{tag};{}\n", name.join(";")).into_bytes())
