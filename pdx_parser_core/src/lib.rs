@@ -1,6 +1,7 @@
 // pub mod bin_tokenizer;
 pub mod bin_deserialize;
 pub mod bin_lexer;
+pub mod common_deserialize;
 pub mod eu4_date;
 pub mod eu4_save_parser;
 pub(crate) mod helpers;
@@ -11,9 +12,11 @@ pub mod stellaris_save_parser;
 pub mod text_deserialize;
 pub mod text_lexer;
 
+pub use bin_deserialize::{BinDeserialize, BinDeserializer};
 pub use eu4_date::{EU4Date, Month};
-pub use pdx_parser_macros::{BinDeserialize, eu5_token};
+pub use pdx_parser_macros::{BinDeserialize, TextDeserialize, eu5_token};
 pub use stellaris_date::StellarisDate;
+pub use text_deserialize::{TextDeserialize, TextDeserializer};
 
 #[cfg(test)]
 mod tests {
@@ -28,7 +31,7 @@ mod tests {
 
     #[test]
     fn thingy_text() {
-        #[derive(pdx_parser_macros::BinDeserialize, pdx_parser_macros::TextDeserialize)]
+        #[derive(BinDeserialize, TextDeserialize)]
         struct Thingy {
             asdf: u32,
             true_false_maybe: Option<bool>,
@@ -61,7 +64,7 @@ mod tests {
     }
     #[test]
     fn thingy_bin() {
-        #[derive(pdx_parser_macros::BinDeserialize)]
+        #[derive(BinDeserialize)]
         struct Thingy {
             #[bin_token("test")]
             asdf: u32,

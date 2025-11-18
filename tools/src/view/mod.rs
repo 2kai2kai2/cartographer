@@ -2,8 +2,9 @@ use std::io::{Cursor, Read};
 
 use anyhow::{anyhow, Result};
 use pdx_parser_core::{
+    common_deserialize::SkipValue,
     modern_header::{ModernHeader, SaveFormat},
-    text_deserialize::{self, TextDeserializer, TextError},
+    text_deserialize::{TextDeserializer, TextError},
     text_lexer::TextToken,
 };
 
@@ -61,7 +62,7 @@ fn traverse_match_kv<'de, 'a>(
         let key = match stream.peek_token().ok_or(TextError::EOF)? {
             TextToken::Equal => return Err(TextError::EOF),
             TextToken::OpenBracket => {
-                let text_deserialize::SkipValue = stream.parse()?;
+                let SkipValue = stream.parse()?;
                 let Ok(()) = stream.parse_token(TextToken::Equal) else {
                     return Ok(stream); // it's not a KV
                 };
@@ -80,7 +81,7 @@ fn traverse_match_kv<'de, 'a>(
         match stream.peek_token().ok_or(TextError::EOF)? {
             TextToken::Equal => return Err(TextError::EOF),
             TextToken::OpenBracket => {
-                let text_deserialize::SkipValue = stream.parse()?;
+                let SkipValue = stream.parse()?;
                 println!("{key} = {{}}");
             }
             TextToken::CloseBracket => return Ok(stream),
@@ -93,7 +94,7 @@ fn traverse_match_kv<'de, 'a>(
     }
 
     // skip key since we already know it matches
-    let text_deserialize::SkipValue = stream.parse()?;
+    let SkipValue = stream.parse()?;
     let Ok(()) = stream.parse_token(TextToken::Equal) else {
         return Ok(stream); // it's not a KV
     };
@@ -110,7 +111,7 @@ fn traverse_matches<'de, 'a>(
     path: &[PathItem<'a>],
 ) -> Result<TextDeserializer<'de>, TextError> {
     let [next, rest @ ..] = path else {
-        let text_deserialize::SkipValue = stream.parse()?;
+        let SkipValue = stream.parse()?;
         return Ok(stream);
     };
 
@@ -123,9 +124,9 @@ fn traverse_matches<'de, 'a>(
                 TextToken::OpenBracket => {
                     if rest.is_empty() {
                         // leaf
-                        let text_deserialize::SkipValue = stream.parse()?;
+                        let SkipValue = stream.parse()?;
                         if let Ok(()) = stream.parse_token(TextToken::Equal) {
-                            let text_deserialize::SkipValue = stream.parse()?;
+                            let SkipValue = stream.parse()?;
                         } else {
                             println!("{{}}");
                         }
@@ -136,7 +137,7 @@ fn traverse_matches<'de, 'a>(
                         stream = traverse_matches(stream, rest)?;
                         // correct if actually was a KV
                         if let Ok(()) = stream.parse_token(TextToken::Equal) {
-                            let text_deserialize::SkipValue = stream.parse()?;
+                            let SkipValue = stream.parse()?;
                         }
                     }
                 }
@@ -148,7 +149,7 @@ fn traverse_matches<'de, 'a>(
                     stream.eat_token();
                     if let Ok(()) = stream.parse_token(TextToken::Equal) {
                         // it's a KV, skip
-                        let text_deserialize::SkipValue = stream.parse()?;
+                        let SkipValue = stream.parse()?;
                     } else if rest.is_empty() {
                         println!("{scalar}");
                     }
@@ -171,10 +172,10 @@ fn traverse_matches<'de, 'a>(
             match stream.peek_token().ok_or(TextError::EOF)? {
                 TextToken::Equal => return Err(TextError::UnexpectedToken),
                 TextToken::OpenBracket => {
-                    let text_deserialize::SkipValue = stream.parse()?;
+                    let SkipValue = stream.parse()?;
                     if let Ok(()) = stream.parse_token(TextToken::Equal) {
                         // it's a KV, skip
-                        let text_deserialize::SkipValue = stream.parse()?;
+                        let SkipValue = stream.parse()?;
                     }
                 }
                 TextToken::CloseBracket => {
@@ -185,10 +186,10 @@ fn traverse_matches<'de, 'a>(
                     if scalar.to_string() == *target_key {
                         stream = traverse_match_kv(stream, rest)?;
                     } else {
-                        let text_deserialize::SkipValue = stream.parse()?;
+                        let SkipValue = stream.parse()?;
                         if let Ok(()) = stream.parse_token(TextToken::Equal) {
                             // it's a KV, skip
-                            let text_deserialize::SkipValue = stream.parse()?;
+                            let SkipValue = stream.parse()?;
                         }
                     }
                 }

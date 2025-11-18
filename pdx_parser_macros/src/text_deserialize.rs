@@ -207,8 +207,8 @@ fn derive_text_deserialize_struct_named(
                         TextDeserializer,
                         TextDeserialize,
                         TextError,
-                        SkipValue,
                     },
+                    common_deserialize::SkipValue,
                     text_lexer::TextToken,
                 };
                 use ::std::result::Result::{self, Err, Ok};

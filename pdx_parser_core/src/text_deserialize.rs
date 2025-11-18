@@ -255,54 +255,6 @@ impl<'de, K: TextDeserialize<'de> + Eq + Hash, V: TextDeserialize<'de>> TextDese
     }
 }
 
-/// Extracts no data, just exists to implement [`TextDeserialize`] and skip the next value
-///
-/// Note that named types are just treated as a scalar string and an unassociated object,
-/// since we currently have no consistent way of knowing which are named types.
-/// However, this should't matter when we're skipping it all anyway.
-pub struct SkipValue;
-impl SkipValue {
-    /// Starting after the opening `{`, skips the rest of the current object.
-    fn finish_object<'de>(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<TextDeserializer<'de>, TextError> {
-        // TODO: I think we can make a non-recursive version of this, if it becomes an issue
-        loop {
-            let peek = stream.peek_token().ok_or(TextError::EOF)?;
-            match peek {
-                TextToken::CloseBracket => {
-                    stream.eat_token();
-                    return Ok(stream);
-                }
-                TextToken::Equal => return Err(TextError::UnexpectedToken),
-                _ => {
-                    stream = SkipValue::take_text(stream)?.1;
-                    if let Some(TextToken::Equal) = stream.peek_token() {
-                        stream.eat_token();
-                        stream = SkipValue::take_text(stream)?.1;
-                    }
-                }
-            }
-        }
-    }
-}
-impl<'de> TextDeserialize<'de> for SkipValue {
-    fn take_text(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
-        match stream.expect_token()? {
-            TextToken::OpenBracket => {
-                stream = SkipValue::finish_object(stream)?;
-            }
-            TextToken::CloseBracket | TextToken::Equal => {
-                return Err(TextError::UnexpectedToken);
-            }
-            _ => {}
-        }
-        return Ok((SkipValue, stream));
-    }
-}
-
 pub trait TextDeserializeWith<'de, W>: Sized {
     fn take_with(
         stream: TextDeserializer<'de>,

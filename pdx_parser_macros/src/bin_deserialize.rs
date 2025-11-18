@@ -333,11 +333,13 @@ fn derive_bin_deserialize_struct_named(
                 #pdx_parser_core::bin_deserialize::BinError
             > {
                 #handle_open_bracket
-                use #pdx_parser_core::bin_deserialize::{
-                    BinDeserializer,
-                    BinDeserialize,
-                    BinError,
-                    SkipValue,
+                use #pdx_parser_core::{
+                    bin_deserialize::{
+                        BinDeserializer,
+                        BinDeserialize,
+                        BinError,
+                    },
+                    common_deserialize::SkipValue,
                 };
                 use ::std::result::Result::{self, Err, Ok};
                 use ::std::option::Option::{self, Some, None};
