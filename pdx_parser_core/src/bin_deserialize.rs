@@ -20,8 +20,11 @@ pub enum BinError {
     UnexpectedKV,
     #[error("An expected field was missing from a struct or similar.")]
     MissingExpectedField,
+    #[error("{0}")]
+    Custom(String),
 }
 
+#[derive(Clone)]
 pub struct BinDeserializer<'de> {
     pub(crate) input: &'de [u8],
 }
@@ -93,6 +96,12 @@ impl<'de> BinDeserializer<'de> {
         self.input = rest;
         return Ok(value);
     }
+
+    pub fn parse<T: BinDeserialize<'de>>(&mut self) -> Result<T, BinError> {
+        let (value, rest) = T::take(self.clone())?;
+        self.input = rest.input;
+        return Ok(value);
+    }
 }
 
 pub trait BinDeserialize<'de>: Sized {
@@ -143,6 +152,24 @@ impl<'de> BinDeserialize<'de> for u64 {
     }
 }
 
+impl<'de> BinDeserialize<'de> for f32 {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_F32)?;
+        let value = stream.expect_bytes_const::<{ size_of::<f32>() }>()?;
+        let value = f32::from_le_bytes(*value);
+        return Ok((value, stream));
+    }
+}
+
+impl<'de> BinDeserialize<'de> for f64 {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_F64)?;
+        let value = stream.expect_bytes_const::<{ size_of::<f64>() }>()?;
+        let value = f64::from_le_bytes(*value);
+        return Ok((value, stream));
+    }
+}
+
 impl<'de> BinDeserialize<'de> for &'de str {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         let (BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED) = stream.expect_token()?
@@ -156,6 +183,12 @@ impl<'de> BinDeserialize<'de> for &'de str {
         };
         // TODO: non-utf decoding
         return Ok((text, stream));
+    }
+}
+impl<'de> BinDeserialize<'de> for String {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        let text: &'de str = stream.parse()?;
+        return Ok((text.to_string(), stream));
     }
 }
 

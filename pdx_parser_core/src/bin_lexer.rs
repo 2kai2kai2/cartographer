@@ -38,7 +38,8 @@ impl<'a> BinToken<'a> {
 
     /// Checks if the value matches one of the const tokens
     pub fn is_base_token(token: u16) -> bool {
-        return match token {
+        return matches! {
+            token,
             Self::ID_EQUAL
             | Self::ID_OPEN_BRACKET
             | Self::ID_CLOSE_BRACKET
@@ -50,9 +51,23 @@ impl<'a> BinToken<'a> {
             | Self::ID_STRING_UNQUOTED
             | Self::ID_F64
             | Self::ID_U64
-            | Self::ID_I64 => true,
-            _ => false,
+            | Self::ID_I64
         };
+    }
+
+    pub fn is_base_scalar(&self) -> bool {
+        return matches!(
+            self,
+            BinToken::I32(_)
+                | BinToken::I64(_)
+                | BinToken::U32(_)
+                | BinToken::U64(_)
+                | BinToken::F32(_)
+                | BinToken::F64(_)
+                | BinToken::Bool(_)
+                | BinToken::StringQuoted(_)
+                | BinToken::StringUnquoted(_)
+        );
     }
 }
 impl<'a> Display for BinToken<'a> {
@@ -61,17 +76,17 @@ impl<'a> Display for BinToken<'a> {
             BinToken::Equal => f.write_char('='),
             BinToken::OpenBracket => f.write_char('{'),
             BinToken::CloseBracket => f.write_char('}'),
-            BinToken::I32(num) => write!(f, "{num}"),
-            BinToken::F32(num) => write!(f, "{num}"),
+            BinToken::I32(num) => write!(f, "{num}i32"),
+            BinToken::F32(num) => write!(f, "{num}f32"),
             BinToken::Bool(value) => write!(f, "{value}"),
             BinToken::StringQuoted(text) => {
                 f.write_fmt(format_args!("\"{}\"", String::from_utf8_lossy(&text)))
             }
-            BinToken::U32(num) => write!(f, "{num}"),
+            BinToken::U32(num) => write!(f, "{num}u32"),
             BinToken::StringUnquoted(text) => f.write_str(&String::from_utf8_lossy(&text)),
-            BinToken::F64(num) => write!(f, "{num}"),
-            BinToken::U64(num) => write!(f, "{num}"),
-            BinToken::I64(num) => write!(f, "{num}"),
+            BinToken::F64(num) => write!(f, "{num}f64"),
+            BinToken::U64(num) => write!(f, "{num}u64"),
+            BinToken::I64(num) => write!(f, "{num}i64"),
             BinToken::Other(id) => write!(f, "<token {id}>"),
         };
     }

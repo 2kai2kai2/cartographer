@@ -24,7 +24,18 @@ impl syn::parse::Parse for GameId {
     }
 }
 
-#[proc_macro_derive(BinDeserialize, attributes(multiple, bin_token, no_brackets))]
+/// ## Structs
+/// - the `multiple` attribute causes a `Vec` to be considered a multimap field rather than a single list.
+///   for example, `{ item = 1 item = 2 item = 3 }` instead of `{ item = { 1 2 3 } }`
+/// - the `bin_token(game: str, [override_token_key: &str])` attribute means the field will be represented as a `u16` in the game's binary format
+///   instead of a string key. If the `override_token_key` is specified, it will be used instead of the field name.
+/// - the `no_brackets` attribute means no outer brackets should be expected around the parsed object, used for the root of the file.
+/// - the `default(value: T)` attribute means the field will be initialized to the given value if it is not present in the file.
+///   The field should be single, so not an `Option` or using the `multiple` attribute.
+///
+/// ## Generics
+/// If the struct needs a lifetime repesenting the original text, it must be named `de`.
+#[proc_macro_derive(BinDeserialize, attributes(multiple, bin_token, no_brackets, default))]
 pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     bin_deserialize::derive_bin_deserialize(stream)
 }

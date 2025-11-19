@@ -81,71 +81,37 @@ pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
 
     // std::fs::write("bin.txt", bin_gamestate.clone().print_to_string())?;
     // std::fs::write("text.txt", text_gamestate.clone().print_to_string())?;
+    let mut combined_output = String::new();
+    let mut indent = 0;
 
     let mut found_tokens = [None; 1 << 16];
     for (i, (bin, text)) in std::iter::zip(bin_gamestate, text_gamestate).enumerate() {
         match (bin, text) {
-            (BinToken::Equal, TextToken::Equal) => {}
-            (BinToken::OpenBracket, TextToken::OpenBracket) => {}
-            (BinToken::CloseBracket, TextToken::CloseBracket) => {}
-            (BinToken::I32(_), TextToken::Int(_)) => {}
-            (BinToken::I32(_), TextToken::UInt(_)) => {}
-            (BinToken::I32(_), TextToken::Float(_)) => {}
-            (BinToken::I32(_), TextToken::Bool(_)) => {}
-            (BinToken::I32(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::I32(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::F32(_), TextToken::Int(_)) => {}
-            (BinToken::F32(_), TextToken::UInt(_)) => {}
-            (BinToken::F32(_), TextToken::Float(_)) => {}
-            (BinToken::F32(_), TextToken::Bool(_)) => {}
-            (BinToken::F32(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::F32(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::Bool(_), TextToken::Int(_)) => {}
-            (BinToken::Bool(_), TextToken::UInt(_)) => {}
-            (BinToken::Bool(_), TextToken::Float(_)) => {}
-            (BinToken::Bool(_), TextToken::Bool(_)) => {}
-            (BinToken::Bool(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::Bool(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::StringQuoted(_), TextToken::Int(_)) => {}
-            (BinToken::StringQuoted(_), TextToken::UInt(_)) => {}
-            (BinToken::StringQuoted(_), TextToken::Float(_)) => {}
-            (BinToken::StringQuoted(_), TextToken::Bool(_)) => {}
-            (BinToken::StringQuoted(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::StringQuoted(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::U32(_), TextToken::Int(_)) => {}
-            (BinToken::U32(_), TextToken::UInt(_)) => {}
-            (BinToken::U32(_), TextToken::Float(_)) => {}
-            (BinToken::U32(_), TextToken::Bool(_)) => {}
-            (BinToken::U32(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::U32(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::StringUnquoted(_), TextToken::Int(_)) => {}
-            (BinToken::StringUnquoted(_), TextToken::UInt(_)) => {}
-            (BinToken::StringUnquoted(_), TextToken::Float(_)) => {}
-            (BinToken::StringUnquoted(_), TextToken::Bool(_)) => {}
-            (BinToken::StringUnquoted(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::StringUnquoted(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::F64(_), TextToken::Int(_)) => {}
-            (BinToken::F64(_), TextToken::UInt(_)) => {}
-            (BinToken::F64(_), TextToken::Float(_)) => {}
-            (BinToken::F64(_), TextToken::Bool(_)) => {}
-            (BinToken::F64(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::F64(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::U64(_), TextToken::Int(_)) => {}
-            (BinToken::U64(_), TextToken::UInt(_)) => {}
-            (BinToken::U64(_), TextToken::Float(_)) => {}
-            (BinToken::U64(_), TextToken::Bool(_)) => {}
-            (BinToken::U64(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::U64(_), TextToken::StringUnquoted(_)) => {}
-            (BinToken::I64(_), TextToken::Int(_)) => {}
-            (BinToken::I64(_), TextToken::UInt(_)) => {}
-            (BinToken::I64(_), TextToken::Float(_)) => {}
-            (BinToken::I64(_), TextToken::Bool(_)) => {}
-            (BinToken::I64(_), TextToken::StringQuoted(_)) => {}
-            (BinToken::I64(_), TextToken::StringUnquoted(_)) => {}
+            (BinToken::Equal, TextToken::Equal) => {
+                combined_output.push_str(format!("{:indent$}=\n", "").as_str());
+            }
+            (BinToken::OpenBracket, TextToken::OpenBracket) => {
+                combined_output.push_str(format!("{:indent$}{{\n", "").as_str());
+                indent += 4;
+            }
+            (BinToken::CloseBracket, TextToken::CloseBracket) => {
+                indent = indent.saturating_sub(4);
+                combined_output.push_str(format!("{:indent$}}}\n", "").as_str());
+            }
+            (bin, text) if bin.is_base_scalar() && text.is_base_scalar() => {
+                let bin = bin.to_string();
+                let text = text.to_string();
+                if bin == text {
+                    combined_output.push_str(format!("{:indent$}{bin}\n", "").as_str());
+                } else {
+                    combined_output.push_str(format!("{:indent$}{bin}/{text}\n", "").as_str());
+                }
+            }
             (
                 BinToken::Other(id),
                 TextToken::StringQuoted(text) | TextToken::StringUnquoted(text),
             ) => {
+                combined_output.push_str(format!("{:indent$}<token {id:5}>/{text}\n", "").as_str());
                 if let None = found_tokens[id as usize] {
                     found_tokens[id as usize] = Some(text);
                     println!("Token {id:5}: {text}");
@@ -154,6 +120,8 @@ pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
             (bin, text) => return Err(anyhow!("Unmatched at token {i:08}: {bin}, {text}")),
         }
     }
+
+    std::fs::write("combined.txt", combined_output)?;
 
     let out_text: String = found_tokens
         .iter()
