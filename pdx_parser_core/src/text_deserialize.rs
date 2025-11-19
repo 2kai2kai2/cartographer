@@ -93,77 +93,35 @@ impl<'de> TextDeserialize<'de> for bool {
     }
 }
 
-impl<'de> TextDeserialize<'de> for i32 {
-    fn take_text(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
-        return match stream.expect_token()? {
-            TextToken::Int(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            TextToken::UInt(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            _ => Err(TextError::UnexpectedToken),
-        };
-    }
-}
-
-impl<'de> TextDeserialize<'de> for i64 {
-    fn take_text(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
-        return match stream.expect_token()? {
-            TextToken::Int(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            TextToken::UInt(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            _ => Err(TextError::UnexpectedToken),
-        };
-    }
-}
-
-impl<'de> TextDeserialize<'de> for u32 {
-    fn take_text(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
-        return match stream.expect_token()? {
-            TextToken::Int(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            TextToken::UInt(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            _ => Err(TextError::UnexpectedToken),
-        };
-    }
-}
-
-impl<'de> TextDeserialize<'de> for u64 {
-    fn take_text(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
-        return match stream.expect_token()? {
-            TextToken::Int(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            TextToken::UInt(out) => Ok((
-                out.try_into().map_err(|_| TextError::IntegerOverflow)?,
-                stream,
-            )),
-            _ => Err(TextError::UnexpectedToken),
-        };
-    }
-}
+macro_rules! deserialize_int_type (
+    ($t:ty) => {
+        impl<'de> TextDeserialize<'de> for $t {
+            fn take_text(
+                mut stream: TextDeserializer<'de>,
+            ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+                return match stream.expect_token()? {
+                    TextToken::Int(out) => Ok((
+                        out.try_into().map_err(|_| TextError::IntegerOverflow)?,
+                        stream,
+                    )),
+                    TextToken::UInt(out) => Ok((
+                        out.try_into().map_err(|_| TextError::IntegerOverflow)?,
+                        stream,
+                    )),
+                    _ => Err(TextError::UnexpectedToken),
+                };
+            }
+        }
+    };
+);
+deserialize_int_type!(i8);
+deserialize_int_type!(i16);
+deserialize_int_type!(i32);
+deserialize_int_type!(i64);
+deserialize_int_type!(u8);
+deserialize_int_type!(u16);
+deserialize_int_type!(u32);
+deserialize_int_type!(u64);
 
 impl<'de> TextDeserialize<'de> for f32 {
     fn take_text(

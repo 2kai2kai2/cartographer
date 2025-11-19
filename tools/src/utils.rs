@@ -45,6 +45,16 @@ impl ModdableDir {
         };
     }
 
+    pub fn join(&self, relative_path: impl AsRef<Path>) -> ModdableDir {
+        return ModdableDir {
+            default: self.default.join(&relative_path),
+            modded: self
+                .modded
+                .as_ref()
+                .map(|modded| modded.join(relative_path)),
+        };
+    }
+
     /// Reads (from `cp1252` encoding rather than utf8) a file,
     /// optionally trying a modded version of the file first.
     pub fn moddable_read_cp1252(

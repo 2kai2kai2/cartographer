@@ -101,7 +101,6 @@ impl<'de> BinDeserialize<'de> for SkipValue {
         return Ok((SkipValue, stream));
     }
 }
-
 impl<'de> TextDeserialize<'de> for SkipValue {
     fn take_text(
         mut stream: TextDeserializer<'de>,
@@ -116,5 +115,78 @@ impl<'de> TextDeserialize<'de> for SkipValue {
             _ => {}
         }
         return Ok((SkipValue, stream));
+    }
+}
+
+/// A newtype for parsing a list of key-value pairs from an input with no outer brackets `{}`.
+/// Very similar to `HashMap`.
+///
+/// Strict: will error if a non-KV or non-matching type is found.
+pub struct UnbracketedKVs<'de, K: TextDeserialize<'de>, V: TextDeserialize<'de>> {
+    inner: Vec<(K, V)>,
+    _phantom: std::marker::PhantomData<&'de ()>,
+}
+impl<'de, K: TextDeserialize<'de>, V: TextDeserialize<'de>> UnbracketedKVs<'de, K, V> {
+    pub fn unwrap(self) -> Vec<(K, V)> {
+        return self.inner;
+    }
+}
+impl<'de, K: TextDeserialize<'de>, V: TextDeserialize<'de>> TextDeserialize<'de>
+    for UnbracketedKVs<'de, K, V>
+{
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        let mut out = Vec::new();
+        while let Some(_) = stream.peek_token() {
+            let (key, mut rest) = K::take_text(stream).map_err(|err| {
+                TextError::Custom(format!(
+                    "{err} while parsing key #{} for UnbracketedKVs",
+                    out.len()
+                ))
+            })?;
+            rest.parse_token(TextToken::Equal).map_err(|err| {
+                TextError::Custom(format!(
+                    "{err} while parsing eq #{} for UnbracketedKVs",
+                    out.len()
+                ))
+            })?;
+            let (value, rest) = V::take_text(rest).map_err(|err| {
+                TextError::Custom(format!(
+                    "{err} while parsing value #{} for UnbracketedKVs",
+                    out.len()
+                ))
+            })?;
+            out.push((key, value));
+            stream = rest;
+        }
+        return Ok((
+            UnbracketedKVs {
+                inner: out,
+                _phantom: std::marker::PhantomData,
+            },
+            stream,
+        ));
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Rgb(pub [u8; 3]);
+impl Rgb {
+    pub fn unwrap(self) -> [u8; 3] {
+        return self.0;
+    }
+}
+impl<'de> TextDeserialize<'de> for Rgb {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        stream.parse_token(TextToken::StringUnquoted("rgb"))?;
+        stream.parse_token(TextToken::OpenBracket)?;
+        let r: u8 = stream.parse()?;
+        let g: u8 = stream.parse()?;
+        let b: u8 = stream.parse()?;
+        stream.parse_token(TextToken::CloseBracket)?;
+        return Ok((Rgb([r, g, b]), stream));
     }
 }

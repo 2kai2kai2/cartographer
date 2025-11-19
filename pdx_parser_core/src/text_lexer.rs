@@ -6,8 +6,9 @@ pub enum TextToken<'a> {
     Equal,
     OpenBracket,
     CloseBracket,
+    /// Used for all negative numbers
     Int(i64),
-    /// Only used when the number cannot fit in an `i64`
+    /// Used for all positive numbers
     UInt(u64),
     Float(f64),
     Bool(bool),
@@ -100,8 +101,17 @@ impl<'a> Iterator for TextLexer<'a> {
                 // may cause internal state change even if it
                 // doesn't find a token (if comments at end of file)
                 // but this doesn't really matter since it's just comments being skipped.
-                let (_, rest) = rest.split_once('\n')?;
+                // we loop since letting recursion handle it can cause stack overflow
+
                 self.0 = rest;
+                loop {
+                    let (_, rest) = self.0.split_once('\n')?;
+                    self.0 = rest.trim_ascii_start();
+                    if !rest.starts_with('#') {
+                        break;
+                    }
+                }
+
                 return self.next();
             }
             _ => {}
