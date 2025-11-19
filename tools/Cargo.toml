@@ -8,6 +8,7 @@ anyhow = "1.0.86"
 encoding_rs = "0.8.34"
 encoding_rs_io = "0.1.7"
 image = "0.25.1"
+imageproc = "0.24.0"
 inquire = "0.9.1"
 decancer = "3.2.3"
 pdx_parser_core = { path = "../pdx_parser_core" }

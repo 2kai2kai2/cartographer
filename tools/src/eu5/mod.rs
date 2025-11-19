@@ -5,7 +5,7 @@ use crate::{
 use image::{imageops, GenericImageView};
 use pdx_parser_core::TextDeserializer;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::{
     collections::HashMap,
     fs::File,
@@ -74,6 +74,26 @@ pub fn eu5_main(args: Eu5Args) -> Result<()> {
         .parse()
         .context("While reading default.map")?;
 
+    let named_locations =
+        map::parse_named_locations(&dir).context("While reading named locations")?;
+    let named_locations_txt: String = named_locations
+        .iter()
+        .map(|(k, _)| format!("{k}\n"))
+        .collect();
+    File::create(format!("{destination_web}/locations.txt"))?
+        .write_all(named_locations_txt.as_bytes())?;
+    let named_locations_map: HashMap<_, _> = named_locations.iter().cloned().collect();
+    let named_locations_color_indices: HashMap<_, _> = named_locations
+        .iter()
+        .enumerate()
+        .map(|(idx, (_, v))| (v.clone(), idx))
+        .collect();
+
+    let mut water: Vec<HexRgb> = std::iter::chain(default_map.lakes, default_map.sea_zones)
+        .map(|k| named_locations_map.get(k).unwrap().clone())
+        .collect();
+    water.sort();
+
     const DEFAULT_MAP_SIZE: (u32, u32) = (16384, 8192);
     let locations_png = dir_map_data.moddable_read_image(&default_map.provinces)?;
     assert_eq!(locations_png.dimensions(), DEFAULT_MAP_SIZE);
@@ -82,32 +102,27 @@ pub fn eu5_main(args: Eu5Args) -> Result<()> {
         DEFAULT_MAP_SIZE.1 / 4,
         imageops::FilterType::Nearest,
     ); // downscale to reduce memory and bandwidth usage
+    let locations_png = locations_png.to_rgb8();
+    let locations_png = imageproc::map::map_colors(&locations_png, |rgb: image::Rgb<u8>| {
+        let rgb = HexRgb(rgb.0);
+        if water.contains(&rgb) {
+            return image::Luma([u16::MAX]);
+        }
+        let idx = *named_locations_color_indices
+            .get(&rgb)
+            .expect("Expected to find a location corresponding to location image color.");
+
+        return image::Luma([idx as u16]);
+    });
     locations_png.save_with_format(
         format!("{destination_web}/locations.png"),
         image::ImageFormat::Png,
     )?;
 
-    let mut named_locations =
-        map::parse_named_locations(&dir).context("While reading named locations")?;
-    named_locations.sort_by(|a, b| a.1.cmp(&b.1));
-    let named_locations_txt: String = named_locations
-        .iter()
-        .map(|(k, v)| format!("{k};{v}\n"))
-        .collect();
-    File::create(format!("{destination_web}/locations.txt"))?
-        .write_all(named_locations_txt.as_bytes())?;
-
-    let named_locations: HashMap<_, _> = named_locations.into_iter().collect();
-    let mut water: Vec<HexRgb> = std::iter::chain(default_map.lakes, default_map.sea_zones)
-        .map(|k| named_locations.get(k).unwrap().clone())
-        .collect();
-    water.sort();
-    let water: String = water.into_iter().map(|v| format!("{v}\n")).collect();
-    File::create(format!("{destination_web}/water.txt"))?.write_all(water.as_bytes())?;
-
-    let mut unownable: Vec<HexRgb> =
+    let mut unownable: Vec<u16> =
         std::iter::chain(default_map.impassable_mountains, default_map.non_ownable)
-            .map(|k| named_locations.get(k).unwrap().clone())
+            .map(|k| named_locations_map.get(k).unwrap().clone())
+            .map(|v| named_locations_color_indices.get(&v).unwrap().clone() as u16)
             .collect();
     unownable.sort();
     let unownable: String = unownable.into_iter().map(|v| format!("{v}\n")).collect();

@@ -49,8 +49,8 @@ pub struct DefaultMap<'de> {
     pub non_ownable: Vec<&'de str>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct HexRgb([u8; 3]);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HexRgb(pub [u8; 3]);
 impl<'de> TextDeserialize<'de> for HexRgb {
     fn take_text(
         mut stream: TextDeserializer<'de>,
