@@ -8,8 +8,7 @@ use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
 use eu4::webgl::webgl_draw_map;
 use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
-use serde::{Deserialize, Serialize};
-use stats_core::{from_cp1252, PreprocessedSaveGame};
+use stats_core::{from_cp1252, EU4ParserStepText, GameSaveType, StellarisParserStepText};
 use wasm_bindgen::prelude::*;
 
 mod eu4;
@@ -21,72 +20,57 @@ macro_rules! log {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum GameSaveType {
-    // /// `.ck3` extension
-    // CK3,
-    /// `.eu4` extension
-    EU4,
-    // /// TBD extension
-    // EU5,
-    /// `.sav` extension
-    Stellaris,
-    // /// `.v3` extension
-    // Victoria3,
-}
-
 /// Should take in a `UInt8Array`
 #[wasm_bindgen]
 pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue> {
     let perf = web_sys::window().and_then(|window| window.performance());
-    perf.as_ref().inspect(|perf| {
-        let _ = perf.mark("parse_preprocess_start");
-    });
-    let preprocessed_save = PreprocessedSaveGame::preprocess(array, filename).map_err(map_error)?;
-    match preprocessed_save {
-        preprocessed_save @ PreprocessedSaveGame::EU4(_) => {
+    let game = GameSaveType::determine_from_filename(filename).ok_or(JsError::new(
+        "Could not determine the game type from the filename.",
+    ))?;
+    match game {
+        GameSaveType::EU4 => {
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_preprocess_start");
+            });
+            let text = EU4ParserStepText::decode_from(array).map_err(map_error)?;
+
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_raw_start");
             });
-            let raw_save = preprocessed_save
-                .to_raw_parsed()
-                .map_err(|err| Some(err.to_string()))?;
+            let raw = text.parse().map_err(map_error)?;
 
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_game_start");
             });
-            let game_save = eu4_save_parser::SaveGame::new_parser(&raw_save)
-                .ok_or("Failed to parse save file (at step 2)".to_string())?;
+            let save = raw.parse().map_err(map_error)?;
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_game_end");
             });
+            drop(text);
 
-            drop(raw_save);
-            drop(preprocessed_save);
-
-            serde_wasm_bindgen::to_value(&(GameSaveType::EU4, game_save)).map_err(map_error)
+            return Ok(serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)?);
         }
-        preprocessed_save @ PreprocessedSaveGame::Stellaris(_) => {
+        GameSaveType::Stellaris => {
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_preprocess_start");
+            });
+            let text = StellarisParserStepText::decode_from(array).map_err(map_error)?;
+
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_raw_start");
             });
-            let raw_save = preprocessed_save
-                .to_raw_parsed()
-                .map_err(|err| Some(err.to_string()))?;
+            let raw = text.parse().map_err(map_error)?;
 
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_game_start");
             });
-            let game_save = stellaris_save_parser::SaveGame::new_parser(&raw_save)
-                .map_err(|_| "Failed to parse save file (at step 2)".to_string())?;
+            let save = raw.parse().map_err(map_error)?;
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_game_end");
             });
+            drop(text);
 
-            drop(raw_save);
-            drop(preprocessed_save);
-
-            serde_wasm_bindgen::to_value(&(GameSaveType::Stellaris, game_save)).map_err(map_error)
+            return Ok(serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)?);
         }
     }
 }

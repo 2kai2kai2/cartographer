@@ -191,6 +191,12 @@ impl<'de> BinDeserialize<'de> for String {
         return Ok((text.to_string(), stream));
     }
 }
+impl<'de> BinDeserialize<'de> for Box<str> {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        let text: &'de str = stream.parse()?;
+        return Ok((text.into(), stream));
+    }
+}
 
 impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
     /// Strict: will error if a KV or non-matching type is found.
@@ -202,6 +208,23 @@ impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
             if let Some(BinToken::ID_CLOSE_BRACKET) = stream.peek_token() {
                 stream.eat_token();
                 return Ok((out, stream));
+            }
+            let (item, rest) = T::take(stream)?;
+            out.push(item);
+            stream = rest;
+        }
+    }
+}
+impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Box<[T]> {
+    /// Strict: will error if a KV or non-matching type is found.
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
+        let mut out = Vec::new();
+
+        loop {
+            if let Some(BinToken::ID_CLOSE_BRACKET) = stream.peek_token() {
+                stream.eat_token();
+                return Ok((out.into(), stream));
             }
             let (item, rest) = T::take(stream)?;
             out.push(item);

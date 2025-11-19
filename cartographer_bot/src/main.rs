@@ -1,6 +1,5 @@
 use anyhow::Context;
 use lazy_static::lazy_static;
-use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use reservations::{Reservation, ReservationsData};
 use serenity::all::{ActivityData, CacheHttp, Ready};
 use serenity::async_trait;
@@ -11,7 +10,7 @@ use serenity::{
     Client,
 };
 use sqlx::PgPool;
-use stats_core::PreprocessedSaveGame;
+use stats_core::{EU4ParserStepText, GameSaveType, StellarisParserStepText};
 use std::collections::HashMap;
 use std::io::Cursor;
 
@@ -334,50 +333,54 @@ impl Handler {
             .map_err(|err| Some(err.to_string()))?;
 
         let time_parse_preprocess_start = std::time::Instant::now();
-        let preprocessed_save = PreprocessedSaveGame::preprocess(&raw_save, &save_file_name)
-            .map_err(|err| Some(err.to_string()))?;
-        drop(raw_save);
+        let game = GameSaveType::determine_from_filename(&save_file_name).ok_or(Some(
+            "Could not determine the game type from the filename.".to_string(),
+        ))?;
+        let (final_img, mut timings) = match game {
+            GameSaveType::EU4 => {
+                let mut timings = vec![(time_parse_preprocess_start, "start")];
 
-        let time_parse_raw_start = std::time::Instant::now();
-        let time_parse_game_start;
-        let time_render_start;
-        let game_id;
-
-        let final_img = match preprocessed_save {
-            preprocessed_save @ PreprocessedSaveGame::EU4(_) => {
-                game_id = "eu4";
-                let raw_save = preprocessed_save
-                    .to_raw_parsed()
+                let text = EU4ParserStepText::decode_from(&raw_save)
                     .map_err(|err| Some(err.to_string()))?;
+                timings.push((std::time::Instant::now(), "preprocess_done"));
 
-                time_parse_game_start = std::time::Instant::now();
-                let game_save = eu4_save_parser::SaveGame::new_parser(&raw_save)
-                    .ok_or("Failed to parse save file (at step 2)".to_string())?;
-                drop(raw_save);
-                drop(preprocessed_save);
+                let raw = text.parse().map_err(|err| Some(err.to_string()))?;
+                timings.push((std::time::Instant::now(), "parse1_done"));
 
-                time_render_start = std::time::Instant::now();
-                stats_core::eu4::render_stats_image(&LocalFetcher, game_save).await
-            }
-            preprocessed_save @ PreprocessedSaveGame::Stellaris(_) => {
-                game_id = "stellaris";
-                let raw_save = preprocessed_save
-                    .to_raw_parsed()
+                let save = raw.parse().map_err(|err| Some(err.to_string()))?;
+                drop(text);
+                timings.push((std::time::Instant::now(), "parse2_done"));
+
+                let img = stats_core::eu4::render_stats_image(&LocalFetcher, save)
+                    .await
                     .map_err(|err| Some(err.to_string()))?;
+                timings.push((std::time::Instant::now(), "render_done"));
 
-                time_parse_game_start = std::time::Instant::now();
-                let game_save = stellaris_save_parser::SaveGame::new_parser(&raw_save)
-                    .map_err(|_| "Failed to parse save file (at step 2)".to_string())?;
-                drop(raw_save);
-                drop(preprocessed_save);
-
-                time_render_start = std::time::Instant::now();
-                stats_core::stellaris::render_stats_image_stellaris(&LocalFetcher, game_save).await
+                (img, timings)
             }
-        }
-        .map_err(|err| Some(err.to_string()))?;
+            GameSaveType::Stellaris => {
+                let mut timings = vec![(time_parse_preprocess_start, "start")];
 
-        let time_upload_start = std::time::Instant::now();
+                let text = StellarisParserStepText::decode_from(&raw_save)
+                    .map_err(|err| Some(err.to_string()))?;
+                timings.push((std::time::Instant::now(), "preprocess_done"));
+
+                let raw = text.parse().map_err(|err| Some(err.to_string()))?;
+                timings.push((std::time::Instant::now(), "parse1_done"));
+
+                let save = raw.parse().map_err(|err| Some(err.to_string()))?;
+                drop(text);
+                timings.push((std::time::Instant::now(), "parse2_done"));
+
+                let img = stats_core::stellaris::render_stats_image_stellaris(&LocalFetcher, save)
+                    .await
+                    .map_err(|err| Some(err.to_string()))?;
+                timings.push((std::time::Instant::now(), "render_done"));
+
+                (img, timings)
+            }
+        };
+
         let mut png_buffer: Vec<u8> = Vec::new();
         final_img
             .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
@@ -391,27 +394,15 @@ impl Handler {
             )
             .await;
 
-        let time_done = std::time::Instant::now();
-        println!(
-            "Stats for {game_id:9} | download {:5.2}s | parse pre {:5.2}s | parse raw {:5.2}s | parse game {:5.2}s | render {:5.2}s | upload {:5.2}s",
-            time_parse_preprocess_start
-                .duration_since(time_download_start)
-                .as_secs_f32(),
-            time_parse_raw_start
-                .duration_since(time_parse_preprocess_start)
-                .as_secs_f32(),
-            time_parse_game_start
-                .duration_since(time_parse_raw_start)
-                .as_secs_f32(),
-            time_render_start
-                .duration_since(time_parse_preprocess_start)
-                .as_secs_f32(),
-            time_upload_start
-                .duration_since(time_render_start)
-                .as_secs_f32(),
-            time_done.duration_since(time_upload_start).as_secs_f32()
-        );
-
+        timings.push((std::time::Instant::now(), "upload_done"));
+        print!("Stats for {:9}", game.id());
+        for pair in timings.windows(2) {
+            let &[(start, _), (end, name)] = pair else {
+                unreachable!()
+            };
+            print!(" | {name} {:5.2}s", end.duration_since(start).as_secs_f32(),);
+        }
+        println!("");
         return Err(None); // we handle responses internally since we have updating messages
     }
 }
