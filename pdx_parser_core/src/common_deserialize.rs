@@ -22,12 +22,16 @@ impl SkipValue {
                     stream.eat_token();
                     return Ok(stream);
                 }
-                BinToken::ID_EQUAL => return Err(BinError::UnexpectedToken),
+                BinToken::ID_EQUAL => return Err(BinError::UnexpectedToken(BinToken::ID_EQUAL)),
                 _ => {
-                    stream = SkipValue::take(stream)?.1;
+                    stream = SkipValue::take(stream)
+                        .map_err(|err| err.context("While skipping value or KV key"))?
+                        .1;
                     if let Some(BinToken::ID_EQUAL) = stream.peek_token() {
                         stream.eat_token();
-                        stream = SkipValue::take(stream)?.1;
+                        stream = SkipValue::take(stream)
+                            .map_err(|err| err.context("While skipping value or KV key"))?
+                            .1;
                     }
                 }
             }
@@ -48,10 +52,14 @@ impl SkipValue {
                 }
                 TextToken::Equal => return Err(TextError::UnexpectedToken),
                 _ => {
-                    stream = SkipValue::take_text(stream)?.1;
+                    stream = SkipValue::take_text(stream)
+                        .map_err(|err| err.context("While skipping value or KV key"))?
+                        .1;
                     if let Some(TextToken::Equal) = stream.peek_token() {
                         stream.eat_token();
-                        stream = SkipValue::take_text(stream)?.1;
+                        stream = SkipValue::take_text(stream)
+                            .map_err(|err| err.context("While skipping KV value"))?
+                            .1;
                     }
                 }
             }
@@ -64,8 +72,8 @@ impl<'de> BinDeserialize<'de> for SkipValue {
             BinToken::ID_OPEN_BRACKET => {
                 stream = SkipValue::finish_object(stream)?;
             }
-            BinToken::ID_CLOSE_BRACKET | BinToken::ID_EQUAL => {
-                return Err(BinError::UnexpectedToken);
+            token @ (BinToken::ID_CLOSE_BRACKET | BinToken::ID_EQUAL) => {
+                return Err(BinError::UnexpectedToken(token));
             }
             BinToken::ID_I32 => {
                 stream.eat_bytes_const::<{ size_of::<i32>() }>()?;
@@ -175,6 +183,18 @@ pub struct Rgb(pub [u8; 3]);
 impl Rgb {
     pub fn unwrap(self) -> [u8; 3] {
         return self.0;
+    }
+}
+impl<'de> BinDeserialize<'de> for Rgb {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(pdx_parser_macros::eu5_token!("rgb"))?;
+        stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
+        let r: u32 = stream.parse()?;
+        let g: u32 = stream.parse()?;
+        let b: u32 = stream.parse()?;
+        stream.parse_token(BinToken::ID_CLOSE_BRACKET)?;
+
+        return Ok((Rgb([r as u8, g as u8, b as u8]), stream));
     }
 }
 impl<'de> TextDeserialize<'de> for Rgb {

@@ -37,7 +37,7 @@ impl<'a> BinToken<'a> {
     pub const ID_I64: u16 = 0x0317;
 
     /// Checks if the value matches one of the const tokens
-    pub fn is_base_token(token: u16) -> bool {
+    pub fn is_base_token_id(token: u16) -> bool {
         return matches! {
             token,
             Self::ID_EQUAL
@@ -52,6 +52,24 @@ impl<'a> BinToken<'a> {
             | Self::ID_F64
             | Self::ID_U64
             | Self::ID_I64
+        };
+    }
+
+    pub fn base_token_repr(token: u16) -> Option<&'static str> {
+        return match token {
+            BinToken::ID_EQUAL => Some("="),
+            BinToken::ID_OPEN_BRACKET => Some("{"),
+            BinToken::ID_CLOSE_BRACKET => Some("}"),
+            BinToken::ID_I32 => Some("i32"),
+            BinToken::ID_F32 => Some("f32"),
+            BinToken::ID_BOOL => Some("bool"),
+            BinToken::ID_STRING_QUOTED => Some("string_quoted"),
+            BinToken::ID_U32 => Some("u32"),
+            BinToken::ID_STRING_UNQUOTED => Some("string_unquoted"),
+            BinToken::ID_F64 => Some("f64"),
+            BinToken::ID_U64 => Some("u64"),
+            BinToken::ID_I64 => Some("i64"),
+            _ => None,
         };
     }
 

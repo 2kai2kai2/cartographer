@@ -52,12 +52,12 @@ impl<'a> TextLexer<'a> {
     }
 
     pub fn print_to_string(self) -> String {
-        let mut depth = 0;
+        let mut depth: usize = 0;
         let mut out_buf = String::new();
 
         for token in self {
             if let TextToken::CloseBracket = token {
-                depth -= 4;
+                depth = depth.saturating_sub(4);
             }
             out_buf.push_str(&format!("{:depth$}{token}\n", ""));
             if let TextToken::OpenBracket = token {
@@ -91,10 +91,17 @@ impl<'a> Iterator for TextLexer<'a> {
                 return Some(TextToken::CloseBracket);
             }
             '"' => {
-                // TODO: escaped text?
-                let (string, rest) = rest.split_once('"')?;
-                self.0 = rest;
-                return Some(TextToken::StringQuoted(string));
+                let mut it = rest.char_indices();
+                while let Some((i, c)) = it.next() {
+                    if c == '\\' {
+                        it.next();
+                    } else if c == '"' {
+                        let (string, rest) = rest.split_at(i);
+                        self.0 = &rest[1..];
+                        return Some(TextToken::StringQuoted(string));
+                    }
+                }
+                return None; // unclosed string
             }
             '#' => {
                 // escape comment

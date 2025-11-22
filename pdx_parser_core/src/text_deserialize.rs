@@ -23,6 +23,19 @@ pub enum TextError {
     #[error("{0}")]
     Custom(String),
 }
+impl TextError {
+    pub fn context(self, context: impl AsRef<str>) -> Self {
+        return TextError::Custom(format!("{}:\n{self}", context.as_ref()));
+    }
+}
+
+/// Construct a [`TextError::Custom`] from a format string and arguments.
+#[macro_export]
+macro_rules! text_err {
+    ($($arg:tt)*) => {
+        $crate::text_deserialize::TextError::Custom(format!($($arg)*))
+    };
+}
 
 #[derive(Clone)]
 pub struct TextDeserializer<'de> {

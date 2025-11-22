@@ -6,8 +6,8 @@ use crate::bin_lexer::BinToken;
 pub enum BinError {
     #[error("Unexpected end of file/input")]
     EOF,
-    #[error("Unexpected token recieved")]
-    UnexpectedToken,
+    #[error("Unexpected token 0x{0:04x} ({name}) recieved", name = BinToken::base_token_repr(*.0).unwrap_or("???"))]
+    UnexpectedToken(u16),
     #[error("Recieved binary token was unknown")]
     UnknownToken,
     #[error("Failed to decode string parse")]
@@ -18,10 +18,23 @@ pub enum BinError {
     UnexpectedLength,
     #[error("A KV was found in what was supposted to be strictly a list of values")]
     UnexpectedKV,
-    #[error("An expected field was missing from a struct or similar.")]
-    MissingExpectedField,
+    #[error("An expected field '{0}' was missing from a struct or similar.")]
+    MissingExpectedField(String),
     #[error("{0}")]
     Custom(String),
+}
+impl BinError {
+    pub fn context(self, context: impl AsRef<str>) -> Self {
+        return BinError::Custom(format!("{}:\n{self}", context.as_ref()));
+    }
+}
+
+/// Construct a [`BinError::Custom`] from a format string and arguments.
+#[macro_export]
+macro_rules! bin_err {
+    ($($arg:tt)*) => {
+        $crate::bin_deserialize::BinError::Custom(format!($($arg)*))
+    };
 }
 
 #[derive(Clone)]
@@ -59,11 +72,20 @@ impl<'de> BinDeserializer<'de> {
     }
 
     /// Expect next token
+    ///
+    /// ## Returns
+    /// - `Ok(())` if the token matches
+    /// - `Err(BinError::UnexpectedToken(parsed_token))` if `token != parsed_token`
+    /// - `Err(BinError::EOF)` if the end of the stream is reached
+    ///
+    /// Errors will not affect the stream's state.
     pub fn parse_token(&mut self, token: u16) -> Result<(), BinError> {
-        if token == self.expect_token()? {
+        let peek = self.peek_token().ok_or(BinError::EOF)?;
+        if token == peek {
+            self.eat_token();
             return Ok(());
         } else {
-            return Err(BinError::UnexpectedToken);
+            return Err(BinError::UnexpectedToken(peek));
         }
     }
 
@@ -172,10 +194,10 @@ impl<'de> BinDeserialize<'de> for f64 {
 
 impl<'de> BinDeserialize<'de> for &'de str {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        let (BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED) = stream.expect_token()?
-        else {
-            return Err(BinError::UnexpectedToken);
-        };
+        match stream.expect_token()? {
+            BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED => {}
+            token => return Err(BinError::UnexpectedToken(token)),
+        }
         let len = stream.expect_token()?; // technically not a token but still a u16
         let text = stream.expect_bytes(len as usize)?;
         let Ok(text) = str::from_utf8(text) else {
@@ -186,12 +208,14 @@ impl<'de> BinDeserialize<'de> for &'de str {
     }
 }
 impl<'de> BinDeserialize<'de> for String {
+    #[inline]
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         let text: &'de str = stream.parse()?;
         return Ok((text.to_string(), stream));
     }
 }
 impl<'de> BinDeserialize<'de> for Box<str> {
+    #[inline]
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         let text: &'de str = stream.parse()?;
         return Ok((text.into(), stream));
@@ -201,7 +225,9 @@ impl<'de> BinDeserialize<'de> for Box<str> {
 impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
     /// Strict: will error if a KV or non-matching type is found.
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
+        stream
+            .parse_token(BinToken::ID_OPEN_BRACKET)
+            .map_err(|err| err.context("While parsing open bracket at start of list"))?;
         let mut out = Vec::new();
 
         loop {
@@ -209,7 +235,8 @@ impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
                 stream.eat_token();
                 return Ok((out, stream));
             }
-            let (item, rest) = T::take(stream)?;
+            let (item, rest) = T::take(stream)
+                .map_err(|err| err.context(format!("While parsing item #{} in list", out.len())))?;
             out.push(item);
             stream = rest;
         }
@@ -217,19 +244,10 @@ impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
 }
 impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Box<[T]> {
     /// Strict: will error if a KV or non-matching type is found.
+    #[inline]
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
-        let mut out = Vec::new();
-
-        loop {
-            if let Some(BinToken::ID_CLOSE_BRACKET) = stream.peek_token() {
-                stream.eat_token();
-                return Ok((out.into(), stream));
-            }
-            let (item, rest) = T::take(stream)?;
-            out.push(item);
-            stream = rest;
-        }
+        let out: Vec<T> = stream.parse()?;
+        return Ok((out.into(), stream));
     }
 }
 
@@ -246,9 +264,12 @@ impl<'de, K: BinDeserialize<'de> + Eq + Hash, V: BinDeserialize<'de>> BinDeseria
                 stream.eat_token();
                 return Ok((HashMap::from_iter(out), stream));
             }
-            let (key, mut rest) = K::take(stream)?;
-            rest.parse_token(BinToken::ID_EQUAL)?;
-            let (value, rest) = V::take(rest)?;
+            let (key, mut rest) =
+                K::take(stream).map_err(|err| err.context("While parsing key for HashMap"))?;
+            rest.parse_token(BinToken::ID_EQUAL)
+                .map_err(|err| err.context("While parsing equal sign for HashMap"))?;
+            let (value, rest) =
+                V::take(rest).map_err(|err| err.context("While parsing value for HashMap"))?;
             out.push((key, value));
             stream = rest;
         }

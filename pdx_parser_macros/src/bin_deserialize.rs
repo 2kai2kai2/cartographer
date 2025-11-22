@@ -1,7 +1,8 @@
+use crate::common::*;
 use proc_macro;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{FieldsNamed, Ident, PathArguments, Type};
+use syn::{FieldsNamed, Ident, PathArguments, Type, Variant};
 
 /// `=`
 pub const ID_EQUAL: u16 = 0x0001;
@@ -18,28 +19,6 @@ pub const ID_STRING_UNQUOTED: u16 = 0x0017;
 pub const ID_F64: u16 = 0x0167;
 pub const ID_U64: u16 = 0x029c;
 pub const ID_I64: u16 = 0x0317;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Quantifier {
-    /// Always should have exactly one, no constraints on rust type
-    Single,
-    /// Always should have zero or one, rust type should be an [`Option`]
-    Optional,
-    /// Can have any number, rust type should be a [`Vec`]
-    Multiple,
-}
-
-fn core_crate_ref() -> TokenStream {
-    let found =
-        proc_macro_crate::crate_name("pdx_parser_core").expect("pdx_parser_core is required");
-    return match found {
-        proc_macro_crate::FoundCrate::Itself => quote! { crate },
-        proc_macro_crate::FoundCrate::Name(name) => {
-            let ident = syn::Ident::new(&name, Span::call_site());
-            quote! { ::#ident }
-        }
-    };
-}
 
 /// Parses the `bin_token` attribute and figures out what game it belongs to
 ///
@@ -96,7 +75,7 @@ fn extract_bin_token_attr(
 
     let token_name = args.token_name.unwrap_or(field_name);
     return Ok(match args.game {
-        crate::GameId::EU5 => quote! { ::pdx_parser_macros::eu5_token(#token_name) },
+        crate::GameId::EU5 => quote! { ::pdx_parser_macros::eu5_token!(#token_name) },
         crate::GameId::Test => match token_name.as_str() {
             "asdf" => quote! { 0x0101u16 },
             "extra_token" => quote! { 0x3412u16 },
@@ -112,35 +91,43 @@ struct DeserNamedField {
     quantifier: Quantifier,
     /// if `true`, we should always reference by the associated token and never the string
     use_token: Option<TokenStream>,
+    default: Option<syn::Expr>,
 }
 impl DeserNamedField {
-    /// NOTE: `multiple` only signifies that it *could* be multiple.
-    /// If it does not have the attribute, it is single.
-    fn get_quantifier<'a>(ty: &'a syn::Type) -> (&'a syn::Type, Quantifier) {
+    fn get_quantifier<'a>(
+        ty: &'a syn::Type,
+        is_multiple: bool,
+    ) -> Result<(&'a syn::Type, Quantifier), syn::Error> {
         let Type::Path(path) = ty else {
-            return (ty, Quantifier::Single);
+            return Ok((ty, Quantifier::Single));
         };
 
         let Some(last) = path.path.segments.last() else {
-            return (ty, Quantifier::Single);
+            return Ok((ty, Quantifier::Single));
         };
-        let potential_quantifier = match last.ident.to_string().as_str() {
+        let quantifier = match last.ident.to_string().as_str() {
+            "Vec" if is_multiple => Quantifier::Multiple,
+            _ if is_multiple => {
+                return Err(syn::Error::new_spanned(
+                    ty,
+                    "The multiple attribute can only be applied to a Vec type",
+                ))
+            }
             "Option" => Quantifier::Optional,
-            "Vec" => Quantifier::Multiple,
-            _ => return (ty, Quantifier::Single),
+            _ => return Ok((ty, Quantifier::Single)),
         };
         let PathArguments::AngleBracketed(args) = &last.arguments else {
-            return (ty, Quantifier::Single);
+            return Ok((ty, Quantifier::Single));
         };
 
         if args.args.len() != 1 {
             // TODO: vec allocator is currently unstable but we may need to handle it
-            return (ty, Quantifier::Single);
+            return Ok((ty, Quantifier::Single));
         };
         let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() else {
-            return (ty, Quantifier::Single);
+            return Ok((ty, Quantifier::Single));
         };
-        return (inner_ty, potential_quantifier);
+        return Ok((inner_ty, quantifier));
     }
 
     pub fn new(field: syn::Field) -> Result<Self, syn::Error> {
@@ -151,32 +138,28 @@ impl DeserNamedField {
             ));
         };
 
-        let (ty, mut quantifier) = Self::get_quantifier(&field.ty);
-
         let mut use_token = None;
         let mut is_multiple = false;
+        let mut default = None;
         for attr in &field.attrs {
             let Some(attr_ident) = attr.path().get_ident() else {
-                return Err(syn::Error::new_spanned(attr.path(), "Unknown attribute"));
+                continue; // not our attribute
             };
             match attr_ident.to_string().as_str() {
                 "multiple" => is_multiple = true,
                 "bin_token" => use_token = Some(extract_bin_token_attr(attr, ident.to_string())?),
-                _ => {
-                    return Err(syn::Error::new_spanned(attr.path(), "Unknown attribute"));
+                "default" => {
+                    default = Some(attr.parse_args::<syn::Expr>()?);
                 }
+                _ => continue, // not our attribute
             }
         }
 
-        if !is_multiple && matches!(quantifier, Quantifier::Multiple) {
-            // is a vec (so could be multiple)
-            // but it is just a single field containing a list
-            quantifier = Quantifier::Single;
-        }
-        if is_multiple && !matches!(quantifier, Quantifier::Multiple) {
+        let (ty, quantifier) = Self::get_quantifier(&field.ty, is_multiple)?;
+        if default.is_some() && !matches!(quantifier, Quantifier::Single) {
             return Err(syn::Error::new_spanned(
                 field,
-                "The `multiple` attribute is applied, but the type was not found to be a `Vec`.",
+                "The `default` attribute is applied, but the type was not found to be a single field.",
             ));
         }
 
@@ -185,16 +168,19 @@ impl DeserNamedField {
             ty: ty.clone(),
             quantifier,
             use_token,
+            default,
         });
     }
 }
 
 fn derive_bin_deserialize_struct_named(
     ident: Ident,
+    generics: syn::Generics,
     fields: FieldsNamed,
     no_brackets: bool,
 ) -> Result<proc_macro::TokenStream, syn::Error> {
     let pdx_parser_core = core_crate_ref();
+    let struct_name = ident.to_string();
 
     let fields = fields
         .named
@@ -202,58 +188,55 @@ fn derive_bin_deserialize_struct_named(
         .map(DeserNamedField::new)
         .collect::<Result<Vec<_>, syn::Error>>()?;
 
-    let define_field_captures: TokenStream = fields
-        .iter()
-        .map(|field| {
-            let DeserNamedField {
-                ident,
-                ty,
-                quantifier,
-                ..
-            } = field;
-            if let Quantifier::Multiple = quantifier {
-                return quote! {
-                    let mut #ident: ::std::vec::Vec<#ty> = ::std::vec::Vec::new();
-                };
-            } else {
-                return quote! {
-                    let mut #ident: ::std::option::Option<#ty> = ::std::option::Option::None;
-                };
-            }
-        })
-        .collect();
-
-    let use_token_match_cases: TokenStream = fields
-        .iter()
-        .map(|field| {
-            let DeserNamedField {
-                ident,
-                ty,
-                quantifier,
-                use_token,
-                ..
-            } = field;
-            let Some(use_token) = use_token else {
-                return TokenStream::new();
-            };
-
-            let add_value = if let Quantifier::Multiple = *quantifier {
-                quote! { #ident.push(value); }
-            } else {
-                quote! { #ident = ::std::option::Option::Some(value); }
-            };
-
+    let define_field_captures = fields.iter().map(|field| {
+        let DeserNamedField {
+            ident,
+            ty,
+            quantifier,
+            ..
+        } = field;
+        if let Quantifier::Multiple = quantifier {
             return quote! {
-                Some(#use_token) => {
-                    stream.eat_token();
-                    stream.parse_token(#ID_EQUAL)?;
-                    let (value, rest) = #ty::take(stream)?;
-                    stream = rest;
-                    #add_value
-                }
+                let mut #ident: ::std::vec::Vec<#ty> = ::std::vec::Vec::new();
             };
-        })
-        .collect();
+        } else {
+            return quote! {
+                let mut #ident: ::std::option::Option<#ty> = ::std::option::Option::None;
+            };
+        }
+    });
+
+    let use_token_match_cases = fields.iter().map(|field| {
+        let DeserNamedField {
+            ident,
+            ty,
+            quantifier,
+            use_token,
+            ..
+        } = field;
+        let field_name = ident.to_string();
+        let Some(use_token) = use_token else {
+            return TokenStream::new();
+        };
+
+        let add_value = if let Quantifier::Multiple = *quantifier {
+            quote! { #ident.push(value); }
+        } else {
+            quote! { #ident = ::std::option::Option::Some(value); }
+        };
+
+        return quote! {
+            Some(#use_token) => {
+                stream.eat_token();
+                stream.parse_token(#ID_EQUAL)
+                    .map_err(|err| err.context(format!("Missing equal sign for {} in {}", #field_name, #struct_name)))?;
+                let (value, rest) = <#ty>::take(stream)
+                    .map_err(|err| err.context(format!("While parsing value for {} in {}", #field_name, #struct_name)))?;
+                stream = rest;
+                #add_value
+            }
+        };
+    });
 
     let string_match_cases: TokenStream = fields
         .iter()
@@ -278,7 +261,8 @@ fn derive_bin_deserialize_struct_named(
             let key = ident.to_string();
             return quote! {
                 #key => {
-                    let (value, rest) = #ty::take(stream)?;
+                    let (value, rest) = <#ty>::take(stream)
+                        .map_err(|err| err.context(format!("While parsing value for {key} in {}", #struct_name)))?;
                     stream = rest;
                     #add_value
                 }
@@ -286,35 +270,37 @@ fn derive_bin_deserialize_struct_named(
         })
         .collect();
 
-    let normalize_single: TokenStream = fields
+    let normalize_single = fields
         .iter()
         .filter(|field| matches!(field.quantifier, Quantifier::Single))
         .map(|field| {
-            let DeserNamedField { ident, .. } = field;
+            let DeserNamedField { ident, default, .. } = field;
+            let ident_str = ident.to_string();
 
-            return quote! {
-                let #ident = #ident.ok_or(BinError::MissingExpectedField)?;
-            };
-        })
-        .collect();
+            if let Some(default) = default {
+                return quote! {
+                    let #ident = #ident.unwrap_or(#default);
+                };
+            } else {
+                return quote! {
+                    let #ident = #ident.ok_or(BinError::MissingExpectedField(#ident_str.to_string()))?;
+                };
+            }
+        });
 
-    let return_fields: TokenStream = fields
-        .iter()
-        .map(|field| {
-            let DeserNamedField { ident, .. } = field;
-
-            return quote! { #ident, };
-        })
-        .collect();
+    let return_fields = fields.iter().map(|field| field.ident.clone());
 
     let (handle_open_bracket, handle_eof, handle_close_bracket) = match no_brackets {
         true => (
             TokenStream::new(),
             quote! { break; },
-            quote! { return Err(BinError::UnexpectedToken); },
+            quote! { return Err(BinError::UnexpectedToken(#ID_CLOSE_BRACKET)); },
         ),
         false => (
-            quote! { stream.parse_token(#ID_OPEN_BRACKET)?; },
+            quote! {
+                stream.parse_token(#ID_OPEN_BRACKET)
+                    .map_err(|err| err.context(format!("Missing open bracket at start of {} struct", #struct_name)))?;
+            },
             quote! {
                 return Err(BinError::EOF);
             },
@@ -324,8 +310,24 @@ fn derive_bin_deserialize_struct_named(
             },
         ),
     };
+
+    let has_lifetime_de = generics.params.iter().any(|generic| match generic {
+        syn::GenericParam::Lifetime(lifetime) => lifetime.lifetime.ident == "de",
+        _ => false,
+    });
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let mut _generics_add_de: syn::Generics;
+    let impl_generics = if has_lifetime_de {
+        impl_generics
+    } else {
+        _generics_add_de = generics.clone();
+        _generics_add_de.params.push(syn::parse_quote! { 'de });
+        _generics_add_de.split_for_impl().0
+    };
+
     let impl_block = quote! {
-        impl<'de> #pdx_parser_core::bin_deserialize::BinDeserialize<'de> for #ident {
+        impl #impl_generics #pdx_parser_core::bin_deserialize::BinDeserialize<'de> for #ident #ty_generics #where_clause {
             fn take(
                 mut stream: #pdx_parser_core::bin_deserialize::BinDeserializer<'de>
             ) -> ::std::result::Result<
@@ -344,19 +346,20 @@ fn derive_bin_deserialize_struct_named(
                 use ::std::result::Result::{self, Err, Ok};
                 use ::std::option::Option::{self, Some, None};
 
-                #define_field_captures
+                #(#define_field_captures)*
 
                 loop {
                     match stream.peek_token() {
                         None => {
                             #handle_eof
                         }
-                        Some(#ID_EQUAL) => return Err(BinError::UnexpectedToken),
+                        Some(#ID_EQUAL) => return Err(BinError::UnexpectedToken(#ID_EQUAL)),
                         Some(#ID_CLOSE_BRACKET) => {
                             #handle_close_bracket
                         }
                         Some(#ID_STRING_QUOTED | #ID_STRING_UNQUOTED) => {
-                            let (key, rest) = <&str>::take(stream)?;
+                            let (key, rest) = <&str>::take(stream)
+                                .map_err(|err| err.context(format!("While parsing string key in {}", #struct_name)))?;
                             stream = rest;
                             let Some(#ID_EQUAL) = stream.peek_token() else {
                                 continue;
@@ -365,28 +368,98 @@ fn derive_bin_deserialize_struct_named(
                             match key {
                                 #string_match_cases
                                 _ => {
-                                    stream = SkipValue::take(stream)?.1;
+                                    stream = SkipValue::take(stream)
+                                        .map_err(|err| err.context(format!("While skipping value for uncaptured key {key} in {}", #struct_name)))?.1;
                                 }
                             }
                         }
-                        #use_token_match_cases
+                        #(#use_token_match_cases)*
                         Some(_) => {
-                            stream = SkipValue::take(stream)?.1;
+                            stream = SkipValue::take(stream)
+                                .map_err(|err| err.context(format!("While skipping non-string key in {}", #struct_name)))?.1;
                             if let Some(#ID_EQUAL) = stream.peek_token() {
                                 stream.eat_token();
-                                stream = SkipValue::take(stream)?.1;
+                                stream = SkipValue::take(stream)
+                                    .map_err(|err| err.context(format!("While skipping value for non-string key in {}", #struct_name)))?.1;
                             }
                         }
                     }
                 }
 
-                #normalize_single
+                #(#normalize_single)*
                 return ::std::result::Result::Ok((
                     #ident {
-                        #return_fields
+                        #(#return_fields,)*
                     },
                     stream,
                 ));
+            }
+        }
+    };
+    return Ok(impl_block.into());
+}
+
+fn pascal_case_to_snake_case(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        if c.is_uppercase() {
+            if !out.is_empty() {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    return out;
+}
+
+/// For enums that have no fields
+fn derive_bin_deserialize_enum_plain(
+    ident: Ident,
+    generics: syn::Generics,
+    variants: syn::punctuated::Punctuated<Variant, syn::token::Comma>,
+) -> Result<proc_macro::TokenStream, syn::Error> {
+    let pdx_parser_core = core_crate_ref();
+    let enum_name = ident.to_string();
+
+    let match_arms = variants.into_iter().map(|variant| {
+        let variant_ident = &variant.ident;
+        let snake_case = pascal_case_to_snake_case(&variant_ident.to_string());
+        return quote! {
+            #snake_case => Ok((#ident::#variant_ident, stream)),
+        };
+    });
+
+    let has_lifetime_de = generics.params.iter().any(|generic| match generic {
+        syn::GenericParam::Lifetime(lifetime) => lifetime.lifetime.ident == "de",
+        _ => false,
+    });
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let mut _generics_add_de: syn::Generics;
+    let impl_generics = if has_lifetime_de {
+        impl_generics
+    } else {
+        _generics_add_de = generics.clone();
+        _generics_add_de.params.push(syn::parse_quote! { 'de });
+        _generics_add_de.split_for_impl().0
+    };
+
+    let impl_block = quote! {
+        impl #impl_generics #pdx_parser_core::bin_deserialize::BinDeserialize<'de> for #ident #ty_generics #where_clause {
+            fn take(
+                mut stream: #pdx_parser_core::bin_deserialize::BinDeserializer<'de>
+            ) -> ::std::result::Result<
+                (Self, #pdx_parser_core::bin_deserialize::BinDeserializer<'de>),
+                #pdx_parser_core::bin_deserialize::BinError
+            > {
+                let text: &'de str = stream.parse()
+                    .map_err(|err| err.context(format!("While parsing string value for enum {}", #enum_name)))?;
+                return match text {
+                    #(#match_arms)*
+                    _ => Err(#pdx_parser_core::bin_deserialize::BinError::Custom(format!("Invalid enum value \"{text}\" for {}", #enum_name))),
+                };
             }
         }
     };
@@ -418,7 +491,7 @@ pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::To
     let impl_block = match data {
         syn::Data::Struct(data_struct) => match data_struct.fields {
             syn::Fields::Named(fields_named) => {
-                derive_bin_deserialize_struct_named(ident, fields_named, no_brackets)
+                derive_bin_deserialize_struct_named(ident, generics, fields_named, no_brackets)
             }
             syn::Fields::Unnamed(fields_unnamed) => {
                 return syn::Error::new_spanned(
@@ -437,10 +510,21 @@ pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::To
                 .into();
             }
         },
-        syn::Data::Enum(_) => {
-            return syn::Error::new(Span::call_site(), "Enums are not currently supported")
+        syn::Data::Enum(data_enum) => {
+            if data_enum
+                .variants
+                .iter()
+                .all(|variant| variant.fields.is_empty())
+            {
+                derive_bin_deserialize_enum_plain(ident, generics, data_enum.variants)
+            } else {
+                return syn::Error::new(
+                    Span::call_site(),
+                    "Non-plain enums are not currently supported",
+                )
                 .into_compile_error()
                 .into();
+            }
         }
         syn::Data::Union(_) => {
             return syn::Error::new(Span::call_site(), "Unions are not currently supported")
