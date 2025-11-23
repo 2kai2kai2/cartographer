@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     BinDeserialize, BinDeserializer, TextDeserialize, TextDeserializer, bin_deserialize::BinError,
     bin_lexer::BinToken, text_deserialize::TextError, text_lexer::TextToken,
@@ -178,7 +180,7 @@ impl<'de, K: TextDeserialize<'de>, V: TextDeserialize<'de>> TextDeserialize<'de>
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rgb(pub [u8; 3]);
 impl Rgb {
     pub fn unwrap(self) -> [u8; 3] {

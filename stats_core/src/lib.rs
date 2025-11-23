@@ -1,10 +1,11 @@
 pub mod eu4;
+pub mod eu5;
 mod fetcher;
 pub mod stellaris;
 
 pub use eu4::{EU4ParserStepRawParsed, EU4ParserStepText};
 pub use fetcher::*;
-use pdx_parser_core::{eu4_save_parser, eu5_deserialize, stellaris_save_parser};
+use pdx_parser_core::{eu4_save_parser, eu5_gamestate, eu5_meta, stellaris_save_parser};
 use serde::{Deserialize, Serialize};
 pub use stellaris::{StellarisParserStepRawParsed, StellarisParserStepText};
 
@@ -14,8 +15,8 @@ pub enum GameSaveType {
     // CK3,
     /// `.eu4` extension
     EU4,
-    // /// TBD extension
-    // EU5,
+    /// `.eu5` extension
+    EU5,
     /// `.sav` extension
     Stellaris,
     // /// `.v3` extension
@@ -26,6 +27,7 @@ impl GameSaveType {
     pub fn id(&self) -> &'static str {
         return match self {
             &GameSaveType::EU4 => "eu4",
+            &GameSaveType::EU5 => "eu5",
             &GameSaveType::Stellaris => "stellaris",
         };
     }
@@ -33,6 +35,8 @@ impl GameSaveType {
         let filename_lower = filename.to_ascii_lowercase();
         if filename_lower.ends_with(".eu4") {
             return Some(GameSaveType::EU4);
+        } else if filename_lower.ends_with(".eu5") {
+            return Some(GameSaveType::EU5);
         } else if filename_lower.ends_with(".sav") {
             return Some(GameSaveType::Stellaris);
         } else {
@@ -43,6 +47,7 @@ impl GameSaveType {
 
 pub enum SomeSaveGame {
     EU4(eu4_save_parser::SaveGame),
+    EU5((eu5_meta::RawMeta, eu5_gamestate::RawGamestate)),
     Stellaris(stellaris_save_parser::SaveGame),
 }
 impl SomeSaveGame {
@@ -50,6 +55,7 @@ impl SomeSaveGame {
     pub fn id(&self) -> &'static str {
         return match self {
             SomeSaveGame::EU4(_) => "eu4",
+            SomeSaveGame::EU5(_) => "eu5",
             SomeSaveGame::Stellaris(_) => "stellaris",
         };
     }
