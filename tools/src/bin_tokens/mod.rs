@@ -14,6 +14,7 @@ use pdx_parser_core::text_lexer::TextLexer;
 use pdx_parser_core::text_lexer::TextToken;
 use std::io::Cursor;
 use std::io::{stdout, Read, Write};
+use std::path::PathBuf;
 
 #[derive(clap::Args)]
 #[command()]
@@ -21,6 +22,65 @@ pub struct BinTokensArgs {
     binary_file_path: Option<String>,
     text_file_path: Option<String>,
     out: Option<String>,
+    /// If set, will print the meta section to the specified file
+    #[arg(short, long)]
+    meta: Option<PathBuf>,
+    /// If set, will print the gamestate section to the specified file
+    #[arg(short, long)]
+    gamestate: Option<PathBuf>,
+}
+
+fn get_bin_tokens<'b, 't>(
+    found_tokens: &mut [Option<&'t str>; 1 << 16],
+    bin_lexer: BinLexer<'b>,
+    text_lexer: TextLexer<'t>,
+) -> anyhow::Result<String> {
+    let mut combined_output = String::new();
+    let mut indent = 0;
+
+    for (i, (bin, text)) in std::iter::zip(bin_lexer, text_lexer).enumerate() {
+        match (bin, text) {
+            (BinToken::Equal, TextToken::Equal) => {
+                combined_output.push_str(format!("{:indent$}=\n", "").as_str());
+            }
+            (BinToken::OpenBracket, TextToken::OpenBracket) => {
+                combined_output.push_str(format!("{:indent$}{{\n", "").as_str());
+                indent += 4;
+            }
+            (BinToken::CloseBracket, TextToken::CloseBracket) => {
+                indent = indent.saturating_sub(4);
+                combined_output.push_str(format!("{:indent$}}}\n", "").as_str());
+            }
+            (bin @ BinToken::Other(_), TextToken::Bool(value)) => {
+                // Can this happen? I ran into a case where a token seems to correspond with unquoted "yes"
+                // for now just skip
+                let text = if value { "yes" } else { "no" };
+                combined_output.push_str(format!("{:indent$}{bin}/{text}\n", "").as_str());
+            }
+            (bin, text) if bin.is_base_scalar() && text.is_base_scalar() => {
+                let bin = bin.to_string();
+                let text = text.to_string();
+                if bin == text {
+                    combined_output.push_str(format!("{:indent$}{bin}\n", "").as_str());
+                } else {
+                    combined_output.push_str(format!("{:indent$}{bin}/{text}\n", "").as_str());
+                }
+            }
+            (
+                BinToken::Other(id),
+                TextToken::StringQuoted(text) | TextToken::StringUnquoted(text),
+            ) => {
+                combined_output.push_str(format!("{:indent$}<token {id:5}>/{text}\n", "").as_str());
+                if let None = found_tokens[id as usize] {
+                    found_tokens[id as usize] = Some(text);
+                    println!("Token {id:5}: {text}");
+                }
+            }
+            (bin, text) => return Err(anyhow!("Unmatched at token {i:08}: {bin}, {text}")),
+        }
+    }
+
+    return Ok(combined_output);
 }
 
 pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
@@ -70,6 +130,7 @@ pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
     let bin_gamestate: Vec<u8> = bin_gamestate.bytes().collect::<Result<_, _>>()?;
     let bin_gamestate = &bin_gamestate[bin_header.meta.len()..];
     let bin_gamestate = BinLexer::new(&bin_gamestate);
+    let mut bin_meta = BinLexer::new(bin_header.meta);
 
     let text_file = std::fs::read(text_file_name)?;
     let (text_gamestate, text_header) = ModernHeader::take(&text_file).unwrap();
@@ -78,50 +139,34 @@ pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
     }
     let text_gamestate = str::from_utf8(text_gamestate)?;
     let text_gamestate = TextLexer::new(&text_gamestate);
+    let mut text_meta = TextLexer::new(str::from_utf8(text_header.meta)?);
+
+    // Skip some stuff:
+    // idk why but otherwise it doesn't line up
+    // in the text there's `metadata={` but the bin tokens are different for `=` and `{`
+    for _ in 0..7 {
+        bin_meta.next();
+    }
+    for _ in 0..3 {
+        text_meta.next();
+    }
 
     // std::fs::write("bin.txt", bin_gamestate.clone().print_to_string())?;
     // std::fs::write("text.txt", text_gamestate.clone().print_to_string())?;
-    let mut combined_output = String::new();
-    let mut indent = 0;
+    let mut found_tokens = Box::new([None; 1 << 16]);
 
-    let mut found_tokens = [None; 1 << 16];
-    for (i, (bin, text)) in std::iter::zip(bin_gamestate, text_gamestate).enumerate() {
-        match (bin, text) {
-            (BinToken::Equal, TextToken::Equal) => {
-                combined_output.push_str(format!("{:indent$}=\n", "").as_str());
-            }
-            (BinToken::OpenBracket, TextToken::OpenBracket) => {
-                combined_output.push_str(format!("{:indent$}{{\n", "").as_str());
-                indent += 4;
-            }
-            (BinToken::CloseBracket, TextToken::CloseBracket) => {
-                indent = indent.saturating_sub(4);
-                combined_output.push_str(format!("{:indent$}}}\n", "").as_str());
-            }
-            (bin, text) if bin.is_base_scalar() && text.is_base_scalar() => {
-                let bin = bin.to_string();
-                let text = text.to_string();
-                if bin == text {
-                    combined_output.push_str(format!("{:indent$}{bin}\n", "").as_str());
-                } else {
-                    combined_output.push_str(format!("{:indent$}{bin}/{text}\n", "").as_str());
-                }
-            }
-            (
-                BinToken::Other(id),
-                TextToken::StringQuoted(text) | TextToken::StringUnquoted(text),
-            ) => {
-                combined_output.push_str(format!("{:indent$}<token {id:5}>/{text}\n", "").as_str());
-                if let None = found_tokens[id as usize] {
-                    found_tokens[id as usize] = Some(text);
-                    println!("Token {id:5}: {text}");
-                }
-            }
-            (bin, text) => return Err(anyhow!("Unmatched at token {i:08}: {bin}, {text}")),
-        }
+    let combined_gamestate = get_bin_tokens(&mut found_tokens, bin_gamestate, text_gamestate)?;
+    let combined_meta = get_bin_tokens(&mut found_tokens, bin_meta, text_meta)?;
+    if let Some(meta_out) = &args.meta {
+        if let Err(_) = std::fs::write(meta_out, combined_meta) {
+            eprintln!("Failed to write meta to {meta_out:?}");
+        };
     }
-
-    std::fs::write("combined.txt", combined_output)?;
+    if let Some(gamestate_out) = &args.gamestate {
+        if let Err(_) = std::fs::write(gamestate_out, combined_gamestate) {
+            eprintln!("Failed to write gamestate to {gamestate_out:?}");
+        };
+    }
 
     let out_text: String = found_tokens
         .iter()

@@ -133,6 +133,32 @@ impl<'a> BinLexer<'a> {
 
         return out_buf;
     }
+
+    pub fn print_to_string_with_tokens(self, tokens: &impl BinTokenLookup) -> String {
+        let mut depth = 0;
+        let mut out_buf = String::new();
+
+        for token in self {
+            if let BinToken::CloseBracket = token {
+                depth -= 4;
+            }
+            if let BinToken::Other(id) = token {
+                let text = tokens.get_text(id);
+                let text = match &text {
+                    Some(text) => text.as_str(),
+                    None => "???",
+                };
+                out_buf.push_str(&format!("{:depth$}{token}/{text}\n", ""));
+            } else {
+                out_buf.push_str(&format!("{:depth$}{token}\n", ""));
+            }
+            if let BinToken::OpenBracket = token {
+                depth += 4;
+            }
+        }
+
+        return out_buf;
+    }
 }
 impl<'a> Iterator for BinLexer<'a> {
     type Item = BinToken<'a>;
@@ -201,16 +227,49 @@ impl<'a> Iterator for BinLexer<'a> {
     }
 }
 
-// pub struct TokenRegistry<'a> {
-//     tokens: HashMap<u16, RawPDXValue<'a>>,
-// }
-// impl<'a> TokenRegistry<'a> {
-//     pub fn new() -> TokenRegistry<'a> {
-//         return TokenRegistry {
-//             tokens: HashMap::new(),
-//         };
-//     }
-//     pub fn check()
-// }
+/// Get the text representation from binary token
+pub trait BinTokenLookup {
+    fn get_text(&self, token: u16) -> Option<String>;
+}
+/// Get the binary token from text representation
+pub trait BinTokenReverseLookup {
+    fn get_token(&self, text: impl AsRef<str>) -> Option<u16>;
+}
 
-fn read(file: &[u8]) {}
+/// Very fast for [`BinTokenLookup`] but requires a lot of memory.
+/// Conversely, very slow for [`BinTokenReverseLookup`] as it has to iterate over the whole array.
+pub struct TokenRegistryArray {
+    lookup_table: Box<[Option<String>; u16::MAX as usize]>,
+}
+impl TokenRegistryArray {
+    pub fn new(tokens_file: impl AsRef<str>) -> anyhow::Result<TokenRegistryArray> {
+        let mut out = TokenRegistryArray {
+            lookup_table: Box::new([const { None }; u16::MAX as usize]),
+        };
+        for line in tokens_file.as_ref().lines() {
+            let Some((token, text)) = line.split_once(';') else {
+                return Err(anyhow::anyhow!("Invalid tokens file format"));
+            };
+            let token = u16::from_str_radix(token, 10)?;
+            out.lookup_table[token as usize] = Some(text.to_string());
+        }
+        return Ok(out);
+    }
+}
+impl BinTokenLookup for TokenRegistryArray {
+    fn get_text(&self, token: u16) -> Option<String> {
+        return self.lookup_table.get(token as usize)?.clone();
+    }
+}
+impl BinTokenReverseLookup for TokenRegistryArray {
+    fn get_token(&self, text: impl AsRef<str>) -> Option<u16> {
+        return self
+            .lookup_table
+            .iter()
+            .enumerate()
+            .find_map(|(i, token)| match token {
+                Some(token) if token == text.as_ref() => Some(i as u16),
+                _ => None,
+            });
+    }
+}
