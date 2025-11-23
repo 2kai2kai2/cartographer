@@ -338,7 +338,10 @@ impl Handler {
         ))?;
         let (final_img, mut timings) = match game {
             GameSaveType::EU4 => {
-                let mut timings = vec![(time_parse_preprocess_start, "start")];
+                let mut timings = vec![
+                    (time_download_start, "start"),
+                    (time_parse_preprocess_start, "downloaded"),
+                ];
 
                 let text = EU4ParserStepText::decode_from(&raw_save)
                     .map_err(|err| Some(err.to_string()))?;
@@ -359,7 +362,10 @@ impl Handler {
                 (img, timings)
             }
             GameSaveType::Stellaris => {
-                let mut timings = vec![(time_parse_preprocess_start, "start")];
+                let mut timings = vec![
+                    (time_download_start, "start"),
+                    (time_parse_preprocess_start, "downloaded"),
+                ];
 
                 let text = StellarisParserStepText::decode_from(&raw_save)
                     .map_err(|err| Some(err.to_string()))?;
@@ -378,6 +384,9 @@ impl Handler {
                 timings.push((std::time::Instant::now(), "render_done"));
 
                 (img, timings)
+            }
+            GameSaveType::EU5 => {
+                return Err(Some("EU5 not yet implemented for bot".to_string()));
             }
         };
 

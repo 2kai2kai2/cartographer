@@ -24,3 +24,14 @@ export interface StellarisSaveGame {
     galaxy_radius: number;
     game_mod: string;
 }
+
+export interface EU5Meta {
+    date: object;
+    compatibility: object;
+}
+
+export interface EU5Gamestate {
+    countries: object;
+    locations: object;
+    previous_played: object[];
+}

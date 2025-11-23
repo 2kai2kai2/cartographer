@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use num_traits::FromPrimitive as _;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     BinDeserialize, TextDeserialize, bin_deserialize::BinError, bin_err,
@@ -9,7 +10,7 @@ use crate::{
 
 pub use crate::eu4_date::Month;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
 pub struct EU5Date {
     pub year: u16,
     pub month: Month,

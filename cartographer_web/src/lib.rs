@@ -6,8 +6,9 @@ use base64::Engine;
 use eu4::country_history::WarHistoryEvent;
 use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
 use eu4::webgl::webgl_draw_map;
-use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
+use pdx_parser_core::{eu4_save_parser, eu5_gamestate, eu5_meta, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
+use stats_core::eu5::EU5ParserStepGamestate;
 use stats_core::{from_cp1252, EU4ParserStepText, GameSaveType, StellarisParserStepText};
 use wasm_bindgen::prelude::*;
 
@@ -72,6 +73,21 @@ pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue>
 
             return Ok(serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)?);
         }
+        GameSaveType::EU5 => {
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_preprocess_start");
+            });
+            let text = EU5ParserStepGamestate::decompress_from(array).map_err(map_error)?;
+
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_start");
+            });
+            let (meta, gamestate) = text.parse().map_err(map_error)?;
+            perf.as_ref().inspect(|perf| {
+                let _ = perf.mark("parse_end");
+            });
+            return Ok(serde_wasm_bindgen::to_value(&(game, meta, gamestate)).map_err(map_error)?);
+        }
     }
 }
 
@@ -116,6 +132,30 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
     let fetcher = WebFetcher::new(reqwest::Url::from_str(&base_url).map_err(map_error)?);
     log!("Rendering stats image...");
     let final_img = stats_core::eu4::render_stats_image(&fetcher, save)
+        .await
+        .map_err(map_error)?;
+
+    log!("Converting to png...");
+    let mut png_buffer: Vec<u8> = Vec::new();
+    final_img
+        .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
+        .map_err(map_error)?;
+    return Ok(JsValue::from_str(
+        &base64::engine::general_purpose::STANDARD.encode(png_buffer),
+    ));
+}
+
+#[wasm_bindgen]
+pub async fn render_stats_image_eu5(meta: JsValue, gamestate: JsValue) -> Result<JsValue, JsValue> {
+    let meta: eu5_meta::RawMeta = serde_wasm_bindgen::from_value(meta)?;
+    let gamestate: eu5_gamestate::RawGamestate = serde_wasm_bindgen::from_value(gamestate)?;
+    let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
+    let base_url = window.location().origin()? + &window.location().pathname()?;
+    // typically `base_url == "https://2kai2kai2.github.io/cartographer"`
+
+    let fetcher = WebFetcher::new(reqwest::Url::from_str(&base_url).map_err(map_error)?);
+    log!("Rendering stats image...");
+    let final_img = stats_core::eu5::render_stats_image(&fetcher, meta, gamestate)
         .await
         .map_err(map_error)?;
 

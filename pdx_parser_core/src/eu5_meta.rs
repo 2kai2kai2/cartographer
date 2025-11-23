@@ -1,10 +1,10 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[cfg(any())]
 use crate::common_deserialize::SkipValue;
 use crate::{BinDeserialize, eu5_date::EU5Date};
 
-#[derive(BinDeserialize)]
+#[derive(BinDeserialize, Serialize, Deserialize)]
 pub struct RawCompatibility {
     #[bin_token("eu5")]
     pub version: i32,
@@ -18,7 +18,7 @@ pub struct RawCompatibility {
 
 /// It has brackets, but since the start bracket is a different token (need to figure that out),
 /// so caller must remove the brackets before deserializing.
-#[derive(BinDeserialize)]
+#[derive(BinDeserialize, Serialize, Deserialize)]
 #[no_brackets]
 pub struct RawMeta {
     #[bin_token("eu5")]

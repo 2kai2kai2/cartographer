@@ -6,13 +6,22 @@ import EU4PlayerEditor from "./components/EU4PlayerEditor.vue";
 import {
     parse_save_file,
     render_stats_image_eu4,
+    render_stats_image_eu5,
     render_stats_image_stellaris,
 } from "../pkg/cartographer_web";
-import type { EU4SaveGame, StellarisSaveGame } from "./types";
+import type {
+    EU4SaveGame,
+    EU5Gamestate,
+    EU5Meta,
+    StellarisSaveGame,
+} from "./types";
 import { OhVueIcon } from "oh-vue-icons";
 
 const img_value = ref<string>("");
-type SaveGameT = ["EU4", EU4SaveGame] | ["Stellaris", StellarisSaveGame];
+type SaveGameT =
+    | ["EU4", EU4SaveGame]
+    | ["EU5", EU5Meta, EU5Gamestate]
+    | ["Stellaris", StellarisSaveGame];
 const save_game = ref<SaveGameT | undefined>();
 const stage = ref<
     "file_upload" | "parsing" | "player_edit" | "rendering" | "img_display"
@@ -44,11 +53,42 @@ async function on_click_copy_img() {
     clicked_copy_img.value = true;
 }
 
+function count_players(save: SaveGameT): number {
+    if (save[0] == "EU4") {
+        return save[1].player_tags.size;
+    } else if (save[0] == "EU5") {
+        return Object.keys(save[2].previous_played).length;
+    } else if (save[0] == "Stellaris") {
+        return save[1].player_tags.size;
+    }
+    throw new Error(`Unknown game ${save[0]}`);
+}
+
 async function do_rendering() {
     switch (save_game.value?.[0]) {
         case "EU4": {
             const time_render_start = performance.mark("render-start");
             const img_b64 = await render_stats_image_eu4(save_game.value[1]);
+            const time_render_end = performance.mark("render-end");
+            const time_render_measure = performance.measure(
+                "render",
+                time_render_start.name,
+                time_render_end.name
+            );
+            umami.track("render-completed", {
+                render_duration: time_render_measure.duration,
+            });
+            img_value.value = `data:image/png;base64,${img_b64}`;
+            save_game.value = undefined; // free up memory
+            stage.value = "img_display";
+            break;
+        }
+        case "EU5": {
+            const time_render_start = performance.mark("render-start");
+            const img_b64 = await render_stats_image_eu5(
+                save_game.value[1],
+                save_game.value[2]
+            );
             const time_render_end = performance.mark("render-end");
             const time_render_measure = performance.measure(
                 "render",
@@ -100,14 +140,14 @@ async function on_file_picked(file: File) {
         );
         save_game.value = _save;
 
-        const player_count = _save[1].player_tags.size;
-        umami.track("file-upload", {
-            game: _save[0],
-            mod: _save[1].game_mod,
-            player_count,
-            date: JSON.stringify(_save[1].date),
-            parse_duration: time_parse_measure.duration,
-        });
+        const player_count = count_players(_save);
+        // umami.track("file-upload", {
+        //     game: _save[0],
+        //     mod: _save[1].game_mod,
+        //     player_count,
+        //     date: JSON.stringify(_save[1].date),
+        //     parse_duration: time_parse_measure.duration,
+        // });
 
         if (_save[0] == "EU4") {
             stage.value = "player_edit";

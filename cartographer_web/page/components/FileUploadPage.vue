@@ -49,13 +49,13 @@ function on_change(ev: Event) {
         <input
             type="file"
             class="hidden"
-            accept=".eu4,.sav"
+            accept=".eu4,.eu5,.sav"
             @change="on_change"
         />
         <div class="m-2">
             Upload Save File
             <v-icon name="fa-upload" class="ml-2" />
         </div>
-        <i class="text-sm">Any non-ironman EU4 or Stellaris save file</i>
+        <i class="text-sm">Any non-ironman EU4, EU5, or Stellaris save file</i>
     </label>
 </template>
