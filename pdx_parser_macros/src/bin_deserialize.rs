@@ -533,6 +533,14 @@ pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::To
         }
     };
 
+    let impl_block = impl_block.map(|block| -> TokenStream {
+        let block: proc_macro2::TokenStream = block.into();
+        return quote! {
+           #[automatically_derived]
+           #block
+        }
+        .into();
+    });
     return match impl_block {
         Ok(impl_block) => proc_macro::TokenStream::from(impl_block),
         Err(err) => err.into_compile_error().into(),
