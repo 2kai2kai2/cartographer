@@ -121,22 +121,7 @@ fn walk_obj_bin_values<'de, 'a, W: Write>(
                     continue;
                 };
             }
-            (BinToken::ID_OPEN_BRACKET, &[]) => {
-                // last path item, can print
-                let CountItems(count_key) = stream.parse()?;
-                let Err(_) = stream.parse_token(BinToken::ID_EQUAL) else {
-                    let SkipValue = stream.parse()?;
-                    continue;
-                };
-                let _ = writeln!(write, "{{{count_key}}}");
-            }
-            (_scalar, [_, ..]) => {
-                let SkipValue = stream.parse()?;
-                if let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) {
-                    let SkipValue = stream.parse()?;
-                };
-            }
-            (_scalar, &[]) => {
+            (_, &[]) => {
                 // last path item, can print
                 let scalar: ViewDisplayValueBin = stream.parse()?;
                 let Err(_) = stream.parse_token(BinToken::ID_EQUAL) else {
@@ -144,6 +129,12 @@ fn walk_obj_bin_values<'de, 'a, W: Write>(
                     continue;
                 };
                 let _ = writeln!(write, "{}", scalar.display_with(tokens));
+            }
+            (_scalar, [_, ..]) => {
+                let SkipValue = stream.parse()?;
+                if let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) {
+                    let SkipValue = stream.parse()?;
+                };
             }
         }
     }
@@ -170,19 +161,9 @@ fn walk_obj_bin_kvs_all<'de, 'a, W: Write>(
                 };
                 stream = try_walk_possible_next_obj_bin(stream, next, rest, write, tokens)?
             }
-            (BinToken::ID_OPEN_BRACKET, &[]) => {
-                // last path item, can print
-                let CountItems(count_key) = stream.parse()?;
-                let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) else {
-                    continue; // it's not a KV
-                };
-                let value: ViewDisplayValueBin = stream.parse()?;
-                let _ = writeln!(write, "{{{count_key}}} = {}", value.display_with(tokens));
-            }
-            (_scalar, &[]) => {
+            (_, &[]) => {
                 // last path item, can print
                 let scalar_key: ViewDisplayValueBin = stream.parse()?;
-                stream.eat_token();
                 let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) else {
                     continue; // it's not a KV
                 };
@@ -221,14 +202,7 @@ fn walk_obj_bin_kvs_matching<'de, 'a, W: Write>(
             }
             (_scalar_key, _) => {
                 let key: ViewDisplayValueBin = stream.parse()?;
-                let is_match = match key {
-                    ViewDisplayValueBin::Object(_) => unreachable!(),
-                    ViewDisplayValueBin::Scalar(ref scalar) => scalar == key_curr,
-                    ViewDisplayValueBin::OtherToken(token) => tokens
-                        .as_ref()
-                        .and_then(|tokens| tokens.get_text(token))
-                        .map_or(false, |token| token == key_curr),
-                };
+                let is_match = key.matches_query_item(key_curr, tokens);
                 let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) else {
                     continue;
                 };

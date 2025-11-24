@@ -62,18 +62,39 @@ impl<'de> TextDeserialize<'de> for CountItems {
     }
 }
 
-pub enum ViewDisplayValueBin {
+pub enum ViewDisplayValueBin<'de> {
     /// The number of items in the object
     Object(usize),
-    Scalar(String),
-    OtherToken(u16),
+    /// Is expected to never be `{`, `=`, or `}`
+    Scalar(BinToken<'de>),
 }
-impl ViewDisplayValueBin {
-    pub fn display_with<'a>(&'a self, tokens: Option<&impl BinTokenLookup>) -> String {
+impl<'de> ViewDisplayValueBin<'de> {
+    pub fn matches_query_item(
+        &self,
+        query_item: &str,
+        tokens: Option<&impl BinTokenLookup>,
+    ) -> bool {
+        match self {
+            ViewDisplayValueBin::Object(_) => false,
+            ViewDisplayValueBin::Scalar(BinToken::Other(token_u16)) => {
+                if let Some(token_text) = tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.get_text(*token_u16))
+                {
+                    token_text == query_item
+                } else {
+                    false
+                }
+            }
+            ViewDisplayValueBin::Scalar(scalar) => scalar.to_string() == query_item,
+        }
+    }
+}
+impl<'de> ViewDisplayValueBin<'de> {
+    pub fn display_with(&self, tokens: Option<&impl BinTokenLookup>) -> String {
         match self {
             ViewDisplayValueBin::Object(count) => format!("{{{count}}}"),
-            ViewDisplayValueBin::Scalar(scalar) => format!("{scalar}"),
-            ViewDisplayValueBin::OtherToken(token_u16) => {
+            ViewDisplayValueBin::Scalar(BinToken::Other(token_u16)) => {
                 if let Some(token) = tokens
                     .as_ref()
                     .and_then(|tokens| tokens.get_text(*token_u16))
@@ -83,10 +104,11 @@ impl ViewDisplayValueBin {
                     format!("<token {token_u16}>")
                 }
             }
+            ViewDisplayValueBin::Scalar(scalar) => format!("{scalar}"),
         }
     }
 }
-impl<'de> BinDeserialize<'de> for ViewDisplayValueBin {
+impl<'de> BinDeserialize<'de> for ViewDisplayValueBin<'de> {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         match stream.peek_token().ok_or(BinError::EOF)? {
             token @ (BinToken::ID_EQUAL | BinToken::ID_CLOSE_BRACKET) => {
@@ -96,40 +118,9 @@ impl<'de> BinDeserialize<'de> for ViewDisplayValueBin {
                 let CountItems(count) = stream.parse()?;
                 return Ok((ViewDisplayValueBin::Object(count), stream));
             }
-            BinToken::ID_I32 => {
-                let out: i32 = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_I64 => {
-                let out: i64 = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_U32 => {
-                let out: u32 = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_U64 => {
-                let out: u64 = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_F32 => {
-                let out: f32 = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_F64 => {
-                let out: f64 = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_BOOL => {
-                let out: bool = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out.to_string()), stream));
-            }
-            BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED => {
-                let out: String = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(out), stream));
-            }
-            other => {
-                return Ok((ViewDisplayValueBin::OtherToken(other), stream));
+            _ => {
+                let scalar: BinToken<'de> = stream.parse()?;
+                return Ok((ViewDisplayValueBin::Scalar(scalar), stream));
             }
         }
     }

@@ -2,6 +2,8 @@
 
 use std::fmt::{Display, Write};
 
+use crate::{BinDeserialize, BinDeserializer, bin_deserialize::BinError};
+
 /// Binary tokens used in the binary format. They are each represented by 2 bytes.
 #[derive(Debug, Clone, Copy)]
 pub enum BinToken<'a> {
@@ -107,6 +109,13 @@ impl<'a> Display for BinToken<'a> {
             BinToken::I64(num) => write!(f, "{num}i64"),
             BinToken::Other(id) => write!(f, "<token {id}>"),
         };
+    }
+}
+impl<'de> BinDeserialize<'de> for BinToken<'de> {
+    fn take(stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        let mut as_lexer = BinLexer::new(stream.input);
+        let next = as_lexer.next().ok_or(BinError::EOF)?;
+        return Ok((next, BinDeserializer::from_bytes(as_lexer.0)));
     }
 }
 
