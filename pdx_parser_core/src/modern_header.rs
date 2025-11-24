@@ -13,11 +13,14 @@ pub enum SaveFormat {
 
 pub struct ModernHeader<'a> {
     pub save_format: SaveFormat,
+    /// Both the meta and gamestate
+    pub all: &'a [u8],
     pub meta: &'a [u8],
+    pub gamestate: &'a [u8],
 }
 impl<'a> ModernHeader<'a> {
     /// Returns `(gamestate, header)` if successful
-    pub fn take(buffer: &'a [u8]) -> Option<(&'a [u8], Self)> {
+    pub fn take(buffer: &'a [u8]) -> Option<Self> {
         let buffer = buffer.strip_prefix(b"SAV0")?;
         let (_, buffer) = buffer.split_first()?;
         let buffer = buffer.strip_prefix(b"0")?;
@@ -43,9 +46,13 @@ impl<'a> ModernHeader<'a> {
             return None;
         };
 
-        let (meta, buffer) = buffer.split_at_checked(meta_len as usize)?;
+        let (meta, gamestate) = buffer.split_at_checked(meta_len as usize)?;
 
-        let out = ModernHeader { save_format, meta };
-        return Some((buffer, out));
+        return Some(ModernHeader {
+            save_format,
+            all: buffer,
+            meta,
+            gamestate,
+        });
     }
 }

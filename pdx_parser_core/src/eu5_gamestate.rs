@@ -4,6 +4,7 @@ use crate::{
     bin_deserialize::{BinDeserialize, BinDeserializer, BinError},
     bin_lexer::BinToken,
     common_deserialize::Rgb,
+    eu5_meta::RawMeta,
 };
 use pdx_parser_macros::BinDeserialize;
 use serde::{Deserialize, Serialize};
@@ -239,6 +240,8 @@ pub struct PreviousPlayedItem {
 #[derive(BinDeserialize, Serialize, Deserialize)]
 #[no_brackets]
 pub struct RawGamestate {
+    #[bin_token("eu5")]
+    pub metadata: RawMeta,
     #[bin_token("eu5")]
     pub countries: Countries,
     #[bin_token("eu5")]

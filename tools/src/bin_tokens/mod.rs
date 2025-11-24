@@ -22,9 +22,6 @@ pub struct BinTokensArgs {
     binary_file_path: Option<String>,
     text_file_path: Option<String>,
     out: Option<String>,
-    /// If set, will print the meta section to the specified file
-    #[arg(short, long)]
-    meta: Option<PathBuf>,
     /// If set, will print the gamestate section to the specified file
     #[arg(short, long)]
     gamestate: Option<PathBuf>,
@@ -121,47 +118,28 @@ pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
     // ====
 
     let bin_file = std::fs::read(binary_file_name)?;
-    let (bin_gamestate, bin_header) = ModernHeader::take(&bin_file).unwrap();
+    let bin_header = ModernHeader::take(&bin_file).unwrap();
     if !matches!(bin_header.save_format, SaveFormat::UnifiedCompressedBinary) {
         return Err(anyhow!("Expected unified compressed binary"));
     }
-    let mut bin_gamestate = zip::ZipArchive::new(Cursor::new(bin_gamestate))?;
+    let mut bin_gamestate = zip::ZipArchive::new(Cursor::new(bin_header.gamestate))?;
     let bin_gamestate = bin_gamestate.by_name("gamestate")?;
     let bin_gamestate: Vec<u8> = bin_gamestate.bytes().collect::<Result<_, _>>()?;
-    let bin_gamestate = &bin_gamestate[bin_header.meta.len()..];
     let bin_gamestate = BinLexer::new(&bin_gamestate);
-    let mut bin_meta = BinLexer::new(bin_header.meta);
 
     let text_file = std::fs::read(text_file_name)?;
-    let (text_gamestate, text_header) = ModernHeader::take(&text_file).unwrap();
+    let text_header = ModernHeader::take(&text_file).unwrap();
     if !matches!(text_header.save_format, SaveFormat::UncompressedText) {
         return Err(anyhow!("Expected decompressed text"));
     }
-    let text_gamestate = str::from_utf8(text_gamestate)?;
+    let text_gamestate = str::from_utf8(text_header.all)?;
     let text_gamestate = TextLexer::new(&text_gamestate);
-    let mut text_meta = TextLexer::new(str::from_utf8(text_header.meta)?);
-
-    // Skip some stuff:
-    // idk why but otherwise it doesn't line up
-    // in the text there's `metadata={` but the bin tokens are different for `=` and `{`
-    for _ in 0..7 {
-        bin_meta.next();
-    }
-    for _ in 0..3 {
-        text_meta.next();
-    }
 
     // std::fs::write("bin.txt", bin_gamestate.clone().print_to_string())?;
     // std::fs::write("text.txt", text_gamestate.clone().print_to_string())?;
     let mut found_tokens = Box::new([None; 1 << 16]);
 
     let combined_gamestate = get_bin_tokens(&mut found_tokens, bin_gamestate, text_gamestate)?;
-    let combined_meta = get_bin_tokens(&mut found_tokens, bin_meta, text_meta)?;
-    if let Some(meta_out) = &args.meta {
-        if let Err(_) = std::fs::write(meta_out, combined_meta) {
-            eprintln!("Failed to write meta to {meta_out:?}");
-        };
-    }
     if let Some(gamestate_out) = &args.gamestate {
         if let Err(_) = std::fs::write(gamestate_out, combined_gamestate) {
             eprintln!("Failed to write gamestate to {gamestate_out:?}");

@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use anyhow::anyhow;
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
-use pdx_parser_core::{
-    eu5_gamestate::{RawCountriesEntry, RawGamestate},
-    eu5_meta::RawMeta,
-};
+use pdx_parser_core::eu5_gamestate::{RawCountriesEntry, RawGamestate};
 
 pub const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
 pub const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
@@ -20,10 +17,10 @@ pub const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);
 /// Grayscale value on location img -> owner country color
 pub fn generate_map_colors_config(
     locations: &[String],
-    meta: &RawMeta,
     gamestate: &RawGamestate,
 ) -> Result<Vec<Rgb<u8>>, anyhow::Error> {
-    let meta_locs_inverse: HashMap<&str, i32> = meta
+    let meta_locs_inverse: HashMap<&str, i32> = gamestate
+        .metadata
         .compatibility
         .locations
         .iter()

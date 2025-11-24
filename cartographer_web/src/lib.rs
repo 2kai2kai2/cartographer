@@ -6,7 +6,7 @@ use base64::Engine;
 use eu4::country_history::WarHistoryEvent;
 use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
 use eu4::webgl::webgl_draw_map;
-use pdx_parser_core::{eu4_save_parser, eu5_gamestate, eu5_meta, stellaris_save_parser};
+use pdx_parser_core::{eu4_save_parser, eu5_gamestate, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
 use stats_core::eu5::EU5ParserStepGamestate;
 use stats_core::{from_cp1252, EU4ParserStepText, GameSaveType, StellarisParserStepText};
@@ -82,11 +82,11 @@ pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue>
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_start");
             });
-            let (meta, gamestate) = text.parse().map_err(map_error)?;
+            let gamestate = text.parse().map_err(map_error)?;
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_end");
             });
-            return Ok(serde_wasm_bindgen::to_value(&(game, meta, gamestate)).map_err(map_error)?);
+            return Ok(serde_wasm_bindgen::to_value(&(game, gamestate)).map_err(map_error)?);
         }
     }
 }
@@ -146,8 +146,7 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn render_stats_image_eu5(meta: JsValue, gamestate: JsValue) -> Result<JsValue, JsValue> {
-    let meta: eu5_meta::RawMeta = serde_wasm_bindgen::from_value(meta)?;
+pub async fn render_stats_image_eu5(gamestate: JsValue) -> Result<JsValue, JsValue> {
     let gamestate: eu5_gamestate::RawGamestate = serde_wasm_bindgen::from_value(gamestate)?;
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
     let base_url = window.location().origin()? + &window.location().pathname()?;
@@ -155,7 +154,7 @@ pub async fn render_stats_image_eu5(meta: JsValue, gamestate: JsValue) -> Result
 
     let fetcher = WebFetcher::new(reqwest::Url::from_str(&base_url).map_err(map_error)?);
     log!("Rendering stats image...");
-    let final_img = stats_core::eu5::render_stats_image(&fetcher, meta, gamestate)
+    let final_img = stats_core::eu5::render_stats_image(&fetcher, gamestate)
         .await
         .map_err(map_error)?;
 

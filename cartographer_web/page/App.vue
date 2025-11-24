@@ -9,18 +9,13 @@ import {
     render_stats_image_eu5,
     render_stats_image_stellaris,
 } from "../pkg/cartographer_web";
-import type {
-    EU4SaveGame,
-    EU5Gamestate,
-    EU5Meta,
-    StellarisSaveGame,
-} from "./types";
+import type { EU4SaveGame, EU5Gamestate, StellarisSaveGame } from "./types";
 import { OhVueIcon } from "oh-vue-icons";
 
 const img_value = ref<string>("");
 type SaveGameT =
     | ["EU4", EU4SaveGame]
-    | ["EU5", EU5Meta, EU5Gamestate]
+    | ["EU5", EU5Gamestate]
     | ["Stellaris", StellarisSaveGame];
 const save_game = ref<SaveGameT | undefined>();
 const stage = ref<
@@ -57,7 +52,7 @@ function count_players(save: SaveGameT): number {
     if (save[0] == "EU4") {
         return save[1].player_tags.size;
     } else if (save[0] == "EU5") {
-        return Object.keys(save[2].previous_played).length;
+        return Object.keys(save[1].previous_played).length;
     } else if (save[0] == "Stellaris") {
         return save[1].player_tags.size;
     }
@@ -85,10 +80,7 @@ async function do_rendering() {
         }
         case "EU5": {
             const time_render_start = performance.mark("render-start");
-            const img_b64 = await render_stats_image_eu5(
-                save_game.value[1],
-                save_game.value[2]
-            );
+            const img_b64 = await render_stats_image_eu5(save_game.value[1]);
             const time_render_end = performance.mark("render-end");
             const time_render_measure = performance.measure(
                 "render",
@@ -139,7 +131,7 @@ async function on_file_picked(file: File) {
             time_parse_end.name
         );
         save_game.value = _save;
-
+        console.log(_save);
         const player_count = count_players(_save);
         // umami.track("file-upload", {
         //     game: _save[0],

@@ -16,10 +16,7 @@ pub struct RawCompatibility {
     pub locations: Vec<String>,
 }
 
-/// It has brackets, but since the start bracket is a different token (need to figure that out),
-/// so caller must remove the brackets before deserializing.
 #[derive(BinDeserialize, Serialize, Deserialize)]
-#[no_brackets]
 pub struct RawMeta {
     #[bin_token("eu5")]
     pub date: EU5Date,

@@ -31,6 +31,7 @@ export interface EU5Meta {
 }
 
 export interface EU5Gamestate {
+    metadata: EU5Meta;
     countries: object;
     locations: object;
     previous_played: object[];

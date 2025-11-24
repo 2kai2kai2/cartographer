@@ -106,7 +106,7 @@ enum LoadedFile {
     Binary(Vec<u8>),
 }
 impl LoadedFile {
-    fn from_modern_save(gamestate: &[u8], header: ModernHeader) -> Result<Self> {
+    fn from_modern_save(header: ModernHeader) -> Result<Self> {
         match header.save_format {
             SaveFormat::SplitCompressedBinary | SaveFormat::UncompressedBinary => {
                 return Err(anyhow!("We currently do not support binary save formats."))
@@ -115,12 +115,12 @@ impl LoadedFile {
                 return Err(anyhow!("We currently do not support split save formats."))
             }
             SaveFormat::UnifiedCompressedBinary => {
-                let mut zip_file = zip::ZipArchive::new(Cursor::new(gamestate))?;
+                let mut zip_file = zip::ZipArchive::new(Cursor::new(header.gamestate))?;
 
                 let mut zip_gamestate = zip_file.by_name("gamestate")?;
                 let mut gamestate = Vec::with_capacity(4 + zip_gamestate.size() as usize);
+                gamestate.extend(BinToken::ID_OPEN_BRACKET.to_le_bytes());
                 zip_gamestate.read_to_end(&mut gamestate)?;
-                gamestate.splice(0..0, BinToken::ID_OPEN_BRACKET.to_le_bytes());
                 gamestate.extend(BinToken::ID_CLOSE_BRACKET.to_le_bytes());
 
                 return Ok(Self::Binary(gamestate));
@@ -131,7 +131,7 @@ impl LoadedFile {
                 ));
             }
             SaveFormat::UncompressedText => {
-                let gamestate = str::from_utf8(gamestate)?;
+                let gamestate = str::from_utf8(header.all)?; // to include meta in gamestate
                 return Ok(Self::Text(format!("{{{gamestate}}}")));
             }
         }
@@ -142,12 +142,12 @@ impl LoadedFile {
         let bytes = bytes;
 
         if bytes.starts_with(b"SAV0") {
-            let Some((gamestate, header)) = ModernHeader::take(&bytes) else {
+            let Some(header) = ModernHeader::take(&bytes) else {
                 return Err(anyhow!(
                     "Found modern save header format, but failed to parse it."
                 ));
             };
-            return Self::from_modern_save(gamestate, header);
+            return Self::from_modern_save(header);
         }
 
         let text = if cp1252 {
