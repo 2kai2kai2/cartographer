@@ -35,6 +35,14 @@ impl<'a> ModernHeader<'a> {
         let meta_len = str::from_utf8(meta_len).ok()?;
         let meta_len = u32::from_str_radix(meta_len, 16).ok()?;
 
+        let buffer = if let Some(buffer) = buffer.strip_prefix(b"\n") {
+            buffer
+        } else if let Some(buffer) = buffer.strip_prefix(b"\r\n") {
+            buffer
+        } else {
+            return None;
+        };
+
         let (meta, buffer) = buffer.split_at_checked(meta_len as usize)?;
 
         let out = ModernHeader { save_format, meta };
