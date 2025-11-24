@@ -177,8 +177,8 @@ impl<'de> BinDeserialize<'de> for u64 {
 impl<'de> BinDeserialize<'de> for f32 {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         stream.parse_token(BinToken::ID_F32)?;
-        let value = stream.expect_bytes_const::<{ size_of::<f32>() }>()?;
-        let value = f32::from_le_bytes(*value);
+        let value = stream.expect_bytes_const::<{ size_of::<i32>() }>()?;
+        let value = i32::from_le_bytes(*value) as f32;
         return Ok((value, stream));
     }
 }
@@ -186,8 +186,8 @@ impl<'de> BinDeserialize<'de> for f32 {
 impl<'de> BinDeserialize<'de> for f64 {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         stream.parse_token(BinToken::ID_F64)?;
-        let value = stream.expect_bytes_const::<{ size_of::<f64>() }>()?;
-        let value = f64::from_le_bytes(*value);
+        let value = stream.expect_bytes_const::<{ size_of::<i64>() }>()?;
+        let value = i64::from_le_bytes(*value) as f64 / 100_000.0;
         return Ok((value, stream));
     }
 }

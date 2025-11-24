@@ -188,7 +188,7 @@ impl<'a> Iterator for BinLexer<'a> {
             BinToken::ID_F32 => {
                 let (value, new_rest) = rest.split_first_chunk()?;
                 rest = new_rest;
-                BinToken::F32(f32::from_le_bytes(*value))
+                BinToken::F32(i32::from_le_bytes(*value) as f32 / 1000.0)
             }
             BinToken::ID_BOOL => {
                 let (value, new_rest) = rest.split_first()?;
@@ -217,7 +217,7 @@ impl<'a> Iterator for BinLexer<'a> {
             BinToken::ID_F64 => {
                 let (value, new_rest) = rest.split_first_chunk()?;
                 rest = new_rest;
-                BinToken::F64(f64::from_be_bytes(*value))
+                BinToken::F64(i64::from_le_bytes(*value) as f64 / 100_000.0)
             }
             BinToken::ID_U64 => {
                 let (value, new_rest) = rest.split_first_chunk()?;
