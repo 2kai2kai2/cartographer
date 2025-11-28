@@ -251,10 +251,15 @@ pub struct TokenRegistryArray {
     lookup_table: Box<[Option<String>; u16::MAX as usize]>,
 }
 impl TokenRegistryArray {
+    fn new_empty() -> Self {
+        let lookup_table = vec![const { None }; u16::MAX as usize]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("We just allocated a vec to the size"));
+        return TokenRegistryArray { lookup_table };
+    }
     pub fn new(tokens_file: impl AsRef<str>) -> anyhow::Result<TokenRegistryArray> {
-        let mut out = TokenRegistryArray {
-            lookup_table: Box::new([const { None }; u16::MAX as usize]),
-        };
+        let mut out = TokenRegistryArray::new_empty();
         for line in tokens_file.as_ref().lines() {
             let Some((token, text)) = line.split_once(';') else {
                 return Err(anyhow::anyhow!("Invalid tokens file format"));
