@@ -194,6 +194,15 @@ impl TextDeserialize<'_> for EU5Date {
 }
 impl Display for EU5Date {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            return f.write_fmt(format_args!(
+                "{:02}:00, {} {}, {}",
+                self.hour,
+                self.day,
+                self.month.month_name(),
+                self.year
+            ));
+        }
         return f.write_fmt(format_args!(
             "{}.{}.{}.{}",
             self.year, self.month, self.day, self.hour

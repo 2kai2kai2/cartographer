@@ -15,4 +15,6 @@ pdx_parser_core = { path = "../pdx_parser_core" }
 clap = { version = "4.5.41", features = ["derive"] }
 image_dds = "0.7.2"
 ddsfile = "0.5.2"
+stats_core = { path = "../stats_core" }
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }
 zip = { version = "2.0.0", default-features = false, features = ["deflate"] }

@@ -100,6 +100,20 @@ pub enum RawCountriesEntry {
     None,
     Country(RawCountry),
 }
+impl RawCountriesEntry {
+    pub fn to_country(self) -> Option<RawCountry> {
+        match self {
+            RawCountriesEntry::None => None,
+            RawCountriesEntry::Country(country) => Some(country),
+        }
+    }
+    pub fn as_country(&self) -> Option<&RawCountry> {
+        match self {
+            RawCountriesEntry::None => None,
+            RawCountriesEntry::Country(country) => Some(country),
+        }
+    }
+}
 impl<'de> BinDeserialize<'de> for RawCountriesEntry {
     fn take(
         mut stream: BinDeserializer<'de>,

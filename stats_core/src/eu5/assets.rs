@@ -1,5 +1,49 @@
 use crate::Fetcher;
-use image::{ImageBuffer, Luma};
+use anyhow::Context as _;
+use image::{ImageBuffer, Luma, RgbImage, RgbaImage};
+
+/// Assets for eu5 that do not depend on the mod
+pub struct CommonAssets {
+    /// `eu5/stats_frame.png`
+    pub stats_frame: RgbImage,
+    pub flag_frame: RgbaImage,
+    pub population: RgbaImage,
+    pub noto_serif_regular: ab_glyph::FontVec,
+    pub noto_serif_italic: ab_glyph::FontVec,
+}
+impl CommonAssets {
+    pub async fn load(fetcher: &impl Fetcher) -> anyhow::Result<Self> {
+        let url_stats_frame_png = "eu5/stats_frame.png";
+        let url_flag_frame_png = "eu5/flag_frame.png";
+        let url_population_png = "eu5/population.png";
+        let url_noto_serif_regular = "eu5/NotoSerif-Medium.ttf";
+        let url_noto_serif_italic = "eu5/NotoSerif-Italic.ttf";
+
+        let (stats_frame, flag_frame, population, noto_serif_regular, noto_serif_italic) = futures::try_join!(
+            fetcher.get_image(url_stats_frame_png),
+            fetcher.get_image(url_flag_frame_png),
+            fetcher.get_image(url_population_png),
+            fetcher.get(url_noto_serif_regular),
+            fetcher.get(url_noto_serif_italic),
+        )?;
+
+        let stats_frame = stats_frame.to_rgb8();
+        let flag_frame = flag_frame.to_rgba8();
+        let population = population.to_rgba8();
+        let noto_serif_regular = ab_glyph::FontVec::try_from_vec(noto_serif_regular)
+            .context("Failed to parse NotoSerif-Regular.ttf")?;
+        let noto_serif_italic = ab_glyph::FontVec::try_from_vec(noto_serif_italic)
+            .context("Failed to parse NotoSerif-Italic.ttf")?;
+
+        return Ok(CommonAssets {
+            stats_frame,
+            flag_frame,
+            population,
+            noto_serif_regular,
+            noto_serif_italic,
+        });
+    }
+}
 
 /// Map data, specific to the game mod
 pub struct MapAssets {
