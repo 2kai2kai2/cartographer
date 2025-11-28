@@ -1,22 +1,20 @@
-use crate::utils::{stdin_line, ModdableDir};
+mod history;
+mod map;
+
+use anyhow::Result;
+use clap::Parser;
 use decancer::cure;
 use image::{GenericImage, GenericImageView};
 use map::{parse_wasteland_provinces, parse_water_provinces};
-
-use crate::utils::read_cp1252;
-use anyhow::Result;
 use std::{
     fs::File,
     io::{stdout, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
+use tools::{read_cp1252, stdin_line, ModdableDir};
 
-mod history;
-mod map;
-
-#[derive(clap::Args)]
-#[command()]
+#[derive(Parser)]
 pub struct Eu4Args {}
 
 /// Returns a vector of tags
@@ -124,7 +122,9 @@ pub fn load_tag_names(dir: &ModdableDir, tags: &Vec<String>) -> Result<Vec<(Stri
     return Ok(items);
 }
 
-pub fn eu4_main(args: Eu4Args) -> Result<()> {
+pub fn main() -> Result<()> {
+    let args = Eu4Args::parse();
+
     fn trim_cli(c: char) -> bool {
         return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
     }

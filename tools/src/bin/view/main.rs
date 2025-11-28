@@ -2,6 +2,7 @@ mod deser_helpers;
 mod query;
 
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use pdx_parser_core::{
     bin_lexer::{BinToken, BinTokenLookup, TokenRegistryArray},
     modern_header::{ModernHeader, SaveFormat},
@@ -14,8 +15,7 @@ use std::{
     io::{Cursor, Read, Write},
 };
 
-#[derive(clap::Args)]
-#[command()]
+#[derive(Parser)]
 pub struct ViewArgs {
     /// The location of the file to parse and search
     pub file: std::path::PathBuf,
@@ -151,7 +151,7 @@ impl LoadedFile {
         }
 
         let text = if cp1252 {
-            &crate::utils::from_cp1252(Cursor::new(bytes))?
+            &tools::from_cp1252(Cursor::new(bytes))?
         } else {
             str::from_utf8(&bytes)?
         };
@@ -207,7 +207,8 @@ fn run_bin_view(bin: &[u8], tokens: Option<&impl BinTokenLookup>) -> Result<()> 
     }
 }
 
-pub fn view_main(args: ViewArgs) -> Result<()> {
+pub fn main() -> Result<()> {
+    let args = ViewArgs::parse();
     let bin_tokens = args
         .tokens
         .map(|tokens_loc| match tokens_loc.as_str() {

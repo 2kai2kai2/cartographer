@@ -2,10 +2,9 @@
 //! However, we can use the wonderful https://pdx.tools/ to melt a binary file,
 //! and we will get a 1:1 token mapping, allowing us to recover the tokens.
 
-use crate::utils::stdin_line;
-
 use anyhow::anyhow;
 use anyhow::Result;
+use clap::Parser;
 use pdx_parser_core::bin_lexer::BinLexer;
 use pdx_parser_core::bin_lexer::BinToken;
 use pdx_parser_core::modern_header::ModernHeader;
@@ -15,8 +14,9 @@ use pdx_parser_core::text_lexer::TextToken;
 use std::io::Cursor;
 use std::io::{stdout, Read, Write};
 use std::path::PathBuf;
+use tools::stdin_line;
 
-#[derive(clap::Args)]
+#[derive(Parser)]
 #[command()]
 pub struct BinTokensArgs {
     binary_file_path: Option<String>,
@@ -80,7 +80,8 @@ fn get_bin_tokens<'b, 't>(
     return Ok(combined_output);
 }
 
-pub fn bin_tokens_main(args: BinTokensArgs) -> Result<()> {
+pub fn main() -> Result<()> {
+    let args = BinTokensArgs::parse();
     fn trim_cli(c: char) -> bool {
         return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
     }

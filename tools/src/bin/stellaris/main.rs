@@ -1,11 +1,9 @@
-use std::str::FromStr;
-
-use anyhow::{anyhow, Context, Result};
-
 mod flags;
 
-#[derive(clap::Args)]
-#[command()]
+use anyhow::{anyhow, Context, Result};
+use clap::Parser;
+
+#[derive(Parser)]
 pub struct StellarisArgs {
     /// The location of the steam game files.
     /// This will typically look something like `<...>/steamapps/common/Stellaris`.
@@ -15,12 +13,13 @@ pub struct StellarisArgs {
     pub target: String,
 }
 
-pub fn stellaris_main(args: StellarisArgs) -> Result<()> {
+pub fn main() -> Result<()> {
+    let args = StellarisArgs::parse();
     let gamefiles = match args.gamefiles {
         Some(gamefiles) => gamefiles,
         None => {
             println!("Enter steam game files location:");
-            let Ok(gamefiles) = crate::utils::stdin_line() else {
+            let Ok(gamefiles) = tools::stdin_line() else {
                 return Err(anyhow!("Exited after not recieving gamefiles location."));
             };
             gamefiles.try_into()?

@@ -1,11 +1,10 @@
-use crate::{
-    eu5::map::HexRgb,
-    utils::{stdin_line, ModdableDir},
-};
+mod map;
+
+use crate::map::HexRgb;
+use anyhow::{Context, Result};
+use clap::Parser;
 use image::{imageops, GenericImageView};
 use pdx_parser_core::TextDeserializer;
-
-use anyhow::{anyhow, Context, Result};
 use std::{
     collections::HashMap,
     fs::File,
@@ -13,11 +12,9 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
+use tools::{stdin_line, ModdableDir};
 
-mod map;
-
-#[derive(clap::Args)]
-#[command()]
+#[derive(Parser)]
 pub struct Eu5Args {
     steam_dir: String,
     #[arg(short, long, default_value_t = String::from("vanilla"))]
@@ -26,7 +23,8 @@ pub struct Eu5Args {
     mod_dir: Option<String>,
 }
 
-pub fn eu5_main(args: Eu5Args) -> Result<()> {
+pub fn main() -> Result<()> {
+    let args = Eu5Args::parse();
     fn trim_cli(c: char) -> bool {
         return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
     }

@@ -8,7 +8,7 @@ pub fn convert_flag_colors(gamefiles: &std::path::Path, target: &std::path::Path
 
     let colors_txt = std::fs::read_to_string(&source)
         .context(format!("While reading in {}", source.display()))?;
-    let colors_txt: String = crate::utils::lines_without_comments(&colors_txt).collect();
+    let colors_txt: String = tools::lines_without_comments(&colors_txt).collect();
 
     let (rest, colors_txt) =
         pdx_parser_core::raw_parser::RawPDXObject::parse_object_inner(&colors_txt)

@@ -1,5 +1,4 @@
-use std::io::Write;
-
+use crate::deser_helpers::{CountItems, ViewDisplayValueBin, ViewDisplayValueText};
 use pdx_parser_core::{
     bin_deserialize::BinError,
     bin_lexer::{BinToken, BinTokenLookup},
@@ -8,8 +7,7 @@ use pdx_parser_core::{
     text_lexer::TextToken,
     BinDeserializer, TextDeserializer,
 };
-
-use crate::view::deser_helpers::{CountItems, ViewDisplayValueBin, ViewDisplayValueText};
+use std::io::Write;
 
 #[derive(Clone, Copy)]
 pub enum PathItem<'a> {

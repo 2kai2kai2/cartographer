@@ -4,12 +4,12 @@ use pdx_parser_core::{
     TextDeserialize, TextDeserializer,
 };
 use std::collections::HashMap;
-
-use crate::utils::ModdableDir;
+use tools::ModdableDir;
 
 /// `game/in_game/map_data/default.map`
 #[derive(Debug, TextDeserialize)]
 #[no_brackets]
+#[allow(dead_code)]
 pub struct DefaultMap<'de> {
     /// Location of provinces image (usually `locations.png`)
     pub provinces: &'de str,

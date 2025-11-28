@@ -2,8 +2,7 @@ use anyhow::anyhow;
 use image::GenericImageView;
 use pdx_parser_core::raw_parser::{RawPDXScalar, RawPDXValue};
 use std::{collections::HashMap, fs::File, io::Write};
-
-use crate::utils::lines_without_comments;
+use tools::lines_without_comments;
 
 pub fn read_definition_csv(text: &str) -> anyhow::Result<HashMap<[u8; 3], u64>> {
     let mut out: HashMap<[u8; 3], u64> = HashMap::new();
