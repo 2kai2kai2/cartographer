@@ -1,8 +1,7 @@
-use serde::{Deserialize, Serialize};
-
 #[cfg(any())]
 use crate::common_deserialize::SkipValue;
-use crate::{BinDeserialize, eu5_date::EU5Date};
+use crate::{BinDeserialize, eu5::EU5Date};
+use serde::{Deserialize, Serialize};
 
 #[derive(BinDeserialize, Serialize, Deserialize)]
 pub struct RawCompatibility {

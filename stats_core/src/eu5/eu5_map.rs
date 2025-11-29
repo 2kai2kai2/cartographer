@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::anyhow;
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
-use pdx_parser_core::eu5_gamestate::{RawCountriesEntry, RawGamestate};
+use pdx_parser_core::eu5::{RawCountriesEntry, RawGamestate};
 
 pub const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
 pub const WATER_COLOR: Rgb<u8> = Rgb([68, 107, 163]);

@@ -2,10 +2,11 @@ pub mod eu4;
 pub mod eu5;
 mod fetcher;
 pub mod stellaris;
+mod utils;
 
 pub use eu4::{EU4ParserStepRawParsed, EU4ParserStepText};
 pub use fetcher::*;
-use pdx_parser_core::{eu4_save_parser, eu5_gamestate, eu5_meta, stellaris_save_parser};
+use pdx_parser_core::{eu4_save_parser, stellaris_save_parser};
 use serde::{Deserialize, Serialize};
 pub use stellaris::{StellarisParserStepRawParsed, StellarisParserStepText};
 
@@ -47,7 +48,7 @@ impl GameSaveType {
 
 pub enum SomeSaveGame {
     EU4(eu4_save_parser::SaveGame),
-    EU5((eu5_meta::RawMeta, eu5_gamestate::RawGamestate)),
+    EU5(pdx_parser_core::eu5::RawGamestate),
     Stellaris(stellaris_save_parser::SaveGame),
 }
 impl SomeSaveGame {

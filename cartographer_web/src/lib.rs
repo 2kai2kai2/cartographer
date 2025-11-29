@@ -6,7 +6,7 @@ use base64::Engine;
 use eu4::country_history::WarHistoryEvent;
 use eu4::map_history::{ColorMapManager, SerializedColorMapManager};
 use eu4::webgl::webgl_draw_map;
-use pdx_parser_core::{eu4_save_parser, eu5_gamestate, stellaris_save_parser};
+use pdx_parser_core::{eu4_save_parser, eu5, stellaris_save_parser};
 use pdx_parser_core::{raw_parser::RawPDXObject, EU4Date, Month};
 use stats_core::eu5::EU5ParserStepGamestate;
 use stats_core::{from_cp1252, EU4ParserStepText, GameSaveType, StellarisParserStepText};
@@ -147,7 +147,7 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub async fn render_stats_image_eu5(gamestate: JsValue) -> Result<JsValue, JsValue> {
-    let gamestate: eu5_gamestate::RawGamestate = serde_wasm_bindgen::from_value(gamestate)?;
+    let gamestate: eu5::RawGamestate = serde_wasm_bindgen::from_value(gamestate)?;
     let window = web_sys::window().ok_or::<JsValue>(JsError::new("Failed to get window").into())?;
     let base_url = window.location().origin()? + &window.location().pathname()?;
     // typically `base_url == "https://2kai2kai2.github.io/cartographer"`

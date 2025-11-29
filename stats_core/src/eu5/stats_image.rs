@@ -1,14 +1,14 @@
 use anyhow::{anyhow, Result};
 use image::{DynamicImage, RgbImage, Rgba};
 use imageproc::{definitions::HasWhite as _, drawing};
-use pdx_parser_core::eu5_gamestate::{PreviousPlayedItem, RawCountry, RawGamestate};
+use pdx_parser_core::eu5::{PreviousPlayedItem, RawCountry, RawGamestate};
 
 use crate::{
-    eu4::army_display,
     eu5::{
         assets::{CommonAssets, MapAssets},
         eu5_map,
     },
+    utils::{display_num, display_num_thousands},
     Fetcher,
 };
 
@@ -39,40 +39,119 @@ pub fn make_image_top(
         .filter(|(_, nation, _)| nation.last_months_population > 0.0)
         .collect();
     player_nations.sort_by_key(|(_, nation, _)| nation.great_power_rank.unwrap_or(i32::MAX));
-    for (i, (tag, nation, player)) in player_nations.into_iter().enumerate().take(16) {
-        const TOP_MARGIN: i32 = 96;
-        const LEFT_MARGIN: i32 = 43 + 96; // include the border graphic
+    for (i, (tag, nation, player)) in player_nations.into_iter().cycle().enumerate().take(16) {
+        const TOP_MARGIN: i32 = 2;
+        const LEFT_MARGIN: i32 = 43 + 24; // include the border graphic
         let x = LEFT_MARGIN + (2986 / 2) * (i as i32 / 8);
         let y = TOP_MARGIN + 128 * (i as i32 % 8);
+
+        let (regular_army, regular_navy, _, _) = nation.military_size(&save)?;
 
         // x+0: flag
         image::imageops::overlay(&mut out, &assets.flag_frame, x as i64, y as i64 + 4);
 
         // x+170: player
         let mut player_name = (*player).to_string();
-        while drawing::text_size(100.0, &assets.noto_serif_regular, &player_name).0 > 760 - 170 {
+        while drawing::text_size(60.0, &assets.noto_serif_regular, &player_name).0 > 500 - 170 {
             player_name.pop();
         }
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
             x + 170 + 8,
-            y + 14,
-            100.0,
+            y + 34,
+            60.0,
             &assets.noto_serif_regular,
             &player_name,
         );
 
-        // x+760: Population
-        image::imageops::overlay(&mut out, &assets.population, x as i64 + 760, y as i64 + 14);
+        // x+500: Population
+        image::imageops::overlay(&mut out, &assets.population, x as i64 + 500, y as i64 + 24);
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
-            x + 760 + 128,
-            y + 14,
-            100.0,
+            x + 500 + 80,
+            y + 34,
+            60.0,
             &assets.noto_serif_regular,
-            &army_display(nation.last_months_population * 1000.0),
+            &display_num_thousands(nation.last_months_population * 1000.0),
+        );
+
+        // x+725: Regular Army
+        image::imageops::overlay(
+            &mut out,
+            &assets.army_regulars,
+            x as i64 + 725,
+            y as i64 + 24,
+        );
+        drawing::draw_text_mut(
+            &mut out,
+            Rgba::white(),
+            x + 725 + 80,
+            y + 34,
+            60.0,
+            &assets.noto_serif_regular,
+            &display_num_thousands(regular_army as f64),
+        );
+
+        // x+950: Regular Navy
+        image::imageops::overlay(
+            &mut out,
+            &assets.navy_regulars,
+            x as i64 + 950,
+            y as i64 + 24,
+        );
+        drawing::draw_text_mut(
+            &mut out,
+            Rgba::white(),
+            x + 950 + 80,
+            y + 34,
+            60.0,
+            &assets.noto_serif_regular,
+            &display_num(regular_navy as f64),
+        );
+
+        // x+1175: Income/Expense
+        const INCOME_COLOR: Rgba<u8> = Rgba([84, 195, 96, 255]);
+        const EXPENSE_COLOR: Rgba<u8> = Rgba([226, 96, 102, 255]);
+        let cashflow = nation.economy.income - nation.economy.expense;
+        let (cashflow_color, cashflow_sign) = if cashflow >= 0.0 {
+            (INCOME_COLOR, '+')
+        } else {
+            (EXPENSE_COLOR, '-')
+        };
+        image::imageops::overlay(
+            &mut out,
+            &assets.monthly_gold,
+            x as i64 + 1175,
+            y as i64 + 24,
+        );
+        drawing::draw_text_mut(
+            &mut out,
+            cashflow_color,
+            x + 1175 + 80,
+            y + 34,
+            60.0,
+            &assets.noto_serif_regular,
+            &format!("{cashflow_sign}{}", display_num(cashflow)),
+        );
+        drawing::draw_text_mut(
+            &mut out,
+            INCOME_COLOR,
+            x + 1175 + 80 + 150,
+            y + 34,
+            30.0,
+            &assets.noto_serif_italic,
+            &format!("+{}", display_num(nation.economy.income)),
+        );
+        drawing::draw_text_mut(
+            &mut out,
+            EXPENSE_COLOR,
+            x + 1175 + 80 + 150,
+            y + 34 + 30,
+            30.0,
+            &assets.noto_serif_italic,
+            &format!("-{}", display_num(nation.economy.expense)),
         );
     }
 

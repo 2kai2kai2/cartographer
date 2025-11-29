@@ -3,6 +3,7 @@ use std::cmp::Reverse;
 use super::assets::FlagImages;
 use crate::{
     eu4::assets::{MapAssets, StatsImageDefaultAssets},
+    utils::{display_num_thousands, text_wrap},
     Fetcher,
 };
 use ab_glyph::{Font, FontRef};
@@ -11,42 +12,6 @@ use image::{DynamicImage, GenericImage, GenericImageView, RgbImage, Rgba, RgbaIm
 use imageproc::definitions::HasWhite;
 use imageproc::drawing;
 use pdx_parser_core::eu4_save_parser::{Nation, SaveGame, WarResult};
-
-pub fn army_display(army: f64) -> String {
-    if army >= 1000000.0 {
-        return format!("{}M", (army / 10000.0).round() / 100.0);
-    } else if army >= 100000.0 {
-        return format!("{:.0}k", army / 1000.0);
-    } else if army >= 0.0 {
-        return format!("{}k", (army / 100.0).round() / 10.0);
-    } else {
-        return "ERROR".to_string();
-    }
-}
-
-/// Assumes whitespace is only a single space between words
-pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut line = String::new();
-
-    for part in text.split_ascii_whitespace() {
-        let prospective = if line.is_empty() {
-            part.to_string()
-        } else {
-            format!("{line} {part}")
-        };
-        if drawing::text_size(scale, font, &prospective).0 > width {
-            out.push(line);
-            line = part.to_string();
-        } else {
-            line = prospective;
-        }
-    }
-    if !line.is_empty() {
-        out.push(line);
-    }
-    return out;
-}
 
 /// Makes the part that is not the map.
 pub fn make_image_top(
@@ -107,7 +72,7 @@ pub fn make_image_top(
             y + 14,
             100.0,
             font,
-            &army_display(nation.army),
+            &display_num_thousands(nation.army),
         );
 
         // x+1100: Navy
@@ -210,7 +175,7 @@ pub fn make_image_top(
             x as i64 + 290 - 12 - 32,
             y as i64 + 156,
         );
-        let attacker_losses_str = format!("Losses: {}", army_display(w.attacker_losses as f64));
+        let attacker_losses_str = format!("Losses: {}", display_num_thousands(w.attacker_losses as f64));
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
@@ -244,7 +209,7 @@ pub fn make_image_top(
             x as i64 + 12 + 585,
             y as i64 + 156,
         );
-        let defender_losses_str = format!("Losses: {}", army_display(w.defender_losses as f64));
+        let defender_losses_str = format!("Losses: {}", display_num_thousands(w.defender_losses as f64));
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),

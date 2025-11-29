@@ -64,12 +64,7 @@ impl BinDeserialize<'_> for EU5Date {
             .map_err(|err| err.context("While parsing an EU5 date"))?;
 
         let hour = (as_num % 24) as u8;
-        // silly encoding format
-        if hour < 8 || 19 < hour {
-            let real_hour = ((hour as i32) - 8) * 2;
-            return Err(bin_err!("Invalid EU5 date hour '{hour}' ({real_hour})"));
-        }
-        let hour = (hour - 8) * 2;
+        let hour = hour / 2 + 8;
         as_num /= 24;
 
         let day_of_year = as_num % 365;
@@ -134,14 +129,7 @@ impl EU5Date {
                 "Failed to parse an EU5 date hour '{text}'"
             )));
         };
-        // silly encoding format
-        if hour < 8 || 19 < hour {
-            let real_hour = ((hour as i32) - 8) * 2;
-            return Err(TextError::Custom(format!(
-                "Invalid EU5 date hour '{hour}' ({real_hour})"
-            )));
-        }
-        let hour = (hour - 8) * 2;
+        let hour = hour / 2 + 8;
         return Ok(hour);
     }
 }

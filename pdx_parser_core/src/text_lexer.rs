@@ -27,6 +27,19 @@ impl<'a> TextToken<'a> {
                 | TextToken::StringUnquoted(_)
         );
     }
+    pub fn token_type_repr(&self) -> &'static str {
+        return match self {
+            TextToken::Equal => "=",
+            TextToken::OpenBracket => "{",
+            TextToken::CloseBracket => "}",
+            TextToken::Int(_) => "int",
+            TextToken::UInt(_) => "uint",
+            TextToken::Float(_) => "float",
+            TextToken::Bool(_) => "bool",
+            TextToken::StringQuoted(_) => "string_quoted",
+            TextToken::StringUnquoted(_) => "string_unquoted",
+        };
+    }
 }
 impl<'a> Display for TextToken<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

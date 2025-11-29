@@ -75,6 +75,25 @@ impl<'a> BinToken<'a> {
         };
     }
 
+    /// Returns the token type as a string, or if it is not a known base type, `Err(token_u16)`
+    pub fn token_type_repr(&self) -> Result<&'static str, u16> {
+        return match self {
+            BinToken::Equal => Ok("="),
+            BinToken::OpenBracket => Ok("{"),
+            BinToken::CloseBracket => Ok("}"),
+            BinToken::I32(_) => Ok("i32"),
+            BinToken::F32(_) => Ok("f32"),
+            BinToken::Bool(_) => Ok("bool"),
+            BinToken::StringQuoted(_) => Ok("string_quoted"),
+            BinToken::U32(_) => Ok("u32"),
+            BinToken::StringUnquoted(_) => Ok("string_unquoted"),
+            BinToken::F64(_) => Ok("f64"),
+            BinToken::U64(_) => Ok("u64"),
+            BinToken::I64(_) => Ok("i64"),
+            BinToken::Other(id) => Err(*id),
+        };
+    }
+
     pub fn is_base_scalar(&self) -> bool {
         return matches!(
             self,

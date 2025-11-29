@@ -3,16 +3,15 @@ pub mod eu5_map;
 pub mod stats_image;
 
 use anyhow::anyhow;
+pub use eu5_map::*;
 use pdx_parser_core::{
-    eu5_gamestate::RawGamestate,
-        modern_header::{ModernHeader, SaveFormat},
+    eu5::RawGamestate,
+    modern_header::{ModernHeader, SaveFormat},
     BinDeserializer,
 };
+pub use stats_image::*;
 use std::io::Read;
 use zip::ZipArchive;
-
-pub use eu5_map::*;
-pub use stats_image::*;
 
 pub struct EU5ParserStepGamestate(Box<[u8]>);
 impl EU5ParserStepGamestate {

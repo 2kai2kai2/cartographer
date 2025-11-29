@@ -10,6 +10,7 @@ use crate::{
 /// Note that named types are just treated as a scalar string and an unassociated object,
 /// since we currently have no consistent way of knowing which are named types.
 /// However, this should't matter when we're skipping it all anyway.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SkipValue;
 impl SkipValue {
     /// Starting after the opening `{`, skips the rest of the current object.
