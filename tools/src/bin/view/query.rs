@@ -17,6 +17,9 @@ pub enum PathItem<'a> {
     AllKVs,
     /// `something_here`: matches the value of all KVs in the parent object where the key matches `something_here`
     MatchingKVs(&'a str),
+    /// `@`: matches all keys in the parent object, but will NOT propogate in them (so must be last item). For use in printing unique keys.
+    /// When printed, will also include the type of the value. This means that for highly heterogeneous data, there may be a lot of duplicate keys.
+    Keys,
 }
 impl<'a> PathItem<'a> {
     pub fn from_str(path_item: &'a str) -> PathItem<'a> {
@@ -24,6 +27,8 @@ impl<'a> PathItem<'a> {
             return PathItem::Values;
         } else if path_item == "*" {
             return PathItem::AllKVs;
+        } else if path_item == "@" {
+            return PathItem::Keys;
         } else {
             return PathItem::MatchingKVs(path_item);
         }
@@ -45,6 +50,8 @@ impl<'a> PathItem<'a> {
                 walk_obj_bin_kvs_matching(stream, key_curr, path_rest, write, tokens)
                     .map_err(|err| err.context(format! {"in `{key_curr}`"}))
             }
+            PathItem::Keys => walk_obj_bin_keys(stream, path_rest, write, tokens)
+                .map_err(|err| err.context("in `@`")),
         }
     }
 
@@ -64,6 +71,9 @@ impl<'a> PathItem<'a> {
             PathItem::MatchingKVs(key_curr) => {
                 walk_obj_text_kvs_matching(stream, key_curr, path_rest, write)
                     .map_err(|err| err.context(format! {"in `{key_curr}`"}))
+            }
+            PathItem::Keys => {
+                walk_obj_text_keys(stream, path_rest, write).map_err(|err| err.context("in `@`"))
             }
         }
     }
@@ -227,6 +237,43 @@ fn walk_obj_bin_kvs_matching<'de, 'a, W: Write>(
         }
     }
 }
+fn walk_obj_bin_keys<'de, 'a, W: Write>(
+    mut stream: BinDeserializer<'de>,
+    path_rest: &[PathItem<'a>],
+    write: &'a mut W,
+    tokens: Option<&impl BinTokenLookup>,
+) -> Result<BinDeserializer<'de>, BinError> {
+    stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
+
+    loop {
+        match (stream.peek_token().ok_or(BinError::EOF)?, path_rest) {
+            (BinToken::ID_EQUAL, _) => return Err(BinError::UnexpectedToken(BinToken::ID_EQUAL)),
+            (BinToken::ID_CLOSE_BRACKET, _) => {
+                stream.eat_token();
+                return Ok(stream);
+            }
+            (BinToken::ID_OPEN_BRACKET, _) | (_, &[_, ..]) => {
+                let SkipValue = stream.parse()?;
+                if let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) {
+                    let SkipValue = stream.parse()?;
+                };
+            }
+            (_scalar_key, &[]) => {
+                let key: ViewDisplayValueBin = stream.parse()?;
+                let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) else {
+                    continue;
+                };
+                let value: ViewDisplayValueBin = stream.parse()?;
+                let _ = writeln!(
+                    write,
+                    "{} = {}",
+                    key.display_with(tokens),
+                    value.display_type_with(tokens)
+                );
+            }
+        }
+    }
+}
 
 /// Next in stream is a value (either by itself or part of a kv) which,
 /// if it is an object, should be walked.
@@ -385,6 +432,37 @@ fn walk_obj_text_kvs_matching<'de, 'a, W: Write>(
                 };
                 let value: ViewDisplayValueText = stream.parse()?;
                 let _ = writeln!(write, "{scalar_key} = {value}");
+            }
+        }
+    }
+}
+fn walk_obj_text_keys<'de, 'a, W: Write>(
+    mut stream: TextDeserializer<'de>,
+    path_rest: &[PathItem<'a>],
+    write: &'a mut W,
+) -> Result<TextDeserializer<'de>, TextError> {
+    stream.parse_token(TextToken::OpenBracket)?;
+
+    loop {
+        match (stream.peek_token().ok_or(TextError::EOF)?, path_rest) {
+            (TextToken::Equal, _) => return Err(TextError::UnexpectedToken),
+            (TextToken::CloseBracket, _) => {
+                stream.eat_token();
+                return Ok(stream);
+            }
+            (TextToken::OpenBracket, _) | (_, &[_, ..]) => {
+                let SkipValue = stream.parse()?;
+                if let Ok(()) = stream.parse_token(TextToken::Equal) {
+                    let SkipValue = stream.parse()?;
+                };
+            }
+            (scalar_key, &[]) => {
+                stream.eat_token();
+                let Ok(()) = stream.parse_token(TextToken::Equal) else {
+                    continue;
+                };
+                let value: ViewDisplayValueText = stream.parse()?;
+                let _ = writeln!(write, "{scalar_key} = {}", value.display_type());
             }
         }
     }

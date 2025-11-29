@@ -107,6 +107,24 @@ impl<'de> ViewDisplayValueBin<'de> {
             ViewDisplayValueBin::Scalar(scalar) => format!("{scalar}"),
         }
     }
+    pub fn display_type_with(&self, tokens: Option<&impl BinTokenLookup>) -> String {
+        match self {
+            ViewDisplayValueBin::Object(_) => format!("{{...}}"),
+            ViewDisplayValueBin::Scalar(token) => match token.token_type_repr() {
+                Ok(token) => format!("{token}"),
+                Err(token_u16) => {
+                    if let Some(token) = tokens
+                        .as_ref()
+                        .and_then(|tokens| tokens.get_text(token_u16))
+                    {
+                        format!("{token}/<token 0x{token_u16:04x}>")
+                    } else {
+                        format!("<token {token_u16}>")
+                    }
+                }
+            },
+        }
+    }
 }
 impl<'de> BinDeserialize<'de> for ViewDisplayValueBin<'de> {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
@@ -130,6 +148,14 @@ pub enum ViewDisplayValueText<'de> {
     /// The number of items in the object
     Object(usize),
     Scalar(TextToken<'de>),
+}
+impl<'de> ViewDisplayValueText<'de> {
+    pub fn display_type(&self) -> &'static str {
+        match self {
+            ViewDisplayValueText::Object(_) => "{...}",
+            ViewDisplayValueText::Scalar(token) => token.token_type_repr(),
+        }
+    }
 }
 impl<'de> TextDeserialize<'de> for ViewDisplayValueText<'de> {
     fn take_text(
