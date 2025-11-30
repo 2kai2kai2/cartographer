@@ -2,17 +2,12 @@
 //! However, we can use the wonderful https://pdx.tools/ to melt a binary file,
 //! and we will get a 1:1 token mapping, allowing us to recover the tokens.
 
-use anyhow::anyhow;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clap::Parser;
-use pdx_parser_core::bin_lexer::BinLexer;
-use pdx_parser_core::bin_lexer::BinToken;
-use pdx_parser_core::modern_header::ModernHeader;
-use pdx_parser_core::modern_header::SaveFormat;
-use pdx_parser_core::text_lexer::TextLexer;
-use pdx_parser_core::text_lexer::TextToken;
-use std::io::Cursor;
-use std::io::{stdout, Read, Write};
+use pdx_parser_core::bin_lexer::{BinLexer, BinToken};
+use pdx_parser_core::modern_header::{ModernHeader, SaveFormat};
+use pdx_parser_core::text_lexer::{TextLexer, TextToken};
+use std::io::{Cursor, Read, Write, stdout};
 use std::path::PathBuf;
 use tools::stdin_line;
 
@@ -25,17 +20,35 @@ pub struct BinTokensArgs {
     /// If set, will print the gamestate section to the specified file
     #[arg(short, long)]
     gamestate: Option<PathBuf>,
+    /// If set, will initialize with already known tokens instead of replacing them
+    #[arg(short, long)]
+    update: bool,
+}
+
+struct SillyDeironmanizer<'b>(BinLexer<'b>);
+impl<'b> Iterator for SillyDeironmanizer<'b> {
+    type Item = <BinLexer<'b> as Iterator>::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.0.next()?;
+        if matches!(item, BinToken::Other(0x05c1)) {
+            self.0.next(); // = 
+            self.0.next(); // true
+            return self.0.next();
+        }
+        return Some(item);
+    }
 }
 
 fn get_bin_tokens<'b, 't>(
-    found_tokens: &mut [Option<&'t str>; 1 << 16],
+    found_tokens: &mut [Option<String>; 1 << 16],
     bin_lexer: BinLexer<'b>,
     text_lexer: TextLexer<'t>,
 ) -> anyhow::Result<String> {
     let mut combined_output = String::new();
     let mut indent = 0;
 
-    for (i, (bin, text)) in std::iter::zip(bin_lexer, text_lexer).enumerate() {
+    for (i, (bin, text)) in std::iter::zip(SillyDeironmanizer(bin_lexer), text_lexer).enumerate() {
         match (bin, text) {
             (BinToken::Equal, TextToken::Equal) => {
                 combined_output.push_str(format!("{:indent$}=\n", "").as_str());
@@ -69,7 +82,7 @@ fn get_bin_tokens<'b, 't>(
             ) => {
                 combined_output.push_str(format!("{:indent$}<token {id:5}>/{text}\n", "").as_str());
                 if let None = found_tokens[id as usize] {
-                    found_tokens[id as usize] = Some(text);
+                    found_tokens[id as usize] = Some(text.to_string());
                     println!("Token {id:5}: {text}");
                 }
             }
@@ -109,7 +122,7 @@ pub fn main() -> Result<()> {
     let out_file_name = match args.out {
         Some(out) => out,
         None => {
-            print!("Text file: ");
+            print!("Output tokens file: ");
             stdout().flush()?;
             let out_file_name = stdin_line()?;
             out_file_name.trim_matches(trim_cli).to_string()
@@ -138,7 +151,18 @@ pub fn main() -> Result<()> {
 
     // std::fs::write("bin.txt", bin_gamestate.clone().print_to_string())?;
     // std::fs::write("text.txt", text_gamestate.clone().print_to_string())?;
-    let mut found_tokens = Box::new([None; 1 << 16]);
+
+    let mut found_tokens: Box<[Option<String>; 1 << 16]> =
+        if args.update && std::fs::exists(&out_file_name)? {
+            let tokens_file = std::fs::read_to_string(&out_file_name)?;
+            let init_tokens = pdx_parser_core::bin_lexer::TokenRegistryArray::new(tokens_file)?;
+            init_tokens.unwrap()
+        } else {
+            vec![const { None }; 1 << 16]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("We just allocated a vec to the size"))
+        };
 
     let combined_gamestate = get_bin_tokens(&mut found_tokens, bin_gamestate, text_gamestate)?;
     if let Some(gamestate_out) = &args.gamestate {

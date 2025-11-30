@@ -45,6 +45,7 @@ fn get_tokens_from(path: &str) -> HashMap<String, u16> {
 
     return contents
         .lines()
+        .filter(|line| !line.bytes().all(|b| b.is_ascii_whitespace()))
         .map(|line| {
             let (id, text) = line.split_once(';').expect("invalid tokens file format");
             let id: u16 = id.parse().expect("invalid tokens file format");

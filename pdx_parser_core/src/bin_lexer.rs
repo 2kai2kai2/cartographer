@@ -267,11 +267,11 @@ pub trait BinTokenReverseLookup {
 /// Very fast for [`BinTokenLookup`] but requires a lot of memory.
 /// Conversely, very slow for [`BinTokenReverseLookup`] as it has to iterate over the whole array.
 pub struct TokenRegistryArray {
-    lookup_table: Box<[Option<String>; u16::MAX as usize]>,
+    lookup_table: Box<[Option<String>; 1 << 16]>,
 }
 impl TokenRegistryArray {
     fn new_empty() -> Self {
-        let lookup_table = vec![const { None }; u16::MAX as usize]
+        let lookup_table = vec![const { None }; 1 << 16]
             .into_boxed_slice()
             .try_into()
             .unwrap_or_else(|_| unreachable!("We just allocated a vec to the size"));
@@ -287,6 +287,9 @@ impl TokenRegistryArray {
             out.lookup_table[token as usize] = Some(text.to_string());
         }
         return Ok(out);
+    }
+    pub fn unwrap(self) -> Box<[Option<String>; 1 << 16]> {
+        return self.lookup_table;
     }
 }
 impl BinTokenLookup for TokenRegistryArray {

@@ -12,6 +12,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: github-pages
     steps:
       - uses: actions/checkout@v4
       - name: Setup rust
@@ -20,6 +21,10 @@ jobs:
           rustup default
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Load Binary Tokens
+        working-directory: ./cartographer_web
+        run: |
+          echo "${{ secrets.BIN_TOKENS_EU5 }}" > ./resources/eu5/tokens.txt
       - name: Build WASM
         working-directory: ./cartographer_web
         run: wasm-pack build --target web --release
