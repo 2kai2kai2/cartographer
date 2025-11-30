@@ -6,6 +6,7 @@ import { OhVueIcon, addIcons } from "oh-vue-icons";
 import {
     FaGithub,
     FaDiscord,
+    FaPatreon,
     FaPlus,
     FaUpload,
     FaSpinner,
@@ -22,6 +23,7 @@ addIcons(
     FaGithub,
     FaDiscord,
     FaPlus,
+    FaPatreon,
     FaUpload,
     FaSpinner,
     FaFileDownload,

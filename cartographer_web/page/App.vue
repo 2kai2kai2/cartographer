@@ -133,13 +133,15 @@ async function on_file_picked(file: File) {
         save_game.value = _save;
         console.log(_save);
         const player_count = count_players(_save);
-        // umami.track("file-upload", {
-        //     game: _save[0],
-        //     mod: _save[1].game_mod,
-        //     player_count,
-        //     date: JSON.stringify(_save[1].date),
-        //     parse_duration: time_parse_measure.duration,
-        // });
+        const game_mod = _save[0] == "EU5" ? "vanilla" : _save[1].game_mod;
+        const date = _save[0] == "EU5" ? _save[1].metadata.date : _save[1].date;
+        umami.track("file-upload", {
+            game: _save[0],
+            mod: game_mod,
+            player_count,
+            date: JSON.stringify(date),
+            parse_duration: time_parse_measure.duration,
+        });
 
         if (_save[0] == "EU4") {
             stage.value = "player_edit";
@@ -227,12 +229,24 @@ async function on_player_edit_confirm() {
             </div>
         </template>
     </main>
-    <footer class="bg-blue-950 flex p-4">
+    <footer class="bg-blue-950 flex gap-4 p-4">
         <a
             title="The Cartographer - GitHub Repository"
             href="https://github.com/2kai2kai2/cartographer"
         >
             <OhVueIcon name="fa-github" class="fill-gray-100" />
+        </a>
+        <a
+            title="Join the Discord"
+            href="https://discord.gg/yQWUAxMsZf"
+        >
+            <OhVueIcon name="fa-discord" class="fill-gray-100" />
+        </a>
+        <a
+            title="Support me on Patreon"
+            href="https://www.patreon.com/bePatron?u=9073173"
+        >
+            <OhVueIcon name="fa-patreon" class="fill-gray-100" />
         </a>
     </footer>
 </template>
