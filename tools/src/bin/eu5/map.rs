@@ -1,7 +1,8 @@
 use anyhow::Context;
+use image::{ImageBuffer, Luma};
 use pdx_parser_core::{
-    common_deserialize::UnbracketedKVs, text_deserialize::TextError, text_lexer::TextToken,
-    TextDeserialize, TextDeserializer,
+    TextDeserialize, TextDeserializer, common_deserialize::UnbracketedKVs,
+    text_deserialize::TextError, text_lexer::TextToken,
 };
 use std::collections::HashMap;
 use tools::ModdableDir;
@@ -108,4 +109,40 @@ pub fn parse_named_locations(dir: &ModdableDir) -> anyhow::Result<Vec<(String, H
         })
         .collect::<anyhow::Result<_>>()?;
     return Ok(files.into_iter().flatten().collect());
+}
+
+/// Will ignore `u16::MAX` values as these are for water tiles
+pub fn adjacencies(
+    locations_img: &ImageBuffer<Luma<u16>, Vec<u16>>,
+) -> anyhow::Result<HashMap<u16, Vec<u16>>> {
+    let mut out = HashMap::<u16, Vec<u16>>::new();
+    fn insert(out: &mut HashMap<u16, Vec<u16>>, key: u16, value: u16) {
+        let entry = out.entry(key).or_default();
+        match entry.binary_search(&value) {
+            Ok(_) => (),
+            Err(idx) => {
+                entry.insert(idx, value);
+            }
+        }
+    }
+    for (x, y, pixel) in locations_img.enumerate_pixels() {
+        if pixel[0] == u16::MAX {
+            continue;
+        }
+        if let Some(right) = locations_img.get_pixel_checked(x + 1, y)
+            && pixel != right
+            && right[0] != u16::MAX
+        {
+            insert(&mut out, pixel[0], right[0]);
+            insert(&mut out, right[0], pixel[0]);
+        }
+        if let Some(bottom) = locations_img.get_pixel_checked(x, y + 1)
+            && pixel != bottom
+            && bottom[0] != u16::MAX
+        {
+            insert(&mut out, pixel[0], bottom[0]);
+            insert(&mut out, bottom[0], pixel[0]);
+        }
+    }
+    return Ok(out);
 }

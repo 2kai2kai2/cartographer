@@ -1,15 +1,15 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use image::{DynamicImage, RgbImage, Rgba};
 use imageproc::{definitions::HasWhite as _, drawing};
 use pdx_parser_core::eu5::{PreviousPlayedItem, RawCountry, RawGamestate};
 
 use crate::{
+    Fetcher,
     eu5::{
         assets::{CommonAssets, MapAssets},
         eu5_map,
     },
     utils::{display_num, display_num_thousands},
-    Fetcher,
 };
 
 /// Makes the part that is not the map.
@@ -39,7 +39,7 @@ pub fn make_image_top(
         .filter(|(_, nation, _)| nation.last_months_population > 0.0)
         .collect();
     player_nations.sort_by_key(|(_, nation, _)| nation.great_power_rank.unwrap_or(i32::MAX));
-    for (i, (tag, nation, player)) in player_nations.into_iter().cycle().enumerate().take(16) {
+    for (i, (_, nation, player)) in player_nations.into_iter().enumerate().take(16) {
         const TOP_MARGIN: i32 = 2;
         const LEFT_MARGIN: i32 = 43 + 24; // include the border graphic
         let x = LEFT_MARGIN + (2986 / 2) * (i as i32 / 8);
@@ -178,8 +178,10 @@ pub async fn render_stats_image(
     let MapAssets {
         base_map,
         locations,
+        unownable,
     } = MapAssets::load(fetcher, "vanilla").await?;
-    let color_map = eu5_map::generate_map_colors_config(&locations, &gamestate)?;
+    let color_map = eu5_map::generate_map_colors_config(&locations, &unownable, &gamestate)?;
+    drop(unownable);
     drop(locations);
 
     let political_map = eu5_map::make_base_map(&base_map, &color_map);

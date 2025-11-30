@@ -1,11 +1,11 @@
 use crate::deser_helpers::{CountItems, ViewDisplayValueBin, ViewDisplayValueText};
 use pdx_parser_core::{
+    BinDeserializer, TextDeserializer,
     bin_deserialize::BinError,
     bin_lexer::{BinToken, BinTokenLookup},
     common_deserialize::SkipValue,
     text_deserialize::TextError,
     text_lexer::TextToken,
-    BinDeserializer, TextDeserializer,
 };
 use std::io::Write;
 
@@ -93,7 +93,7 @@ fn try_walk_possible_next_obj_bin<'de, 'a, W: Write>(
 ) -> Result<BinDeserializer<'de>, BinError> {
     match stream.peek_token().ok_or(BinError::EOF)? {
         token @ (BinToken::ID_EQUAL | BinToken::ID_CLOSE_BRACKET) => {
-            return Err(BinError::UnexpectedToken(token))
+            return Err(BinError::UnexpectedToken(token));
         }
         BinToken::ID_OPEN_BRACKET => {
             return path_next.walk_bin(stream, path_rest, write, tokens);
@@ -120,7 +120,7 @@ fn walk_obj_bin_values<'de, 'a, W: Write>(
                 stream.eat_token();
                 return Ok(stream);
             }
-            (BinToken::ID_OPEN_BRACKET, [next, ref rest @ ..]) => {
+            (BinToken::ID_OPEN_BRACKET, [next, rest @ ..]) => {
                 // we can't actually check if it's a KV before walking it,
                 // but let's just assume
                 stream = try_walk_possible_next_obj_bin(stream, next, rest, write, tokens)?;
@@ -162,7 +162,7 @@ fn walk_obj_bin_kvs_all<'de, 'a, W: Write>(
                 stream.eat_token();
                 return Ok(stream);
             }
-            (_, [next, ref rest @ ..]) => {
+            (_, [next, rest @ ..]) => {
                 let SkipValue = stream.parse()?;
                 let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) else {
                     continue; // it's not a KV
@@ -214,7 +214,7 @@ fn walk_obj_bin_kvs_matching<'de, 'a, W: Write>(
                 let Ok(()) = stream.parse_token(BinToken::ID_EQUAL) else {
                     continue;
                 };
-                if let [next, ref rest @ ..] = path_rest {
+                if let [next, rest @ ..] = path_rest {
                     if is_match {
                         stream = try_walk_possible_next_obj_bin(stream, next, rest, write, tokens)?;
                     } else {
@@ -312,7 +312,7 @@ fn walk_obj_text_values<'de, 'a, W: Write>(
                 stream.eat_token();
                 return Ok(stream);
             }
-            (TextToken::OpenBracket, [next, ref rest @ ..]) => {
+            (TextToken::OpenBracket, [next, rest @ ..]) => {
                 // we can't actually check if it's a KV before walking it,
                 // but let's just assume
                 stream = try_walk_possible_next_obj_text(stream, next, rest, write)?;
@@ -362,7 +362,7 @@ fn walk_obj_text_kvs_all<'de, 'a, W: Write>(
                 stream.eat_token();
                 return Ok(stream);
             }
-            (_, [next, ref rest @ ..]) => {
+            (_, [next, rest @ ..]) => {
                 let SkipValue = stream.parse()?;
                 let Ok(()) = stream.parse_token(TextToken::Equal) else {
                     continue; // it's not a KV
@@ -417,7 +417,7 @@ fn walk_obj_text_kvs_matching<'de, 'a, W: Write>(
                     let SkipValue = stream.parse()?;
                 };
             }
-            (_scalar_key, [next, ref rest @ ..]) => {
+            (_scalar_key, [next, rest @ ..]) => {
                 stream.eat_token();
                 let Ok(()) = stream.parse_token(TextToken::Equal) else {
                     continue; // it's not a KV

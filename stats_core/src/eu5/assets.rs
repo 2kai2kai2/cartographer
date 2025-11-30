@@ -1,5 +1,5 @@
 use crate::Fetcher;
-use anyhow::Context as _;
+use anyhow::{Context as _, anyhow};
 use image::{ImageBuffer, Luma, RgbImage, RgbaImage};
 
 /// Assets for eu5 that do not depend on the mod
@@ -69,21 +69,58 @@ impl CommonAssets {
     }
 }
 
+pub struct UnownableLocations(Vec<(u16, Vec<u16>)>);
+impl UnownableLocations {
+    pub fn get<'a>(&'a self, grayscale: u16) -> Option<&'a [u16]> {
+        let idx = self
+            .0
+            .binary_search_by_key(&grayscale, |(grayscale, _)| *grayscale)
+            .ok()?;
+        return Some(&self.0[idx].1);
+    }
+}
+
 /// Map data, specific to the game mod
 pub struct MapAssets {
     /// Generated from `provinces.png` and `definition.csv`, each pixel is a `u16` corresponding to the index in the locations list
     pub base_map: ImageBuffer<Luma<u16>, Vec<u16>>,
     pub locations: Vec<String>,
-    // todo: unowned land
+    pub unownable: UnownableLocations,
 }
 impl MapAssets {
     pub fn new(
         base_map: ImageBuffer<Luma<u16>, Vec<u16>>,
         locations: &str,
+        unownable: &str,
     ) -> anyhow::Result<MapAssets> {
+        let locations: Vec<String> = locations.lines().map(str::to_string).collect();
+        let unownable: Vec<(u16, Vec<u16>)> = unownable
+            .lines()
+            .map(|line| -> anyhow::Result<(u16, Vec<u16>)> {
+                let mut it = line.split(';');
+                let key = it.next().ok_or(anyhow!(
+                    "Expected line in `unownable.txt` to have an item in it."
+                ))?;
+                let key = u16::from_str_radix(key, 10).with_context(|| {
+                    format!("Failed to parse u16 from \"{key}\" while parsing `unownable.txt`")
+                })?;
+                let adjs = it
+                    .map(|adj| {
+                        u16::from_str_radix(adj, 10).with_context(|| {
+                            format!(
+                                "Failed to parse u16 from \"{adj}\" (as adjacent to {key}) \
+                                    while parsing `unownable.txt`"
+                            )
+                        })
+                    })
+                    .collect::<anyhow::Result<_>>()?;
+                return Ok((key, adjs));
+            })
+            .collect::<anyhow::Result<_>>()?;
         return Ok(MapAssets {
             base_map,
-            locations: locations.lines().map(str::to_string).collect(),
+            locations,
+            unownable: UnownableLocations(unownable),
         });
     }
 
@@ -91,11 +128,13 @@ impl MapAssets {
     pub async fn load(fetcher: &impl Fetcher, mod_dir_path: &str) -> anyhow::Result<MapAssets> {
         let url_base_map = format!("eu5/{mod_dir_path}/locations.png");
         let url_locations_txt = format!("eu5/{mod_dir_path}/locations.txt");
+        let url_unownable_txt = format!("eu5/{mod_dir_path}/unownable.txt");
 
-        let (base_map, locations_txt) = futures::try_join!(
+        let (base_map, locations_txt, unownable_txt) = futures::try_join!(
             fetcher.get_image(&url_base_map),
             fetcher.get_utf8(&url_locations_txt),
+            fetcher.get_utf8(&url_unownable_txt),
         )?;
-        return MapAssets::new(base_map.to_luma16(), &locations_txt);
+        return MapAssets::new(base_map.to_luma16(), &locations_txt, &unownable_txt);
     }
 }

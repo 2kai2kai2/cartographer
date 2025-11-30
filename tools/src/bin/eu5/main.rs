@@ -1,18 +1,18 @@
 mod map;
 
-use crate::map::HexRgb;
+use crate::map::{HexRgb, adjacencies};
 use anyhow::{Context, Result};
 use clap::Parser;
-use image::{imageops, GenericImageView};
+use image::{DynamicImage, GenericImageView, imageops};
 use pdx_parser_core::TextDeserializer;
 use std::{
     collections::HashMap,
     fs::File,
-    io::{stdout, Write},
+    io::{Write, stdout},
     path::PathBuf,
     str::FromStr,
 };
-use tools::{stdin_line, ModdableDir};
+use tools::{ModdableDir, stdin_line};
 
 #[derive(Parser)]
 pub struct Eu5Args {
@@ -31,11 +31,11 @@ pub fn main() -> Result<()> {
 
     let target_name = args.target;
     let destination_web = format!(
-        "{}/../../../../cartographer_web/resources/eu5/{target_name}",
+        "{}/../../../../../cartographer_web/resources/eu5/{target_name}",
         file!()
     );
     let destination_bot = format!(
-        "{}/../../../../cartographer_bot/assets/eu5/{target_name}",
+        "{}/../../../../../cartographer_bot/assets/eu5/{target_name}",
         file!()
     );
 
@@ -95,15 +95,10 @@ pub fn main() -> Result<()> {
     const DEFAULT_MAP_SIZE: (u32, u32) = (16384, 8192);
     let locations_png = dir_map_data.moddable_read_image(&default_map.provinces)?;
     assert_eq!(locations_png.dimensions(), DEFAULT_MAP_SIZE);
-    let locations_png = locations_png.resize(
-        DEFAULT_MAP_SIZE.0 / 4,
-        DEFAULT_MAP_SIZE.1 / 4,
-        imageops::FilterType::Nearest,
-    ); // downscale to reduce memory and bandwidth usage
     let locations_png = locations_png.to_rgb8();
     let locations_png = imageproc::map::map_colors(&locations_png, |rgb: image::Rgb<u8>| {
         let rgb = HexRgb(rgb.0);
-        if water.contains(&rgb) {
+        if water.binary_search(&rgb).is_ok() {
             return image::Luma([u16::MAX]);
         }
         let idx = *named_locations_color_indices
@@ -112,10 +107,6 @@ pub fn main() -> Result<()> {
 
         return image::Luma([idx as u16]);
     });
-    locations_png.save_with_format(
-        format!("{destination_web}/locations.png"),
-        image::ImageFormat::Png,
-    )?;
 
     let mut unownable: Vec<u16> =
         std::iter::chain(default_map.impassable_mountains, default_map.non_ownable)
@@ -123,8 +114,33 @@ pub fn main() -> Result<()> {
             .map(|v| named_locations_color_indices.get(&v).unwrap().clone() as u16)
             .collect();
     unownable.sort();
-    let unownable: String = unownable.into_iter().map(|v| format!("{v}\n")).collect();
+    let mut adjacencies: Vec<(u16, Vec<u16>)> = adjacencies(&locations_png)?
+        .into_iter()
+        .filter(|(k, _)| unownable.binary_search(k).is_ok())
+        .map(|(k, mut adjs)| {
+            adjs.retain(|adj| !unownable.binary_search(adj).is_ok());
+            (k, adjs)
+        })
+        .collect();
+    adjacencies.sort();
+    let unownable: String = adjacencies
+        .into_iter()
+        .map(|(k, adjs)| {
+            let adjs: String = adjs.into_iter().map(|adj| format!(";{adj}")).collect();
+            format!("{k}{adjs}\n")
+        })
+        .collect();
     File::create(format!("{destination_web}/unownable.txt"))?.write_all(unownable.as_bytes())?;
+
+    let locations_png = DynamicImage::ImageLuma16(locations_png).resize(
+        DEFAULT_MAP_SIZE.0 / 4,
+        DEFAULT_MAP_SIZE.1 / 4,
+        imageops::FilterType::Nearest,
+    ); // downscale to reduce memory and bandwidth usage
+    locations_png.save_with_format(
+        format!("{destination_web}/locations.png"),
+        image::ImageFormat::Png,
+    )?;
 
     return Ok(());
 }
