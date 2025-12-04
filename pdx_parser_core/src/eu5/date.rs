@@ -36,17 +36,17 @@ impl EU5Date {
         const START_DEC: i32 = START_NOV + Month::NOV.length() as i32;
 
         return match day_of_year {
-            START_JAN..START_FEB => Ok((Month::JAN, (day_of_year - START_JAN) as u8)),
-            START_FEB..START_MAR => Ok((Month::FEB, (day_of_year - START_FEB) as u8)),
-            START_MAR..START_APR => Ok((Month::MAR, (day_of_year - START_MAR) as u8)),
-            START_APR..START_MAY => Ok((Month::APR, (day_of_year - START_APR) as u8)),
-            START_MAY..START_JUN => Ok((Month::MAY, (day_of_year - START_MAY) as u8)),
-            START_JUN..START_JUL => Ok((Month::JUN, (day_of_year - START_JUN) as u8)),
-            START_JUL..START_AUG => Ok((Month::JUL, (day_of_year - START_JUL) as u8)),
-            START_AUG..START_SEP => Ok((Month::AUG, (day_of_year - START_AUG) as u8)),
-            START_SEP..START_OCT => Ok((Month::SEP, (day_of_year - START_SEP) as u8)),
-            START_OCT..START_NOV => Ok((Month::OCT, (day_of_year - START_OCT) as u8)),
-            START_NOV..START_DEC => Ok((Month::NOV, (day_of_year - START_NOV) as u8)),
+            START_JAN..START_FEB => Ok((Month::JAN, (day_of_year - START_JAN) as u8 + 1)),
+            START_FEB..START_MAR => Ok((Month::FEB, (day_of_year - START_FEB) as u8 + 1)),
+            START_MAR..START_APR => Ok((Month::MAR, (day_of_year - START_MAR) as u8 + 1)),
+            START_APR..START_MAY => Ok((Month::APR, (day_of_year - START_APR) as u8 + 1)),
+            START_MAY..START_JUN => Ok((Month::MAY, (day_of_year - START_MAY) as u8 + 1)),
+            START_JUN..START_JUL => Ok((Month::JUN, (day_of_year - START_JUN) as u8 + 1)),
+            START_JUL..START_AUG => Ok((Month::JUL, (day_of_year - START_JUL) as u8 + 1)),
+            START_AUG..START_SEP => Ok((Month::AUG, (day_of_year - START_AUG) as u8 + 1)),
+            START_SEP..START_OCT => Ok((Month::SEP, (day_of_year - START_SEP) as u8 + 1)),
+            START_OCT..START_NOV => Ok((Month::OCT, (day_of_year - START_OCT) as u8 + 1)),
+            START_NOV..START_DEC => Ok((Month::NOV, (day_of_year - START_NOV) as u8 + 1)),
             START_DEC..365 => Ok((Month::DEC, (day_of_year - START_DEC) as u8)),
             _ => Err(bin_err!("Invalid day of year {day_of_year}")),
         };
