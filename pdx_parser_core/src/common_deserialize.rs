@@ -5,6 +5,41 @@ use crate::{
     bin_lexer::BinToken, text_deserialize::TextError, text_lexer::TextToken,
 };
 
+/// Represents a string lookup index in v2 save formats. Generally used in [`crate::StringsResolver`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct LookupU16(pub u16);
+impl<'de> BinDeserialize<'de> for LookupU16 {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_LOOKUP_U16)?;
+        let value = stream.expect_bytes_const::<{ size_of::<u16>() }>()?;
+        let value = u16::from_le_bytes(*value);
+        return Ok((LookupU16(value), stream));
+    }
+}
+impl std::ops::Deref for LookupU16 {
+    type Target = u16;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct LookupU8(pub u8);
+impl<'de> BinDeserialize<'de> for LookupU8 {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_LOOKUP_U8)?;
+        let value = stream.expect_bytes_const::<{ size_of::<u8>() }>()?;
+        let value = u8::from_le_bytes(*value);
+        return Ok((LookupU8(value), stream));
+    }
+}
+impl std::ops::Deref for LookupU8 {
+    type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Extracts no data, just exists to implement [`BinDeserialize`] or [`TextDeserialize`] and skip the next value
 ///
 /// Note that named types are just treated as a scalar string and an unassociated object,
@@ -103,6 +138,12 @@ impl<'de> BinDeserialize<'de> for SkipValue {
                 let len = stream.expect_token()?; // not really a token
                 stream.eat_bytes(len as usize)?;
             }
+            BinToken::ID_LOOKUP_U8 => {
+                stream.eat_bytes_const::<{ size_of::<u8>() }>()?;
+            }
+            BinToken::ID_LOOKUP_U16 => {
+                stream.eat_bytes_const::<{ size_of::<u16>() }>()?;
+            }
             _ => {
                 // is some other token.
                 // this is potentially dangerous if it is supposed to be the tag on a named type
@@ -195,6 +236,7 @@ impl<'de> BinDeserialize<'de> for Rgb {
         let r: u32 = stream.parse()?;
         let g: u32 = stream.parse()?;
         let b: u32 = stream.parse()?;
+        let _ = stream.parse::<u32>(); // TODO: do we want to keep alpha on the occasion it is present?
         stream.parse_token(BinToken::ID_CLOSE_BRACKET)?;
 
         return Ok((Rgb([r as u8, g as u8, b as u8]), stream));

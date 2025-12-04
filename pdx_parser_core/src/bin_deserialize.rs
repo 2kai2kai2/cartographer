@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::bin_lexer::BinToken;
+use crate::{bin_lexer::BinToken, strings_resolver::StringsResolver};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BinError {
@@ -20,6 +20,8 @@ pub enum BinError {
     UnexpectedKV,
     #[error("An expected field '{0}' was missing from a struct or similar.")]
     MissingExpectedField(String),
+    #[error("Unknown string lookup id {0}")]
+    UnknownStringLookup(u16),
     #[error("{0}")]
     Custom(String),
 }
@@ -39,11 +41,18 @@ macro_rules! bin_err {
 
 #[derive(Clone)]
 pub struct BinDeserializer<'de> {
-    pub(crate) input: &'de [u8],
+    original: &'de [u8],
+    pub input: &'de [u8],
+    pub strings: &'de StringsResolver,
 }
 impl<'de> BinDeserializer<'de> {
-    pub fn from_bytes(input: &'de [u8]) -> Self {
-        BinDeserializer { input }
+    /// Creates a new deserializer, which remembers the location relative to original input.
+    pub fn from_bytes(input: &'de [u8], strings: &'de StringsResolver) -> Self {
+        BinDeserializer {
+            original: input,
+            input,
+            strings,
+        }
     }
 
     pub fn peek_token(&mut self) -> Option<u16> {
@@ -124,6 +133,16 @@ impl<'de> BinDeserializer<'de> {
         self.input = rest.input;
         return Ok(value);
     }
+
+    /// Returns `usize::MAX` if `self.input` appears to not be from the original buffer.
+    pub fn current_index(&self) -> usize {
+        let start_addr = core::ptr::from_ref(self.original).addr();
+        let curr_addr = core::ptr::from_ref(self.input).addr();
+        if curr_addr < start_addr || start_addr + self.input.len() < curr_addr {
+            return usize::MAX;
+        }
+        return curr_addr - start_addr;
+    }
 }
 
 pub trait BinDeserialize<'de>: Sized {
@@ -195,20 +214,40 @@ impl<'de> BinDeserialize<'de> for f64 {
 impl<'de> BinDeserialize<'de> for &'de str {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         match stream.expect_token()? {
-            BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED => {}
+            BinToken::ID_LOOKUP_U16 => {
+                let lookup_id = stream
+                    .expect_token()
+                    .map_err(|err| err.context("While getting u16 string lookup id"))?;
+                let string = stream
+                    .strings
+                    .get(lookup_id)
+                    .ok_or(BinError::UnknownStringLookup(lookup_id))?;
+                return Ok((string, stream));
+            }
+            BinToken::ID_LOOKUP_U8 => {
+                let &[lookup_id] = stream
+                    .expect_bytes_const()
+                    .map_err(|err| err.context("While getting u8 string lookup id"))?;
+                let string = stream
+                    .strings
+                    .get(lookup_id as u16)
+                    .ok_or(BinError::UnknownStringLookup(lookup_id as u16))?;
+                return Ok((string, stream));
+            }
+            BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED => {
+                let len = stream.expect_token()?; // technically not a token but still a u16
+                let text = stream.expect_bytes(len as usize)?;
+                let Ok(text) = str::from_utf8(text) else {
+                    return Err(BinError::StringDecode);
+                };
+                // TODO: non-utf decoding
+                return Ok((text, stream));
+            }
             token => return Err(BinError::UnexpectedToken(token)),
         }
-        let len = stream.expect_token()?; // technically not a token but still a u16
-        let text = stream.expect_bytes(len as usize)?;
-        let Ok(text) = str::from_utf8(text) else {
-            return Err(BinError::StringDecode);
-        };
-        // TODO: non-utf decoding
-        return Ok((text, stream));
     }
 }
 impl<'de> BinDeserialize<'de> for String {
-    #[inline]
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         let text: &'de str = stream.parse()?;
         return Ok((text.to_string(), stream));

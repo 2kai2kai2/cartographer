@@ -2,7 +2,12 @@
 
 use std::fmt::{Display, Write};
 
-use crate::{BinDeserialize, BinDeserializer, bin_deserialize::BinError};
+use crate::{
+    BinDeserialize, BinDeserializer,
+    bin_deserialize::BinError,
+    common_deserialize::{LookupU8, LookupU16},
+    strings_resolver::StringsResolver,
+};
 
 /// Binary tokens used in the binary format. They are each represented by 2 bytes.
 #[derive(Debug, Clone, Copy)]
@@ -19,6 +24,8 @@ pub enum BinToken<'a> {
     F64(f64),
     U64(u64),
     I64(i64),
+    LookupU8(LookupU8),
+    LookupU16(LookupU16),
     Other(u16),
 }
 impl<'a> BinToken<'a> {
@@ -37,6 +44,8 @@ impl<'a> BinToken<'a> {
     pub const ID_F64: u16 = 0x0167;
     pub const ID_U64: u16 = 0x029c;
     pub const ID_I64: u16 = 0x0317;
+    pub const ID_LOOKUP_U8: u16 = 0x0d40;
+    pub const ID_LOOKUP_U16: u16 = 0x0d3e;
 
     /// Checks if the value matches one of the const tokens
     pub fn is_base_token_id(token: u16) -> bool {
@@ -54,6 +63,8 @@ impl<'a> BinToken<'a> {
             | Self::ID_F64
             | Self::ID_U64
             | Self::ID_I64
+            | Self::ID_LOOKUP_U8
+            | Self::ID_LOOKUP_U16
         };
     }
 
@@ -71,6 +82,8 @@ impl<'a> BinToken<'a> {
             BinToken::ID_F64 => Some("f64"),
             BinToken::ID_U64 => Some("u64"),
             BinToken::ID_I64 => Some("i64"),
+            BinToken::ID_LOOKUP_U8 => Some("lookup_u8"),
+            BinToken::ID_LOOKUP_U16 => Some("lookup_u16"),
             _ => None,
         };
     }
@@ -90,6 +103,8 @@ impl<'a> BinToken<'a> {
             BinToken::F64(_) => Ok("f64"),
             BinToken::U64(_) => Ok("u64"),
             BinToken::I64(_) => Ok("i64"),
+            BinToken::LookupU8(_) => Ok("lookup_u8"),
+            BinToken::LookupU16(_) => Ok("lookup_u16"),
             BinToken::Other(id) => Err(*id),
         };
     }
@@ -106,6 +121,8 @@ impl<'a> BinToken<'a> {
                 | BinToken::Bool(_)
                 | BinToken::StringQuoted(_)
                 | BinToken::StringUnquoted(_)
+                | BinToken::LookupU8(_)
+                | BinToken::LookupU16(_)
         );
     }
 }
@@ -126,49 +143,142 @@ impl<'a> Display for BinToken<'a> {
             BinToken::F64(num) => write!(f, "{num}f64"),
             BinToken::U64(num) => write!(f, "{num}u64"),
             BinToken::I64(num) => write!(f, "{num}i64"),
+            BinToken::LookupU8(num) => write!(f, "{}lookup_u8", num.0),
+            BinToken::LookupU16(num) => write!(f, "{}lookup_u16", num.0),
             BinToken::Other(id) => write!(f, "<token {id}>"),
         };
     }
 }
 impl<'de> BinDeserialize<'de> for BinToken<'de> {
-    fn take(stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        let mut as_lexer = BinLexer::new(stream.input);
-        let next = as_lexer.next().ok_or(BinError::EOF)?;
-        return Ok((next, BinDeserializer::from_bytes(as_lexer.0)));
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        let token_id = stream.expect_token()?;
+        let mut rest = stream.input;
+        let token = match token_id {
+            BinToken::ID_EQUAL => BinToken::Equal,
+            BinToken::ID_OPEN_BRACKET => BinToken::OpenBracket,
+            BinToken::ID_CLOSE_BRACKET => BinToken::CloseBracket,
+            BinToken::ID_I32 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::I32(i32::from_le_bytes(*value))
+            }
+            BinToken::ID_F32 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F32(i32::from_le_bytes(*value) as f32 / 1000.0)
+            }
+            BinToken::ID_BOOL => {
+                let (value, new_rest) = rest.split_first().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::Bool(*value != 0)
+            }
+            BinToken::ID_STRING_QUOTED => {
+                let (len, new_rest) = rest.split_first_chunk::<2>().ok_or(BinError::EOF)?;
+                let len = u16::from_le_bytes(*len);
+                let (value, new_rest) = new_rest
+                    .split_at_checked(len as usize)
+                    .ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::StringQuoted(value)
+            }
+            BinToken::ID_U32 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::U32(u32::from_le_bytes(*value))
+            }
+            BinToken::ID_STRING_UNQUOTED => {
+                let (len, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                let len = u16::from_le_bytes(*len);
+                let (value, new_rest) = new_rest
+                    .split_at_checked(len as usize)
+                    .ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::StringUnquoted(value)
+            }
+            BinToken::ID_F64 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(i64::from_le_bytes(*value) as f64 / 100_000.0)
+            }
+            BinToken::ID_U64 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::U64(u64::from_le_bytes(*value))
+            }
+            BinToken::ID_I64 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::I64(i64::from_le_bytes(*value))
+            }
+            BinToken::ID_LOOKUP_U8 => {
+                let (value, new_rest) = rest.split_first().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::LookupU8(LookupU8(*value))
+            }
+            BinToken::ID_LOOKUP_U16 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::LookupU16(LookupU16(u16::from_le_bytes(*value)))
+            }
+            other => BinToken::Other(other),
+        };
+        stream.input = rest;
+        return Ok((token, stream));
     }
 }
 
 #[derive(Clone)]
-pub struct BinLexer<'a>(&'a [u8]);
+pub struct BinLexer<'a>(BinDeserializer<'a>);
 impl<'a> BinLexer<'a> {
-    pub fn new(buffer: &'a [u8]) -> BinLexer<'a> {
-        return BinLexer(buffer);
+    pub fn new_deser(stream: BinDeserializer<'a>) -> BinLexer<'a> {
+        return BinLexer(stream);
     }
 
-    pub fn print_to_string(self) -> String {
-        let mut depth = 0;
-        let mut out_buf = String::new();
+    pub fn new(buffer: &'a [u8], strings: &'a StringsResolver) -> BinLexer<'a> {
+        return BinLexer(BinDeserializer::from_bytes(buffer, strings));
+    }
 
-        for token in self {
+    pub fn write_pretty(self, writer: &mut impl std::io::Write) -> std::io::Result<()> {
+        let mut depth: usize = 0;
+        let BinLexer(mut de) = self;
+        loop {
+            let idx = de.current_index();
+            let Ok(token) = de.parse::<BinToken>() else {
+                break;
+            };
             if let BinToken::CloseBracket = token {
-                depth -= 4;
+                depth = depth.saturating_sub(4);
             }
-            out_buf.push_str(&format!("{:depth$}{token}\n", ""));
+            if let BinToken::LookupU16(lookup_id) = token {
+                let text = de.strings.get(*lookup_id).unwrap_or("???");
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
+            } else if let BinToken::LookupU8(lookup_id) = token {
+                let text = de.strings.get(*lookup_id as u16).unwrap_or("???");
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
+            } else {
+                writeln!(writer, "{idx:08x} {:depth$}{token}", "")?;
+            }
             if let BinToken::OpenBracket = token {
                 depth += 4;
             }
         }
-
-        return out_buf;
+        return Ok(());
     }
 
-    pub fn print_to_string_with_tokens(self, tokens: &impl BinTokenLookup) -> String {
-        let mut depth = 0;
-        let mut out_buf = String::new();
-
-        for token in self {
+    pub fn write_pretty_with_tokens(
+        self,
+        writer: &mut impl std::io::Write,
+        tokens: &impl BinTokenLookup,
+    ) -> std::io::Result<()> {
+        let mut depth: usize = 0;
+        let BinLexer(mut de) = self;
+        loop {
+            let idx = de.current_index();
+            let Ok(token) = de.parse::<BinToken>() else {
+                break;
+            };
             if let BinToken::CloseBracket = token {
-                depth -= 4;
+                depth = depth.saturating_sub(4);
             }
             if let BinToken::Other(id) = token {
                 let text = tokens.get_text(id);
@@ -176,82 +286,29 @@ impl<'a> BinLexer<'a> {
                     Some(text) => text.as_str(),
                     None => "???",
                 };
-                out_buf.push_str(&format!("{:depth$}{token}/{text}\n", ""));
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
+            }
+            if let BinToken::LookupU16(lookup_id) = token {
+                let text = de.strings.get(*lookup_id).unwrap_or("???");
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
+            } else if let BinToken::LookupU8(lookup_id) = token {
+                let text = de.strings.get(*lookup_id as u16).unwrap_or("???");
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
             } else {
-                out_buf.push_str(&format!("{:depth$}{token}\n", ""));
+                writeln!(writer, "{idx:08x} {:depth$}{token}", "")?;
             }
             if let BinToken::OpenBracket = token {
                 depth += 4;
             }
         }
-
-        return out_buf;
+        Ok(())
     }
 }
 impl<'a> Iterator for BinLexer<'a> {
     type Item = BinToken<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (token_id, mut rest) = self.0.split_first_chunk()?;
-        let token_id = u16::from_le_bytes(*token_id);
-
-        let token = match token_id {
-            BinToken::ID_EQUAL => BinToken::Equal,
-            BinToken::ID_OPEN_BRACKET => BinToken::OpenBracket,
-            BinToken::ID_CLOSE_BRACKET => BinToken::CloseBracket,
-            BinToken::ID_I32 => {
-                let (value, new_rest) = rest.split_first_chunk()?;
-                rest = new_rest;
-                BinToken::I32(i32::from_le_bytes(*value))
-            }
-            BinToken::ID_F32 => {
-                let (value, new_rest) = rest.split_first_chunk()?;
-                rest = new_rest;
-                BinToken::F32(i32::from_le_bytes(*value) as f32 / 1000.0)
-            }
-            BinToken::ID_BOOL => {
-                let (value, new_rest) = rest.split_first()?;
-                rest = new_rest;
-                BinToken::Bool(*value != 0)
-            }
-            BinToken::ID_STRING_QUOTED => {
-                let (len, new_rest) = rest.split_first_chunk::<2>()?;
-                let len = u16::from_le_bytes(*len);
-                let (value, new_rest) = new_rest.split_at_checked(len as usize)?;
-                rest = new_rest;
-                BinToken::StringQuoted(value)
-            }
-            BinToken::ID_U32 => {
-                let (value, new_rest) = rest.split_first_chunk()?;
-                rest = new_rest;
-                BinToken::U32(u32::from_le_bytes(*value))
-            }
-            BinToken::ID_STRING_UNQUOTED => {
-                let (len, new_rest) = rest.split_first_chunk()?;
-                let len = u16::from_le_bytes(*len);
-                let (value, new_rest) = new_rest.split_at_checked(len as usize)?;
-                rest = new_rest;
-                BinToken::StringUnquoted(value)
-            }
-            BinToken::ID_F64 => {
-                let (value, new_rest) = rest.split_first_chunk()?;
-                rest = new_rest;
-                BinToken::F64(i64::from_le_bytes(*value) as f64 / 100_000.0)
-            }
-            BinToken::ID_U64 => {
-                let (value, new_rest) = rest.split_first_chunk()?;
-                rest = new_rest;
-                BinToken::U64(u64::from_le_bytes(*value))
-            }
-            BinToken::ID_I64 => {
-                let (value, new_rest) = rest.split_first_chunk()?;
-                rest = new_rest;
-                BinToken::I64(i64::from_le_bytes(*value))
-            }
-            other => BinToken::Other(other),
-        };
-        self.0 = rest;
-        return Some(token);
+        self.0.parse::<BinToken>().ok()
     }
 }
 

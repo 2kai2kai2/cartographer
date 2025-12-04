@@ -5,19 +5,31 @@ use quote::quote;
 use syn::{FieldsNamed, Ident, PathArguments, Type, Variant};
 
 /// `=`
+#[allow(unused)]
 pub const ID_EQUAL: u16 = 0x0001;
 /// `{`
+#[allow(unused)]
 pub const ID_OPEN_BRACKET: u16 = 0x0003;
 /// `}`
+#[allow(unused)]
 pub const ID_CLOSE_BRACKET: u16 = 0x0004;
+#[allow(unused)]
 pub const ID_I32: u16 = 0x000c;
+#[allow(unused)]
 pub const ID_F32: u16 = 0x000d;
+#[allow(unused)]
 pub const ID_BOOL: u16 = 0x000e;
+#[allow(unused)]
 pub const ID_STRING_QUOTED: u16 = 0x000f;
+#[allow(unused)]
 pub const ID_U32: u16 = 0x0014;
+#[allow(unused)]
 pub const ID_STRING_UNQUOTED: u16 = 0x0017;
+#[allow(unused)]
 pub const ID_F64: u16 = 0x0167;
+#[allow(unused)]
 pub const ID_U64: u16 = 0x029c;
+#[allow(unused)]
 pub const ID_I64: u16 = 0x0317;
 
 /// Parses the `bin_token` attribute and figures out what game it belongs to
@@ -294,15 +306,20 @@ fn derive_bin_deserialize_struct_named(
         true => (
             TokenStream::new(),
             quote! { break; },
-            quote! { return Err(BinError::UnexpectedToken(#ID_CLOSE_BRACKET)); },
+            quote! {
+                return Err(
+                    BinError::UnexpectedToken(#ID_CLOSE_BRACKET)
+                        .context(format!("At idx {} when we were expecting the {} object to be terminated by EOF", stream.current_index(), #struct_name))
+                );
+            },
         ),
         false => (
             quote! {
                 stream.parse_token(#ID_OPEN_BRACKET)
-                    .map_err(|err| err.context(format!("Missing open bracket at start of {} struct", #struct_name)))?;
+                    .map_err(|err| err.context(format!("Missing open bracket at start of {} struct at idx {}", #struct_name, stream.current_index())))?;
             },
             quote! {
-                return Err(BinError::EOF);
+                return Err(BinError::EOF.context(format!("When we were expecting the {} object to be terminated by '}}'", #struct_name)));
             },
             quote! {
                 stream.eat_token();
@@ -353,14 +370,19 @@ fn derive_bin_deserialize_struct_named(
                         None => {
                             #handle_eof
                         }
-                        Some(#ID_EQUAL) => return Err(BinError::UnexpectedToken(#ID_EQUAL)),
+                        Some(#ID_EQUAL) => {
+                            return Err(
+                                BinError::UnexpectedToken(#ID_EQUAL)
+                                    .context(format!("At idx {} when a new KV or value was expected in {}", stream.current_index(), #struct_name))
+                            );
+                        }
                         Some(#ID_CLOSE_BRACKET) => {
                             #handle_close_bracket
                         }
                         Some(#ID_STRING_QUOTED | #ID_STRING_UNQUOTED) => {
-                            let (key, rest) = <&str>::take(stream)
-                                .map_err(|err| err.context(format!("While parsing string key in {}", #struct_name)))?;
-                            stream = rest;
+                            let key: &'de str = stream.parse().map_err(|err| {
+                                err.context(format!("While parsing string key at idx {} in {}", stream.current_index(), #struct_name))
+                            })?;
                             let Some(#ID_EQUAL) = stream.peek_token() else {
                                 continue;
                             };
@@ -368,19 +390,22 @@ fn derive_bin_deserialize_struct_named(
                             match key {
                                 #string_match_cases
                                 _ => {
-                                    stream = SkipValue::take(stream)
-                                        .map_err(|err| err.context(format!("While skipping value for uncaptured key {key} in {}", #struct_name)))?.1;
+                                    let SkipValue = stream.parse().map_err(|err| {
+                                        err.context(format!("While skipping value for uncaptured key {key} in {} at idx {}", #struct_name, stream.current_index()))
+                                    })?;
                                 }
                             }
                         }
                         #(#use_token_match_cases)*
                         Some(_) => {
-                            stream = SkipValue::take(stream)
-                                .map_err(|err| err.context(format!("While skipping non-string key in {}", #struct_name)))?.1;
+                            let SkipValue = stream.parse().map_err(|err| {
+                                err.context(format!("While skipping non-string key in {}", #struct_name))
+                            })?;
                             if let Some(#ID_EQUAL) = stream.peek_token() {
                                 stream.eat_token();
-                                stream = SkipValue::take(stream)
-                                    .map_err(|err| err.context(format!("While skipping value for non-string key in {}", #struct_name)))?.1;
+                                let SkipValue = stream.parse().map_err(|err| {
+                                    err.context(format!("While skipping value for non-string key in {}", #struct_name))
+                                })?;
                             }
                         }
                     }
@@ -458,7 +483,9 @@ fn derive_bin_deserialize_enum_plain(
                     .map_err(|err| err.context(format!("While parsing string value for enum {}", #enum_name)))?;
                 return match text {
                     #(#match_arms)*
-                    _ => Err(#pdx_parser_core::bin_deserialize::BinError::Custom(format!("Invalid enum value \"{text}\" for {}", #enum_name))),
+                    _ => ::std::result::Result::Err(
+                        #pdx_parser_core::bin_deserialize::BinError::Custom(format!("Invalid enum value \"{text}\" for {}", #enum_name))
+                    ),
                 };
             }
         }
@@ -469,10 +496,10 @@ fn derive_bin_deserialize_enum_plain(
 pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let syn::DeriveInput {
         attrs,
-        vis,
         ident,
         generics,
         data,
+        ..
     } = syn::parse_macro_input!(stream);
 
     let mut no_brackets = false;

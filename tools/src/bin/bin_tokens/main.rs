@@ -4,6 +4,7 @@
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
+use pdx_parser_core::StringsResolver;
 use pdx_parser_core::bin_lexer::{BinLexer, BinToken};
 use pdx_parser_core::modern_header::{ModernHeader, SaveFormat};
 use pdx_parser_core::text_lexer::{TextLexer, TextToken};
@@ -139,7 +140,8 @@ pub fn main() -> Result<()> {
     let mut bin_gamestate = zip::ZipArchive::new(Cursor::new(bin_header.gamestate))?;
     let bin_gamestate = bin_gamestate.by_name("gamestate")?;
     let bin_gamestate: Vec<u8> = bin_gamestate.bytes().collect::<Result<_, _>>()?;
-    let bin_gamestate = BinLexer::new(&bin_gamestate);
+    let empty_strings = StringsResolver::default();
+    let bin_gamestate = BinLexer::new(&bin_gamestate, &empty_strings);
 
     let text_file = std::fs::read(text_file_name)?;
     let text_header = ModernHeader::take(&text_file).unwrap();

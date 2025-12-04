@@ -7,7 +7,7 @@ use crate::{
     common_deserialize::Rgb, eu5::RawGamestate,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, default};
+use std::collections::HashMap;
 
 #[derive(BinDeserialize, Debug, Serialize, Deserialize)]
 pub enum CountryBasisType {
@@ -230,23 +230,19 @@ pub struct RawCountry {
     /// Usually present
     #[bin_token("eu5")]
     pub color: Option<Rgb>,
-    /// Only sometimes present, value type seems to be `u32` or some token
+    #[bin_token("eu5")]
+    pub color2: Option<Rgb>,
+    #[bin_token("eu5")]
+    pub color3: Option<Rgb>,
     #[cfg(any())]
     #[bin_token("eu5")]
-    pub color2: Option<SkipValue>,
-    /// Only sometimes present, value type seems to be `u32` or some token
+    pub unit_color0: Option<Rgb>,
     #[cfg(any())]
     #[bin_token("eu5")]
-    pub color3: Option<SkipValue>,
+    pub unit_color1: Option<Rgb>,
     #[cfg(any())]
     #[bin_token("eu5")]
-    pub unit_color0: Option<SkipValue>,
-    #[cfg(any())]
-    #[bin_token("eu5")]
-    pub unit_color1: Option<SkipValue>,
-    #[cfg(any())]
-    #[bin_token("eu5")]
-    pub unit_color2: Option<SkipValue>,
+    pub unit_color2: Option<Rgb>,
     #[cfg(any())]
     #[bin_token("eu5")]
     #[default(false)]

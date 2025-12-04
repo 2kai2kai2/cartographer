@@ -1,13 +1,13 @@
 mod deser_helpers;
 mod query;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Context as _, Result, anyhow};
 use clap::Parser;
 use pdx_parser_core::{
+    BinDeserializer, StringsResolver,
     bin_lexer::{BinToken, BinTokenLookup, TokenRegistryArray},
     modern_header::{ModernHeader, SaveFormat},
     text_deserialize::TextDeserializer,
-    BinDeserializer,
 };
 use query::PathItem;
 use std::{
@@ -103,19 +103,37 @@ impl Write for UniqueWriter {
 /// Should include the outer brackets
 enum LoadedFile {
     Text(String),
-    Binary(Vec<u8>),
+    Binary(Vec<u8>, StringsResolver),
 }
 impl LoadedFile {
     fn from_modern_save(header: ModernHeader) -> Result<Self> {
         match header.save_format {
             SaveFormat::SplitCompressedBinary | SaveFormat::UncompressedBinary => {
-                return Err(anyhow!("We currently do not support binary save formats."))
+                return Err(anyhow!("We currently do not support binary save formats."));
             }
             SaveFormat::SplitCompressedText => {
-                return Err(anyhow!("We currently do not support split save formats."))
+                return Err(anyhow!("We currently do not support split save formats."));
             }
             SaveFormat::UnifiedCompressedBinary => {
                 let mut zip_file = zip::ZipArchive::new(Cursor::new(header.gamestate))?;
+
+                let string_lookup = match header.save_format_version {
+                    1 => StringsResolver::default(),
+                    2 => {
+                        let mut zip_string_lookup = zip_file.by_name("string_lookup")?;
+                        let mut string_lookup =
+                            Vec::with_capacity(zip_string_lookup.size() as usize);
+                        zip_string_lookup.read_to_end(&mut string_lookup)?;
+                        drop(zip_string_lookup);
+                        StringsResolver::from_raw(string_lookup.into_boxed_slice())?
+                    }
+                    _ => {
+                        return Err(anyhow!(
+                            "Invalid save format version {}",
+                            header.save_format_version
+                        ));
+                    }
+                };
 
                 let mut zip_gamestate = zip_file.by_name("gamestate")?;
                 let mut gamestate = Vec::with_capacity(4 + zip_gamestate.size() as usize);
@@ -123,7 +141,7 @@ impl LoadedFile {
                 zip_gamestate.read_to_end(&mut gamestate)?;
                 gamestate.extend(BinToken::ID_CLOSE_BRACKET.to_le_bytes());
 
-                return Ok(Self::Binary(gamestate));
+                return Ok(Self::Binary(gamestate, string_lookup));
             }
             SaveFormat::UnifiedCompressedText => {
                 return Err(anyhow!(
@@ -142,11 +160,8 @@ impl LoadedFile {
         let bytes = bytes;
 
         if bytes.starts_with(b"SAV0") {
-            let Some(header) = ModernHeader::take(&bytes) else {
-                return Err(anyhow!(
-                    "Found modern save header format, but failed to parse it."
-                ));
-            };
+            let header = ModernHeader::take(&bytes)
+                .context("Found modern save header format, but failed to parse it.")?;
             return Self::from_modern_save(header);
         }
 
@@ -183,8 +198,20 @@ fn run_text_view(text: &str) -> Result<()> {
     }
 }
 
-fn run_bin_view(bin: &[u8], tokens: Option<&impl BinTokenLookup>) -> Result<()> {
-    std::fs::write("asdf.bin", bin)?;
+fn run_bin_view(
+    bin: &[u8],
+    string_lookup: &StringsResolver,
+    tokens: Option<&impl BinTokenLookup>,
+) -> Result<()> {
+    // let mut asdfbin = std::fs::File::create("asdf.bin")?;
+    // asdfbin.write_all(bin)?;
+    // let mut asdfbin = std::io::BufWriter::new(asdfbin);
+    // match tokens {
+    //     Some(tokens) => pdx_parser_core::bin_lexer::BinLexer::new(bin)
+    //         .write_pretty_with_tokens(&mut asdfbin, tokens)?,
+    //     None => pdx_parser_core::bin_lexer::BinLexer::new(bin).write_pretty(&mut asdfbin)?,
+    // }
+
     let mut prev_input = String::new();
 
     loop {
@@ -197,12 +224,18 @@ fn run_bin_view(bin: &[u8], tokens: Option<&impl BinTokenLookup>) -> Result<()> 
             .collect();
 
         if let [first, rest @ ..] = path.as_slice() {
-            first.walk_bin(
-                BinDeserializer::from_bytes(&bin),
+            let bin_rest = first.walk_bin(
+                BinDeserializer::from_bytes(&bin, string_lookup),
                 rest,
                 &mut UniqueWriter::new(),
                 tokens,
             )?;
+            if bin_rest.input.len() != 0 {
+                eprintln!(
+                    "WARNING: Binary deserializer did not consume all input, {} bytes left.",
+                    bin_rest.input.len()
+                );
+            }
         }
     }
 }
@@ -225,6 +258,8 @@ pub fn main() -> Result<()> {
     let loaded = LoadedFile::from_file(file, args.cp1252)?;
     return match loaded {
         LoadedFile::Text(text) => run_text_view(&text),
-        LoadedFile::Binary(bin) => run_bin_view(&bin, bin_tokens.as_ref()),
+        LoadedFile::Binary(bin, string_lookup) => {
+            run_bin_view(&bin, &string_lookup, bin_tokens.as_ref())
+        }
     };
 }
