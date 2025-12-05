@@ -1,4 +1,7 @@
-use crate::{BinDeserialize, bin_lexer::BinToken, common_deserialize::SkipValue};
+use crate::{
+    BinDeserialize, BinDeserializer, Context, bin_deserialize::BinError, bin_lexer::BinToken,
+    common_deserialize::SkipValue,
+};
 #[cfg(any())]
 use crate::{common_deserialize::SkipValue, eu5::EU5Date};
 use pdx_parser_macros::eu5_token;
@@ -100,25 +103,17 @@ pub struct DiplomacyManager {
 }
 impl<'de> BinDeserialize<'de> for DiplomacyManager {
     fn take(
-        mut stream: crate::bin_deserialize::BinDeserializer<'de>,
-    ) -> ::std::result::Result<
-        (Self, crate::bin_deserialize::BinDeserializer<'de>),
-        crate::bin_deserialize::BinError,
-    > {
+        mut stream: BinDeserializer<'de>,
+    ) -> ::std::result::Result<(Self, BinDeserializer<'de>), BinError> {
         stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
         #[cfg(any())]
         let mut countries = HashMap::new();
         let mut overlords = HashMap::new();
 
         loop {
-            match stream
-                .peek_token()
-                .ok_or(crate::bin_deserialize::BinError::EOF)?
-            {
+            match stream.peek_token().ok_or(BinError::EOF)? {
                 BinToken::ID_EQUAL => {
-                    return Err(crate::bin_deserialize::BinError::UnexpectedToken(
-                        BinToken::ID_EQUAL,
-                    ));
+                    return Err(BinError::UnexpectedToken(BinToken::ID_EQUAL));
                 }
                 BinToken::ID_CLOSE_BRACKET => {
                     stream.eat_token();
@@ -139,9 +134,7 @@ impl<'de> BinDeserialize<'de> for DiplomacyManager {
                     let Ok(_) = stream.parse_token(BinToken::ID_EQUAL) else {
                         continue; // shouldn't happen since DiplomacyManager should only have KVs, but just in case
                     };
-                    let value: Dependency = stream
-                        .parse()
-                        .map_err(|err| err.context("While parsing dependency"))?;
+                    let value: Dependency = stream.parse().context("While parsing dependency")?;
                     overlords.insert(value.second, value);
                 }
                 _ => {

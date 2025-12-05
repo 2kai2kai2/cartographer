@@ -1,10 +1,10 @@
 use pdx_parser_core::{
+    BinDeserialize, BinDeserializer, TextDeserialize, TextDeserializer,
     bin_deserialize::BinError,
     bin_lexer::{BinToken, BinTokenLookup},
     common_deserialize::SkipValue,
     text_deserialize::TextError,
     text_lexer::TextToken,
-    BinDeserialize, BinDeserializer, TextDeserialize, TextDeserializer,
 };
 
 pub struct CountItems(pub usize);
@@ -130,7 +130,7 @@ impl<'de> BinDeserialize<'de> for ViewDisplayValueBin<'de> {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         match stream.peek_token().ok_or(BinError::EOF)? {
             token @ (BinToken::ID_EQUAL | BinToken::ID_CLOSE_BRACKET) => {
-                return Err(BinError::UnexpectedToken(token))
+                return Err(BinError::UnexpectedToken(token));
             }
             BinToken::ID_OPEN_BRACKET => {
                 let CountItems(count) = stream.parse()?;

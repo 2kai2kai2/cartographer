@@ -2,6 +2,7 @@
 pub mod bin_deserialize;
 pub mod bin_lexer;
 pub mod common_deserialize;
+mod err_context;
 pub mod eu4_date;
 pub mod eu4_save_parser;
 pub mod eu5;
@@ -15,6 +16,7 @@ pub mod text_deserialize;
 pub mod text_lexer;
 
 pub use bin_deserialize::{BinDeserialize, BinDeserializer};
+pub use err_context::Context;
 pub use eu4_date::{EU4Date, Month};
 pub use pdx_parser_macros::{BinDeserialize, TextDeserialize, eu5_token};
 pub use stellaris_date::StellarisDate;

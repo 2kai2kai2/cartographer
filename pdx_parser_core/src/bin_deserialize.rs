@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{bin_lexer::BinToken, strings_resolver::StringsResolver};
+use crate::{Context, bin_lexer::BinToken, strings_resolver::StringsResolver};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BinError {
@@ -217,7 +217,7 @@ impl<'de> BinDeserialize<'de> for &'de str {
             BinToken::ID_LOOKUP_U16 => {
                 let lookup_id = stream
                     .expect_token()
-                    .map_err(|err| err.context("While getting u16 string lookup id"))?;
+                    .context("While getting u16 string lookup id")?;
                 let string = stream
                     .strings
                     .get(lookup_id)
@@ -227,7 +227,7 @@ impl<'de> BinDeserialize<'de> for &'de str {
             BinToken::ID_LOOKUP_U8 => {
                 let &[lookup_id] = stream
                     .expect_bytes_const()
-                    .map_err(|err| err.context("While getting u8 string lookup id"))?;
+                    .context("While getting u8 string lookup id")?;
                 let string = stream
                     .strings
                     .get(lookup_id as u16)
@@ -266,7 +266,7 @@ impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         stream
             .parse_token(BinToken::ID_OPEN_BRACKET)
-            .map_err(|err| err.context("While parsing open bracket at start of list"))?;
+            .context("While parsing open bracket at start of list")?;
         let mut out = Vec::new();
 
         loop {
@@ -275,7 +275,7 @@ impl<'de, T: BinDeserialize<'de>> BinDeserialize<'de> for Vec<T> {
                 return Ok((out, stream));
             }
             let (item, rest) = T::take(stream)
-                .map_err(|err| err.context(format!("While parsing item #{} in list", out.len())))?;
+                .with_context(|| format!("While parsing item #{} in list", out.len()))?;
             out.push(item);
             stream = rest;
         }
@@ -303,12 +303,10 @@ impl<'de, K: BinDeserialize<'de> + Eq + Hash, V: BinDeserialize<'de>> BinDeseria
                 stream.eat_token();
                 return Ok((HashMap::from_iter(out), stream));
             }
-            let (key, mut rest) =
-                K::take(stream).map_err(|err| err.context("While parsing key for HashMap"))?;
+            let (key, mut rest) = K::take(stream).context("While parsing key for HashMap")?;
             rest.parse_token(BinToken::ID_EQUAL)
-                .map_err(|err| err.context("While parsing equal sign for HashMap"))?;
-            let (value, rest) =
-                V::take(rest).map_err(|err| err.context("While parsing value for HashMap"))?;
+                .context("While parsing equal sign for HashMap")?;
+            let (value, rest) = V::take(rest).context("While parsing value for HashMap")?;
             out.push((key, value));
             stream = rest;
         }

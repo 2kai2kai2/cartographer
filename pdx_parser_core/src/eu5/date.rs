@@ -4,8 +4,8 @@ use num_traits::FromPrimitive as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BinDeserialize, TextDeserialize, bin_deserialize::BinError, bin_err,
-    text_deserialize::TextError, text_lexer::TextToken,
+    BinDeserialize, Context, TextDeserialize, bin_deserialize::BinError, bin_err,
+    text_deserialize::TextError, text_err, text_lexer::TextToken,
 };
 
 pub use crate::eu4_date::Month;
@@ -59,9 +59,7 @@ impl BinDeserialize<'_> for EU5Date {
         (Self, crate::bin_deserialize::BinDeserializer<'_>),
         crate::bin_deserialize::BinError,
     > {
-        let mut as_num: i32 = stream
-            .parse()
-            .map_err(|err| err.context("While parsing an EU5 date"))?;
+        let mut as_num: i32 = stream.parse().context("While parsing an EU5 date")?;
 
         let hour = (as_num % 24) as u8;
         let hour = hour / 2 + 8;
@@ -90,44 +88,34 @@ impl BinDeserialize<'_> for EU5Date {
 impl EU5Date {
     fn parse_year(text: &str) -> Result<u16, TextError> {
         let Ok(year) = text.parse::<u16>() else {
-            return Err(TextError::Custom(format!(
-                "Failed to parse an EU5 date year '{text}'"
-            )));
+            return Err(text_err!("Failed to parse an EU5 date year '{text}'"));
         };
         return Ok(year);
     }
     fn parse_month(text: &str) -> Result<Month, TextError> {
         let Ok(month) = text.parse::<u8>() else {
-            return Err(TextError::Custom(format!(
-                "Failed to parse an EU5 date month '{text}'"
-            )));
+            return Err(text_err!("Failed to parse an EU5 date month '{text}'"));
         };
         let Some(month) = Month::from_u8(month) else {
-            return Err(TextError::Custom(format!(
-                "Invalid EU5 date month '{month}'"
-            )));
+            return Err(text_err!("Invalid EU5 date month '{month}'"));
         };
         return Ok(month);
     }
     fn parse_day(text: &str, month: Month) -> Result<u8, TextError> {
         let Ok(day) = text.parse::<u8>() else {
-            return Err(TextError::Custom(format!(
-                "Failed to parse an EU5 date day '{text}'"
-            )));
+            return Err(text_err!("Failed to parse an EU5 date day '{text}'"));
         };
         if day == 0 || day > month.length() {
-            return Err(TextError::Custom(format!(
+            return Err(text_err!(
                 "Invalid EU5 date day '{day}' for month {month} with length {}",
                 month.length()
-            )));
+            ));
         }
         return Ok(day);
     }
     fn parse_hour(text: &str) -> Result<u8, TextError> {
         let Ok(hour) = text.parse::<u8>() else {
-            return Err(TextError::Custom(format!(
-                "Failed to parse an EU5 date hour '{text}'"
-            )));
+            return Err(text_err!("Failed to parse an EU5 date hour '{text}'"));
         };
         let hour = hour / 2 + 8;
         return Ok(hour);
