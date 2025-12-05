@@ -1,3 +1,4 @@
+mod flags;
 mod map;
 
 use crate::map::{HexRgb, adjacencies};

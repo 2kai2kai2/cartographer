@@ -14,6 +14,11 @@ pub enum TextToken<'a> {
     Bool(bool),
     StringQuoted(&'a str),
     StringUnquoted(&'a str),
+
+    /// Only in game files, `@variable` will become `Variable("variable")`
+    Variable(&'a str),
+    /// Only in game files, `@[expr]` will become `Expr("expr")`
+    Expr(&'a str),
 }
 impl<'a> TextToken<'a> {
     pub fn is_base_scalar(&self) -> bool {
@@ -38,6 +43,8 @@ impl<'a> TextToken<'a> {
             TextToken::Bool(_) => "bool",
             TextToken::StringQuoted(_) => "string_quoted",
             TextToken::StringUnquoted(_) => "string_unquoted",
+            TextToken::Variable(_) => "variable",
+            TextToken::Expr(_) => "expr",
         };
     }
 }
@@ -53,6 +60,8 @@ impl<'a> Display for TextToken<'a> {
             TextToken::Bool(value) => write!(f, "{value}"),
             TextToken::StringQuoted(text) => f.write_fmt(format_args!("\"{text}\"")),
             TextToken::StringUnquoted(text) => f.write_str(text),
+            TextToken::Variable(var) => f.write_fmt(format_args!("@{var}")),
+            TextToken::Expr(expr) => f.write_fmt(format_args!("@[{expr}]")),
         };
     }
 }
@@ -134,6 +143,22 @@ impl<'a> Iterator for TextLexer<'a> {
 
                 return self.next();
             }
+            '@' => {
+                if let Some(rest) = rest.strip_prefix('[') {
+                    // TODO: should we handle comments within an expression?
+                    let (expr, rest) = rest.split_at_first(|c| *c == ']')?;
+                    self.0 = rest;
+                    return Some(TextToken::Expr(expr));
+                }
+                let (var, rest) = rest
+                    .split_at_first_inclusive(|&c| !c.is_ascii_alphanumeric() && c != '_')
+                    .unwrap_or(rest.split_at(rest.len()));
+                if var.is_empty() {
+                    return None;
+                }
+                self.0 = rest;
+                return Some(TextToken::Variable(var));
+            }
             _ => {}
         }
 
@@ -142,9 +167,7 @@ impl<'a> Iterator for TextLexer<'a> {
         let (value, rest) = self
             .0
             .trim_ascii_start()
-            .split_at_first_inclusive(|b| {
-                *b == '=' || *b == '{' || *b == '}' || b.is_ascii_whitespace()
-            })
+            .split_at_first_inclusive(char_ends_token)
             .unwrap_or(rest.split_at(rest.len()));
 
         if value == "yes" {
@@ -179,4 +202,8 @@ impl<'a> Iterator for TextLexer<'a> {
         self.0 = rest;
         return Some(value);
     }
+}
+
+fn char_ends_token(c: &char) -> bool {
+    *c == '=' || *c == '{' || *c == '}' || c.is_ascii_whitespace()
 }

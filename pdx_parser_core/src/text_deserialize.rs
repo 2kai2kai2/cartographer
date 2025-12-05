@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, iter::Peekable};
+use std::{borrow::Cow, collections::HashMap, hash::Hash, iter::Peekable};
 
 use crate::text_lexer::{TextLexer, TextToken};
 
@@ -16,8 +16,8 @@ pub enum TextError {
     UnexpectedLength,
     #[error("A KV was found in what was supposted to be strictly a list of values")]
     UnexpectedKV,
-    #[error("An expected field was missing from a struct or similar.")]
-    MissingExpectedField,
+    #[error("An expected field \"{0}\" was missing from a struct or similar.")]
+    MissingExpectedField(Cow<'static, str>),
     #[error("An integer overflow (or underflow) has occurred.")]
     IntegerOverflow,
     #[error("{0}")]
@@ -199,6 +199,44 @@ impl<'de, T: TextDeserialize<'de>> TextDeserialize<'de> for Vec<T> {
             out.push(item);
             stream = rest;
         }
+    }
+}
+impl<'de, T: TextDeserialize<'de>> TextDeserialize<'de> for Box<[T]> {
+    /// Strict: will error if a KV or non-matching type is found.
+    #[inline]
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        let out: Vec<T> = stream.parse()?;
+        return Ok((out.into_boxed_slice(), stream));
+    }
+}
+impl<'de, T: TextDeserialize<'de>, const N: usize> TextDeserialize<'de> for Box<[T; N]> {
+    /// Strict: will error if a KV or non-matching type is found.
+    #[inline]
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        let out: Box<[T]> = stream.parse()?;
+        return Ok((
+            out.try_into()
+                .map_err(|_| text_err!("Parsed array was not of length {N}"))?,
+            stream,
+        ));
+    }
+}
+impl<'de, T: TextDeserialize<'de>, const N: usize> TextDeserialize<'de> for [T; N] {
+    /// Strict: will error if a KV or non-matching type is found.
+    #[inline]
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        let out: Vec<T> = stream.parse()?;
+        return Ok((
+            out.try_into()
+                .map_err(|_| text_err!("Parsed array was not of length {N}"))?,
+            stream,
+        ));
     }
 }
 

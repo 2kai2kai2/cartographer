@@ -134,7 +134,8 @@ fn derive_text_deserialize_struct_named(
         let key = ident.to_string();
         return quote! {
             #key => {
-                let (value, rest) = <#ty>::take_text(stream)?;
+                let (value, rest) = <#ty>::take_text(stream)
+                    .map_err(|err| err.context(format!("While parsing value for {}", #key)))?;
                 stream = rest;
                 #add_value
             }
@@ -152,8 +153,9 @@ fn derive_text_deserialize_struct_named(
                     let #ident = #ident.unwrap_or(#default);
                 };
             } else {
+                let ident_str = ident.to_string();
                 return quote! {
-                    let #ident = #ident.ok_or(TextError::MissingExpectedField)?;
+                    let #ident = #ident.ok_or(TextError::MissingExpectedField(::std::borrow::Cow::Borrowed(#ident_str)))?;
                 };
             }
         });
@@ -329,10 +331,10 @@ fn derive_text_deserialize_enum_plain(
 pub fn derive_text_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let syn::DeriveInput {
         attrs,
-        vis,
         ident,
         generics,
         data,
+        ..
     } = syn::parse_macro_input!(stream);
 
     let mut no_brackets = false;

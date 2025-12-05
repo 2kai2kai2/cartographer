@@ -6,7 +6,7 @@ mod err_context;
 pub mod eu4_date;
 pub mod eu4_save_parser;
 pub mod eu5;
-pub(crate) mod helpers;
+pub mod helpers;
 pub mod modern_header;
 pub mod raw_parser;
 pub mod stellaris_date;
