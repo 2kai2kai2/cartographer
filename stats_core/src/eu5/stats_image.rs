@@ -39,7 +39,7 @@ pub fn make_image_top(
         .filter(|(_, nation, _)| nation.last_months_population > 0.0)
         .collect();
     player_nations.sort_by_key(|(_, nation, _)| nation.great_power_rank.unwrap_or(i32::MAX));
-    for (i, (_, nation, player)) in player_nations.into_iter().enumerate().take(16) {
+    for (i, (tag, nation, player)) in player_nations.into_iter().enumerate().take(16) {
         const TOP_MARGIN: i32 = 2;
         const LEFT_MARGIN: i32 = 43 + 24; // include the border graphic
         let x = LEFT_MARGIN + (2986 / 2) * (i as i32 / 8);
@@ -49,6 +49,17 @@ pub fn make_image_top(
 
         // x+0: flag
         image::imageops::overlay(&mut out, &assets.flag_frame, x as i64, y as i64 + 4);
+        if tag.len() == 3 {
+            drawing::draw_text_mut(
+                &mut out,
+                Rgba::white(),
+                x + 30,
+                y + 34,
+                60.0,
+                &assets.noto_serif_italic,
+                tag,
+            );
+        }
 
         // x+170: player
         let mut player_name = (*player).to_string();
@@ -74,7 +85,7 @@ pub fn make_image_top(
             y + 34,
             60.0,
             &assets.noto_serif_regular,
-            &display_num_thousands(nation.last_months_population * 1000.0),
+            &display_num(nation.last_months_population * 1000.0),
         );
 
         // x+725: Regular Army
@@ -91,7 +102,7 @@ pub fn make_image_top(
             y + 34,
             60.0,
             &assets.noto_serif_regular,
-            &display_num_thousands(regular_army as f64),
+            &display_num(regular_army as f64),
         );
 
         // x+950: Regular Navy
@@ -133,7 +144,7 @@ pub fn make_image_top(
             y + 34,
             60.0,
             &assets.noto_serif_regular,
-            &format!("{cashflow_sign}{}", display_num(cashflow)),
+            &format!("{cashflow_sign}{}", display_num(cashflow.abs())),
         );
         drawing::draw_text_mut(
             &mut out,
