@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    BinDeserialize, BinDeserializer, TextDeserialize, TextDeserializer, bin_deserialize::BinError,
-    bin_lexer::BinToken, text_deserialize::TextError, text_lexer::TextToken,
+    BinDeserialize, BinDeserializer, Context, TextDeserialize, TextDeserializer,
+    bin_deserialize::BinError, bin_lexer::BinToken, text_deserialize::TextError,
+    text_lexer::TextToken,
 };
 
 /// Represents a string lookup index in v2 save formats. Generally used in [`crate::StringsResolver`].
@@ -10,7 +11,10 @@ use crate::{
 pub struct LookupU16(pub u16);
 impl<'de> BinDeserialize<'de> for LookupU16 {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_LOOKUP_U16)?;
+        let token = stream.expect_token()?;
+        if !matches!(token, BinToken::ID_LOOKUP_U16 | BinToken::ID_LOOKUP_U16_ALT) {
+            return Err(BinError::UnexpectedToken(token));
+        }
         let value = stream.expect_bytes_const::<{ size_of::<u16>() }>()?;
         let value = u16::from_le_bytes(*value);
         return Ok((LookupU16(value), stream));
@@ -27,7 +31,10 @@ impl std::ops::Deref for LookupU16 {
 pub struct LookupU8(pub u8);
 impl<'de> BinDeserialize<'de> for LookupU8 {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_LOOKUP_U8)?;
+        let token = stream.expect_token()?;
+        if !matches!(token, BinToken::ID_LOOKUP_U8 | BinToken::ID_LOOKUP_U8_ALT) {
+            return Err(BinError::UnexpectedToken(token));
+        }
         let value = stream.expect_bytes_const::<{ size_of::<u8>() }>()?;
         let value = u8::from_le_bytes(*value);
         return Ok((LookupU8(value), stream));
@@ -35,6 +42,23 @@ impl<'de> BinDeserialize<'de> for LookupU8 {
 }
 impl std::ops::Deref for LookupU8 {
     type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct LookupU24(pub u32);
+impl<'de> BinDeserialize<'de> for LookupU24 {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_LOOKUP_U24)?;
+        let &[b0, b1, b2] = stream.expect_bytes_const::<3>()?;
+        let value = u32::from_le_bytes([b0, b1, b2, 0]);
+        return Ok((LookupU24(value), stream));
+    }
+}
+impl std::ops::Deref for LookupU24 {
+    type Target = u32;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -131,6 +155,28 @@ impl<'de> BinDeserialize<'de> for SkipValue {
             BinToken::ID_F64 => {
                 stream.eat_bytes_const::<{ size_of::<f64>() }>()?;
             }
+            BinToken::ID_ZERO => {}
+            BinToken::ID_FIXED2_U8 | BinToken::ID_FIXED2_U8_NEG => {
+                stream.eat_bytes_const::<{ size_of::<u8>() }>()?;
+            }
+            BinToken::ID_FIXED2_U16 | BinToken::ID_FIXED2_U16_NEG => {
+                stream.eat_bytes_const::<{ size_of::<u16>() }>()?;
+            }
+            BinToken::ID_FIXED5_U24 | BinToken::ID_FIXED2_U24_NEG => {
+                stream.eat_bytes_const::<3>()?;
+            }
+            BinToken::ID_FIXED5_U32 | BinToken::ID_FIXED5_U32_NEG => {
+                stream.eat_bytes_const::<{ size_of::<u32>() }>()?;
+            }
+            BinToken::ID_FIXED5_U40 | BinToken::ID_FIXED5_U40_NEG => {
+                stream.eat_bytes_const::<5>()?;
+            }
+            BinToken::ID_FIXED5_U48 | BinToken::ID_FIXED5_U48_NEG => {
+                stream.eat_bytes_const::<6>()?;
+            }
+            BinToken::ID_FIXED5_U56 | BinToken::ID_FIXED5_U56_NEG => {
+                stream.eat_bytes_const::<7>()?;
+            }
             BinToken::ID_BOOL => {
                 stream.eat_bytes_const::<{ size_of::<bool>() }>()?;
             }
@@ -138,11 +184,14 @@ impl<'de> BinDeserialize<'de> for SkipValue {
                 let len = stream.expect_token()?; // not really a token
                 stream.eat_bytes(len as usize)?;
             }
-            BinToken::ID_LOOKUP_U8 => {
+            BinToken::ID_LOOKUP_U8 | BinToken::ID_LOOKUP_U8_ALT => {
                 stream.eat_bytes_const::<{ size_of::<u8>() }>()?;
             }
-            BinToken::ID_LOOKUP_U16 => {
+            BinToken::ID_LOOKUP_U16 | BinToken::ID_LOOKUP_U16_ALT => {
                 stream.eat_bytes_const::<{ size_of::<u16>() }>()?;
+            }
+            BinToken::ID_LOOKUP_U24 => {
+                stream.eat_bytes_const::<3>()?;
             }
             _ => {
                 // is some other token.

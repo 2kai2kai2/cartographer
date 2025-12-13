@@ -5,7 +5,7 @@ use std::fmt::{Display, Write};
 use crate::{
     BinDeserialize, BinDeserializer,
     bin_deserialize::BinError,
-    common_deserialize::{LookupU8, LookupU16},
+    common_deserialize::{LookupU8, LookupU16, LookupU24},
     strings_resolver::StringsResolver,
 };
 
@@ -26,6 +26,7 @@ pub enum BinToken<'a> {
     I64(i64),
     LookupU8(LookupU8),
     LookupU16(LookupU16),
+    LookupU24(LookupU24),
     Other(u16),
 }
 impl<'a> BinToken<'a> {
@@ -44,8 +45,43 @@ impl<'a> BinToken<'a> {
     pub const ID_F64: u16 = 0x0167;
     pub const ID_U64: u16 = 0x029c;
     pub const ID_I64: u16 = 0x0317;
+    /// Represents a constant 0.0
+    pub const ID_ZERO: u16 = 0x0d47;
+    /// Fixed 2 decimal places
+    pub const ID_FIXED2_U8: u16 = 0x0d48;
+    /// Fixed 2 decimal places
+    pub const ID_FIXED2_U16: u16 = 0x0d49;
+    /// Fixed 2 decimal places
+    pub const ID_FIXED5_U24: u16 = 0x0d4a;
+    /// Fixed 5 decimal places
+    pub const ID_FIXED5_U32: u16 = 0x0d4b;
+    /// Fixed 5 decimal places
+    pub const ID_FIXED5_U40: u16 = 0x0d4c;
+    /// Fixed 5 decimal places
+    pub const ID_FIXED5_U48: u16 = 0x0d4d;
+    /// Fixed 5 decimal places
+    pub const ID_FIXED5_U56: u16 = 0x0d4e;
+    /// Fixed 2 decimal places, negative
+    pub const ID_FIXED2_U8_NEG: u16 = 0x0d4f;
+    /// Fixed 2 decimal places, negative
+    pub const ID_FIXED2_U16_NEG: u16 = 0x0d50;
+    /// Fixed 2 decimal places, negative
+    pub const ID_FIXED2_U24_NEG: u16 = 0x0d51;
+    /// Fixed 5 decimal places, negative
+    pub const ID_FIXED5_U32_NEG: u16 = 0x0d52;
+    /// Fixed 5 decimal places, negative
+    pub const ID_FIXED5_U40_NEG: u16 = 0x0d53;
+    /// Fixed 5 decimal places, negative
+    pub const ID_FIXED5_U48_NEG: u16 = 0x0d54;
+    /// Fixed 5 decimal places, negative
+    pub const ID_FIXED5_U56_NEG: u16 = 0x0d55;
     pub const ID_LOOKUP_U8: u16 = 0x0d40;
+    /// Seems to be the same use as [`ID_LOOKUP_U8`]
+    pub const ID_LOOKUP_U8_ALT: u16 = 0x0d43;
     pub const ID_LOOKUP_U16: u16 = 0x0d3e;
+    /// Seems to be the same use as [`ID_LOOKUP_U16`]
+    pub const ID_LOOKUP_U16_ALT: u16 = 0x0d44;
+    pub const ID_LOOKUP_U24: u16 = 0x0d41;
 
     /// Checks if the value matches one of the const tokens
     pub fn is_base_token_id(token: u16) -> bool {
@@ -63,8 +99,26 @@ impl<'a> BinToken<'a> {
             | Self::ID_F64
             | Self::ID_U64
             | Self::ID_I64
+            | Self::ID_ZERO
+            | Self::ID_FIXED2_U8
+            | Self::ID_FIXED2_U16
+            | Self::ID_FIXED5_U24
+            | Self::ID_FIXED5_U32
+            | Self::ID_FIXED5_U40
+            | Self::ID_FIXED5_U48
+            | Self::ID_FIXED5_U56
+            | Self::ID_FIXED2_U8_NEG
+            | Self::ID_FIXED2_U16_NEG
+            | Self::ID_FIXED2_U24_NEG
+            | Self::ID_FIXED5_U32_NEG
+            | Self::ID_FIXED5_U40_NEG
+            | Self::ID_FIXED5_U48_NEG
+            | Self::ID_FIXED5_U56_NEG
             | Self::ID_LOOKUP_U8
+            | Self::ID_LOOKUP_U8_ALT
             | Self::ID_LOOKUP_U16
+            | Self::ID_LOOKUP_U16_ALT
+            | Self::ID_LOOKUP_U24
         };
     }
 
@@ -82,8 +136,26 @@ impl<'a> BinToken<'a> {
             BinToken::ID_F64 => Some("f64"),
             BinToken::ID_U64 => Some("u64"),
             BinToken::ID_I64 => Some("i64"),
+            BinToken::ID_ZERO => Some("zero"),
+            BinToken::ID_FIXED2_U8 => Some("fixed2_u8"),
+            BinToken::ID_FIXED2_U16 => Some("fixed2_u16"),
+            BinToken::ID_FIXED5_U24 => Some("fixed5_u24"),
+            BinToken::ID_FIXED5_U32 => Some("fixed5_u32"),
+            BinToken::ID_FIXED5_U40 => Some("fixed5_u40"),
+            BinToken::ID_FIXED5_U48 => Some("fixed5_u48"),
+            BinToken::ID_FIXED5_U56 => Some("fixed5_u56"),
+            BinToken::ID_FIXED2_U8_NEG => Some("fixed2_u8_neg"),
+            BinToken::ID_FIXED2_U16_NEG => Some("fixed2_u16_neg"),
+            BinToken::ID_FIXED2_U24_NEG => Some("fixed5_u24_neg"),
+            BinToken::ID_FIXED5_U32_NEG => Some("fixed5_u32_neg"),
+            BinToken::ID_FIXED5_U40_NEG => Some("fixed5_u40_neg"),
+            BinToken::ID_FIXED5_U48_NEG => Some("fixed5_u48_neg"),
+            BinToken::ID_FIXED5_U56_NEG => Some("fixed5_u56_neg"),
             BinToken::ID_LOOKUP_U8 => Some("lookup_u8"),
+            BinToken::ID_LOOKUP_U8_ALT => Some("lookup_u8_alt"),
             BinToken::ID_LOOKUP_U16 => Some("lookup_u16"),
+            BinToken::ID_LOOKUP_U16_ALT => Some("lookup_u16_alt"),
+            BinToken::ID_LOOKUP_U24 => Some("lookup_u24"),
             _ => None,
         };
     }
@@ -105,6 +177,7 @@ impl<'a> BinToken<'a> {
             BinToken::I64(_) => Ok("i64"),
             BinToken::LookupU8(_) => Ok("lookup_u8"),
             BinToken::LookupU16(_) => Ok("lookup_u16"),
+            BinToken::LookupU24(_) => Ok("lookup_u24"),
             BinToken::Other(id) => Err(*id),
         };
     }
@@ -145,6 +218,7 @@ impl<'a> Display for BinToken<'a> {
             BinToken::I64(num) => write!(f, "{num}i64"),
             BinToken::LookupU8(num) => write!(f, "{}lookup_u8", num.0),
             BinToken::LookupU16(num) => write!(f, "{}lookup_u16", num.0),
+            BinToken::LookupU24(num) => write!(f, "{}lookup_u24", num.0),
             BinToken::Other(id) => write!(f, "<token {id}>"),
         };
     }
@@ -210,15 +284,105 @@ impl<'de> BinDeserialize<'de> for BinToken<'de> {
                 rest = new_rest;
                 BinToken::I64(i64::from_le_bytes(*value))
             }
-            BinToken::ID_LOOKUP_U8 => {
+            BinToken::ID_ZERO => BinToken::F64(0.0),
+            BinToken::ID_FIXED2_U8 => {
+                let (value, new_rest) = rest.split_first().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(*value as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED2_U16 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(u16::from_le_bytes(*value) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U24 => {
+                let (&[b0, b1, b2], new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(u32::from_le_bytes([b0, b1, b2, 0]) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U32 => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(u32::from_le_bytes(*value) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U40 => {
+                let (&[b0, b1, b2, b3, b4], new_rest) =
+                    rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(u64::from_le_bytes([b0, b1, b2, b3, b4, 0, 0, 0]) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U48 => {
+                let (&[b0, b1, b2, b3, b4, b5], new_rest) =
+                    rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, 0, 0]) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U56 => {
+                let (&[b0, b1, b2, b3, b4, b5, b6], new_rest) =
+                    rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(
+                    u64::from_le_bytes([b0, b1, b2, b3, b4, b5, b6, 0]) as f64 / 100_000.0,
+                )
+            }
+            BinToken::ID_FIXED2_U8_NEG => {
+                let (value, new_rest) = rest.split_first().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(-(*value as f64 / 100_000.0))
+            }
+            BinToken::ID_FIXED2_U16_NEG => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(-(u16::from_le_bytes(*value) as f64 / 100_000.0))
+            }
+            BinToken::ID_FIXED2_U24_NEG => {
+                let (&[b0, b1, b2], new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(-(u32::from_le_bytes([b0, b1, b2, 0]) as f64 / 100_000.0))
+            }
+            BinToken::ID_FIXED5_U32_NEG => {
+                let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(-(u32::from_le_bytes(*value) as f64 / 100_000.0))
+            }
+            BinToken::ID_FIXED5_U40_NEG => {
+                let (&[b0, b1, b2, b3, b4], new_rest) =
+                    rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(
+                    -(u64::from_le_bytes([b0, b1, b2, b3, b4, 0, 0, 0]) as f64 / 100_000.0),
+                )
+            }
+            BinToken::ID_FIXED5_U48_NEG => {
+                let (&[b0, b1, b2, b3, b4, b5], new_rest) =
+                    rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(
+                    -(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, 0, 0]) as f64 / 100_000.0),
+                )
+            }
+            BinToken::ID_FIXED5_U56_NEG => {
+                let (&[b0, b1, b2, b3, b4, b5, b6], new_rest) =
+                    rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::F64(
+                    -(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, b6, 0]) as f64 / 100_000.0),
+                )
+            }
+            BinToken::ID_LOOKUP_U8 | BinToken::ID_LOOKUP_U8_ALT => {
                 let (value, new_rest) = rest.split_first().ok_or(BinError::EOF)?;
                 rest = new_rest;
                 BinToken::LookupU8(LookupU8(*value))
             }
-            BinToken::ID_LOOKUP_U16 => {
+            BinToken::ID_LOOKUP_U16 | BinToken::ID_LOOKUP_U16_ALT => {
                 let (value, new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
                 rest = new_rest;
                 BinToken::LookupU16(LookupU16(u16::from_le_bytes(*value)))
+            }
+            BinToken::ID_LOOKUP_U24 => {
+                let (&[b0, b1, b2], new_rest) = rest.split_first_chunk().ok_or(BinError::EOF)?;
+                rest = new_rest;
+                BinToken::LookupU24(LookupU24(u32::from_le_bytes([b0, b1, b2, 0])))
             }
             other => BinToken::Other(other),
         };
@@ -250,10 +414,13 @@ impl<'a> BinLexer<'a> {
                 depth = depth.saturating_sub(4);
             }
             if let BinToken::LookupU16(lookup_id) = token {
-                let text = de.strings.get(*lookup_id).unwrap_or("???");
+                let text = de.strings.get(*lookup_id as usize).unwrap_or("???");
                 writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
             } else if let BinToken::LookupU8(lookup_id) = token {
-                let text = de.strings.get(*lookup_id as u16).unwrap_or("???");
+                let text = de.strings.get(*lookup_id as usize).unwrap_or("???");
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
+            } else if let BinToken::LookupU24(lookup_id) = token {
+                let text = de.strings.get(*lookup_id as usize).unwrap_or("???");
                 writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
             } else {
                 writeln!(writer, "{idx:08x} {:depth$}{token}", "")?;
@@ -288,11 +455,14 @@ impl<'a> BinLexer<'a> {
                 };
                 writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
             }
-            if let BinToken::LookupU16(lookup_id) = token {
-                let text = de.strings.get(*lookup_id).unwrap_or("???");
+            if let BinToken::LookupU24(lookup_id) = token {
+                let text = de.strings.get(*lookup_id as usize).unwrap_or("???");
+                writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
+            } else if let BinToken::LookupU16(lookup_id) = token {
+                let text = de.strings.get(*lookup_id as usize).unwrap_or("???");
                 writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
             } else if let BinToken::LookupU8(lookup_id) = token {
-                let text = de.strings.get(*lookup_id as u16).unwrap_or("???");
+                let text = de.strings.get(*lookup_id as usize).unwrap_or("???");
                 writeln!(writer, "{idx:08x} {:depth$}{token}/{text}", "")?;
             } else {
                 writeln!(writer, "{idx:08x} {:depth$}{token}", "")?;

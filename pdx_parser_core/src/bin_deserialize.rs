@@ -21,7 +21,7 @@ pub enum BinError {
     #[error("An expected field '{0}' was missing from a struct or similar.")]
     MissingExpectedField(String),
     #[error("Unknown string lookup id {0}")]
-    UnknownStringLookup(u16),
+    UnknownStringLookup(usize),
     #[error("{0}")]
     Custom(String),
 }
@@ -204,9 +204,73 @@ impl<'de> BinDeserialize<'de> for f32 {
 
 impl<'de> BinDeserialize<'de> for f64 {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_F64)?;
-        let value = stream.expect_bytes_const::<{ size_of::<i64>() }>()?;
-        let value = i64::from_le_bytes(*value) as f64 / 100_000.0;
+        let token = stream.expect_token()?;
+        let value = match token {
+            BinToken::ID_ZERO => 0.0,
+            BinToken::ID_FIXED2_U8 => {
+                let &[value] = stream.expect_bytes_const::<{ size_of::<u8>() }>()?;
+                value as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED2_U16 => {
+                let value = stream.expect_bytes_const::<{ size_of::<u16>() }>()?;
+                u16::from_le_bytes(*value) as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED5_U24 => {
+                let &[b0, b1, b2] = stream.expect_bytes_const::<3>()?;
+                u32::from_le_bytes([b0, b1, b2, 0]) as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED5_U32 => {
+                let value = stream.expect_bytes_const::<{ size_of::<u32>() }>()?;
+                u32::from_le_bytes(*value) as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED5_U40 => {
+                let &[b0, b1, b2, b3, b4] = stream.expect_bytes_const::<5>()?;
+                u64::from_le_bytes([b0, b1, b2, b3, b4, 0, 0, 0]) as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED5_U48 => {
+                let &[b0, b1, b2, b3, b4, b5] = stream.expect_bytes_const::<6>()?;
+                u64::from_le_bytes([b0, b1, b2, b3, b4, b5, 0, 0]) as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED5_U56 => {
+                let &[b0, b1, b2, b3, b4, b5, b6] = stream.expect_bytes_const::<7>()?;
+                u64::from_le_bytes([b0, b1, b2, b3, b4, b5, b6, 0]) as f64 / 100_000.0
+            }
+            BinToken::ID_F64 => {
+                let value = stream.expect_bytes_const::<{ size_of::<i64>() }>()?;
+                i64::from_le_bytes(*value) as f64 / 100_000.0
+            }
+            BinToken::ID_FIXED2_U8_NEG => {
+                let &[value] = stream.expect_bytes_const::<{ size_of::<u8>() }>()?;
+                -(value as f64) / 100_000.0
+            }
+            BinToken::ID_FIXED2_U16_NEG => {
+                let value = stream.expect_bytes_const::<{ size_of::<u16>() }>()?;
+                -(u16::from_le_bytes(*value) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED2_U24_NEG => {
+                let &[b0, b1, b2] = stream.expect_bytes_const::<3>()?;
+                -(u32::from_le_bytes([b0, b1, b2, 0]) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U32_NEG => {
+                let value = stream.expect_bytes_const::<{ size_of::<u32>() }>()?;
+                -(u32::from_le_bytes(*value) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U40_NEG => {
+                let &[b0, b1, b2, b3, b4] = stream.expect_bytes_const::<5>()?;
+                -(u64::from_le_bytes([b0, b1, b2, b3, b4, 0, 0, 0]) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U48_NEG => {
+                let &[b0, b1, b2, b3, b4, b5] = stream.expect_bytes_const::<6>()?;
+                -(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, 0, 0]) as f64 / 100_000.0)
+            }
+            BinToken::ID_FIXED5_U56_NEG => {
+                let &[b0, b1, b2, b3, b4, b5, b6] = stream.expect_bytes_const::<7>()?;
+                -(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, b6, 0]) as f64 / 100_000.0)
+            }
+            _ => {
+                return Err(BinError::UnexpectedToken(token));
+            }
+        };
         return Ok((value, stream));
     }
 }
@@ -214,24 +278,34 @@ impl<'de> BinDeserialize<'de> for f64 {
 impl<'de> BinDeserialize<'de> for &'de str {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         match stream.expect_token()? {
-            BinToken::ID_LOOKUP_U16 => {
+            BinToken::ID_LOOKUP_U24 => {
+                let lookup_id = stream
+                    .expect_token()
+                    .context("While getting u24 string lookup id")?;
+                let string = stream
+                    .strings
+                    .get(lookup_id as usize)
+                    .ok_or(BinError::UnknownStringLookup(lookup_id as usize))?;
+                return Ok((string, stream));
+            }
+            BinToken::ID_LOOKUP_U16 | BinToken::ID_LOOKUP_U16_ALT => {
                 let lookup_id = stream
                     .expect_token()
                     .context("While getting u16 string lookup id")?;
                 let string = stream
                     .strings
-                    .get(lookup_id)
-                    .ok_or(BinError::UnknownStringLookup(lookup_id))?;
+                    .get(lookup_id as usize)
+                    .ok_or(BinError::UnknownStringLookup(lookup_id as usize))?;
                 return Ok((string, stream));
             }
-            BinToken::ID_LOOKUP_U8 => {
+            BinToken::ID_LOOKUP_U8 | BinToken::ID_LOOKUP_U8_ALT => {
                 let &[lookup_id] = stream
                     .expect_bytes_const()
                     .context("While getting u8 string lookup id")?;
                 let string = stream
                     .strings
-                    .get(lookup_id as u16)
-                    .ok_or(BinError::UnknownStringLookup(lookup_id as u16))?;
+                    .get(lookup_id as usize)
+                    .ok_or(BinError::UnknownStringLookup(lookup_id as usize))?;
                 return Ok((string, stream));
             }
             BinToken::ID_STRING_QUOTED | BinToken::ID_STRING_UNQUOTED => {

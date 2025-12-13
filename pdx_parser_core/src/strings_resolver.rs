@@ -37,8 +37,8 @@ impl StringsResolver {
         return Ok(StringsResolver { inner });
     }
 
-    pub fn get<'a>(&'a self, id: u16) -> Option<&'a str> {
-        return self.inner.borrow_strings().get(id as usize).copied();
+    pub fn get<'a>(&'a self, id: usize) -> Option<&'a str> {
+        return self.inner.borrow_strings().get(id).copied();
     }
 
     pub fn len(&self) -> usize {
@@ -49,13 +49,13 @@ impl StringsResolver {
         return self.inner.borrow_strings().is_empty();
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (u16, &str)> {
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &str)> {
         return self
             .inner
             .borrow_strings()
             .iter()
             .enumerate()
-            .map(|(i, &s)| (i as u16, s));
+            .map(|(i, &s)| (i, s));
     }
 }
 impl Default for StringsResolver {
