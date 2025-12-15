@@ -1,6 +1,6 @@
 use crate::Fetcher;
 use anyhow::{Context as _, anyhow};
-use image::{ImageBuffer, Luma, RgbImage, RgbaImage};
+use image::{GenericImageView, ImageBuffer, Luma, RgbImage, RgbaImage};
 
 /// Assets for eu5 that do not depend on the mod
 pub struct CommonAssets {
@@ -69,17 +69,6 @@ impl CommonAssets {
     }
 }
 
-pub struct UnownableLocations(Vec<(u16, Vec<u16>)>);
-impl UnownableLocations {
-    pub fn get<'a>(&'a self, grayscale: u16) -> Option<&'a [u16]> {
-        let idx = self
-            .0
-            .binary_search_by_key(&grayscale, |(grayscale, _)| *grayscale)
-            .ok()?;
-        return Some(&self.0[idx].1);
-    }
-}
-
 /// Map data, specific to the game mod
 pub struct MapAssets {
     /// Generated from `provinces.png` and `definition.csv`, each pixel is a `u16` corresponding to the index in the locations list
@@ -136,5 +125,66 @@ impl MapAssets {
             fetcher.get_utf8(&url_unownable_txt),
         )?;
         return MapAssets::new(base_map.to_luma16(), &locations_txt, &unownable_txt);
+    }
+}
+
+pub struct UnownableLocations(Vec<(u16, Vec<u16>)>);
+impl UnownableLocations {
+    pub fn get<'a>(&'a self, grayscale: u16) -> Option<&'a [u16]> {
+        let idx = self
+            .0
+            .binary_search_by_key(&grayscale, |(grayscale, _)| *grayscale)
+            .ok()?;
+        return Some(&self.0[idx].1);
+    }
+}
+
+/// Assets for eu5 that depend on the mod but are not needed for rendering the map
+pub struct GameDataAssets {
+    pub flags: Flags,
+}
+impl GameDataAssets {
+    pub async fn load(fetcher: &impl Fetcher, mod_dir_path: &str) -> anyhow::Result<Self> {
+        let url_flags_img = format!("eu5/{mod_dir_path}/flags.png");
+        let url_flags_tags = format!("eu5/{mod_dir_path}/flags.txt");
+
+        let (flags_img, flags_tags) = futures::try_join!(
+            fetcher.get_image(&url_flags_img),
+            fetcher.get_utf8(&url_flags_tags),
+        )?;
+        return Ok(GameDataAssets {
+            flags: Flags::new(flags_img.to_rgb8(), &flags_tags)?,
+        });
+    }
+}
+
+pub struct Flags {
+    imgs: RgbImage,
+    tags: Vec<String>,
+}
+impl Flags {
+    pub fn new(imgs: RgbImage, tags: &str) -> anyhow::Result<Self> {
+        let tags: Vec<String> = tags
+            .lines()
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect();
+        if imgs.width() != 150 {
+            return Err(anyhow!("Expected flag image to have width 150"));
+        }
+        if imgs.height() != tags.len() as u32 * 100 {
+            return Err(anyhow!(
+                "Expected flag image to have height {}",
+                tags.len() * 100
+            ));
+        }
+        return Ok(Flags { imgs, tags });
+    }
+    pub fn get_normal_flag<'a>(&'a self, tag: &str) -> Option<image::SubImage<&'a RgbImage>> {
+        let idx = self
+            .tags
+            .binary_search_by_key(&tag, |tag| tag.as_str())
+            .ok()?;
+        return Some(self.imgs.view(0, idx as u32 * 100, 150, 100));
     }
 }

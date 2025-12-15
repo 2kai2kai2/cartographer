@@ -6,16 +6,16 @@ use pdx_parser_core::eu5::{PreviousPlayedItem, RawCountry, RawGamestate};
 use crate::{
     Fetcher,
     eu5::{
-        assets::{CommonAssets, MapAssets},
+        assets::{CommonAssets, GameDataAssets, MapAssets},
         eu5_map,
     },
-    utils::{display_num, display_num_thousands},
+    utils::display_num,
 };
 
 /// Makes the part that is not the map.
 pub fn make_image_top(
-    // flag_images: &FlagImages,
     assets: CommonAssets,
+    gamedata_assets: GameDataAssets,
     save: &RawGamestate,
 ) -> Result<RgbImage> {
     const TOP_SIZE: (u32, u32) = (4096, 1024);
@@ -50,15 +50,21 @@ pub fn make_image_top(
         // x+0: flag
         image::imageops::overlay(&mut out, &assets.flag_frame, x as i64, y as i64 + 4);
         if tag.len() == 3 {
-            drawing::draw_text_mut(
-                &mut out,
-                Rgba::white(),
-                x + 30,
-                y + 34,
-                60.0,
-                &assets.noto_serif_italic,
-                tag,
-            );
+            if let Some(flag) = gamedata_assets.flags.get_normal_flag(&tag) {
+                let flag = flag.to_image();
+                let flag = image::DynamicImage::ImageRgb8(flag).to_rgba8();
+                image::imageops::overlay(&mut out, &flag, x as i64 + 10, y as i64 + 14);
+            } else {
+                drawing::draw_text_mut(
+                    &mut out,
+                    Rgba::white(),
+                    x + 30,
+                    y + 34,
+                    60.0,
+                    &assets.noto_serif_italic,
+                    tag,
+                );
+            }
         }
 
         // x+170: player
@@ -200,7 +206,8 @@ pub async fn render_stats_image(
     drop(color_map);
 
     let common_assets = CommonAssets::load(fetcher).await?;
-    let image_top = make_image_top(common_assets, &gamestate)?;
+    let gamedata_assets = GameDataAssets::load(fetcher, "vanilla").await?;
+    let image_top = make_image_top(common_assets, gamedata_assets, &gamestate)?;
     drop(gamestate);
 
     let mut image_top = image_top.into_raw();

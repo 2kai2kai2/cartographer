@@ -143,5 +143,12 @@ pub fn main() -> Result<()> {
         image::ImageFormat::Png,
     )?;
 
+    let (flags_img, flags) = flags::do_flags(&dir).context("While rendering flags")?;
+    flags_img.save_with_format(
+        format!("{destination_web}/flags.png"),
+        image::ImageFormat::Png,
+    )?;
+    std::fs::write(format!("{destination_web}/flags.txt"), flags.join("\n"))?;
+
     return Ok(());
 }

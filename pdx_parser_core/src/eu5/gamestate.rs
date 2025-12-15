@@ -59,7 +59,7 @@ pub struct Locations {
     pub locations: HashMap<i32, Location>,
 }
 
-#[derive(BinDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BinDeserialize, Serialize, Deserialize)]
 pub struct PreviousPlayedItem {
     /// Country ID
     #[bin_token("eu5")]

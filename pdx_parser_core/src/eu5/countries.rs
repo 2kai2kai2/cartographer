@@ -183,9 +183,8 @@ impl<'de> BinDeserialize<'de> for RawCountriesEntry {
 
 #[derive(BinDeserialize, Serialize, Deserialize)]
 pub struct RawCountry {
-    #[cfg(any())]
     #[bin_token("eu5")]
-    pub flag: SkipValue,
+    pub flag: Option<Box<str>>,
     #[bin_token("eu5")]
     pub definition: Option<Box<str>>,
     #[bin_token("eu5", "type")]
