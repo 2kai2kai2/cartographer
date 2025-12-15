@@ -33,6 +33,7 @@ pub fn lines_without_comments<'a>(input: &'a str) -> impl Iterator<Item = &'a st
         .map(|line| line.split('#').next().unwrap_or(line));
 }
 
+#[derive(Clone)]
 pub struct ModdableDir {
     pub default: PathBuf,
     pub modded: Option<PathBuf>,
@@ -61,14 +62,8 @@ impl ModdableDir {
         &self,
         relative_path: impl AsRef<Path>,
     ) -> Result<String, std::io::Error> {
-        if let Some(modded) = &self.modded {
-            let modded_file = modded.join(&relative_path);
-            if std::fs::exists(&modded_file)? {
-                return from_cp1252(File::open(modded_file)?);
-            }
-        }
-        let default_file = self.default.join(relative_path);
-        return from_cp1252(File::open(default_file)?);
+        let file = self.moddable_open_file(relative_path)?;
+        return from_cp1252(file);
     }
 
     /// Reads a utf8 file, optionally trying a modded version of the file first.
@@ -76,14 +71,8 @@ impl ModdableDir {
         &self,
         relative_path: impl AsRef<Path>,
     ) -> Result<String, std::io::Error> {
-        if let Some(modded) = &self.modded {
-            let modded_file = modded.join(&relative_path);
-            if std::fs::exists(&modded_file)? {
-                return std::fs::read_to_string(modded_file);
-            }
-        }
-        let default_file = self.default.join(relative_path);
-        return std::fs::read_to_string(default_file);
+        let file = self.moddable_open_file(relative_path)?;
+        return std::io::read_to_string(file);
     }
 
     /// Reads an image, optionally trying a modded version of the file first.
@@ -146,6 +135,30 @@ impl ModdableDir {
         }
 
         return Ok(out.into_values().collect());
+    }
+
+    pub fn moddable_read_file(
+        &self,
+        relative_path: impl AsRef<Path>,
+    ) -> Result<Vec<u8>, std::io::Error> {
+        let mut file = self.moddable_open_file(relative_path)?;
+        let mut out = Vec::new();
+        file.read_to_end(&mut out)?;
+        return Ok(out);
+    }
+
+    pub fn moddable_open_file(
+        &self,
+        relative_path: impl AsRef<Path>,
+    ) -> Result<std::fs::File, std::io::Error> {
+        if let Some(modded) = &self.modded {
+            let modded_file = modded.join(&relative_path);
+            if std::fs::exists(&modded_file)? {
+                return std::fs::File::open(modded_file);
+            }
+        }
+        let default_file = self.default.join(relative_path);
+        return std::fs::File::open(default_file);
     }
 }
 

@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use pdx_parser_core::{
-    Context, TextDeserialize, TextDeserializer, common_deserialize::SkipValue,
-    text_deserialize::TextError, text_lexer::TextToken,
+    Context, TextDeserialize, TextDeserializer,
+    common_deserialize::{self, NumericColor, SkipValue},
+    text_deserialize::TextError,
+    text_lexer::TextToken,
 };
 
 #[derive(Debug, Clone)]
@@ -222,9 +224,6 @@ pub struct RawColoredEmblem {
     pub color1: Option<ColorReference>,
     pub color2: Option<ColorReference>,
     pub color3: Option<ColorReference>,
-    pub color4: Option<ColorReference>,
-    pub color5: Option<ColorReference>,
-    pub color6: Option<ColorReference>,
     #[multiple]
     pub instance: Vec<RawCOAInstance>,
     #[default(Vec::new())]
@@ -266,8 +265,10 @@ pub struct RawCOAInstance {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ColorValue {
+    /// Requires a palette, see [`ColorPalette`]. E.g. `"red"`
     Named(String),
-    HSV360(f64, f64, f64),
+    /// Self-describing, no palette needed. E.g. `rgb { 255 0 0 }`
+    Numeric(common_deserialize::NumericColor),
 }
 impl<'de> TextDeserialize<'de> for ColorValue {
     fn take_text(
@@ -275,18 +276,9 @@ impl<'de> TextDeserialize<'de> for ColorValue {
     ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         let peek = stream.peek_token().ok_or(TextError::EOF)?;
         match peek {
-            TextToken::StringUnquoted("hsv360") => {
-                stream.eat_token();
-                let Ok(()) = stream.parse_token(TextToken::OpenBracket) else {
-                    return Err(TextError::UnexpectedToken);
-                };
-                let h: f64 = stream.parse()?;
-                let s: f64 = stream.parse()?;
-                let v: f64 = stream.parse()?;
-                let Ok(()) = stream.parse_token(TextToken::CloseBracket) else {
-                    return Err(TextError::UnexpectedToken);
-                };
-                return Ok((ColorValue::HSV360(h, s, v), stream));
+            TextToken::StringUnquoted("rgb" | "hsv360") => {
+                let color: common_deserialize::NumericColor = stream.parse()?;
+                return Ok((ColorValue::Numeric(color), stream));
             }
             TextToken::StringQuoted(color) | TextToken::StringUnquoted(color) => {
                 stream.eat_token();
@@ -298,11 +290,50 @@ impl<'de> TextDeserialize<'de> for ColorValue {
 }
 
 /// Inside things like `colored_emblem` or `sub`, color fields are either a quoted string (color name) or a reference to the coat of arms' colors
+#[derive(Debug)]
 pub enum ColorReference {
     /// e.g. `"red"`
     Color(ColorValue),
     /// e.g. `color1` => `Self::Reference(1)`
     Reference(usize),
+}
+impl ColorReference {
+    pub fn resolve_rgb(
+        &self,
+        colors: &[image::Rgb<u8>],
+        palette: &ColorPalette,
+    ) -> anyhow::Result<image::Rgb<u8>> {
+        return match self {
+            ColorReference::Color(ColorValue::Named(name)) => palette
+                .get_rgb(name)
+                .map(|rgb| image::Rgb(rgb.0))
+                .ok_or(anyhow::anyhow!("Color {name} was not found in palette")),
+            ColorReference::Color(ColorValue::Numeric(color)) => Ok(image::Rgb(color.to_rgb().0)),
+            ColorReference::Reference(idx) => colors
+                .get(*idx - 1)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Color reference {idx} out of bounds (size {})",
+                        colors.len()
+                    )
+                })
+                .cloned(),
+        };
+    }
+    pub fn resolve_color_value(&self, colors: &[ColorValue]) -> anyhow::Result<ColorValue> {
+        return match self {
+            ColorReference::Color(color) => Ok(color.clone()),
+            ColorReference::Reference(idx) => colors
+                .get(*idx - 1)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Color reference {idx} out of bounds (size {})",
+                        colors.len()
+                    )
+                })
+                .cloned(),
+        };
+    }
 }
 impl<'de> TextDeserialize<'de> for ColorReference {
     fn take_text(
@@ -324,5 +355,66 @@ impl<'de> TextDeserialize<'de> for ColorReference {
                 return Ok((ColorReference::Color(color), stream));
             }
         }
+    }
+}
+
+/// For parsing files like `game/main_menu/common/named_colors/01_coa.txt`
+#[derive(Debug, TextDeserialize)]
+#[no_brackets]
+pub struct ColorPalette {
+    colors: HashMap<String, NumericColor>,
+}
+impl ColorPalette {
+    pub fn get(&self, name: &str) -> Option<NumericColor> {
+        return self.colors.get(name).cloned();
+    }
+    pub fn get_rgb(&self, name: &str) -> Option<common_deserialize::Rgb> {
+        return self.get(name).map(|color| color.to_rgb());
+    }
+    pub fn get_or(&self, name: &str, default: NumericColor) -> NumericColor {
+        return self.get(name).unwrap_or(default);
+    }
+    pub fn get_or_rgb(
+        &self,
+        name: &str,
+        default: common_deserialize::Rgb,
+    ) -> common_deserialize::Rgb {
+        return self.get_rgb(name).unwrap_or(default);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::flags::{
+        coat_of_arms::CoatOfArms,
+        expression_parser::{VariableResolver, VariableScope},
+    };
+
+    use super::*;
+    use anyhow::Context;
+    use pdx_parser_core::TextDeserializer;
+
+    #[test]
+    fn test_file() -> anyhow::Result<()> {
+        let text = std::fs::read_to_string(
+            "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Europa Universalis V\\game\\main_menu\\common\\coat_of_arms\\coat_of_arms\\pre_scripted_countries.txt",
+        )?;
+        let deser = TextDeserializer::from_str(&text);
+        let deser = RawCoatOfArmsFile::take_text(deser)?.0;
+        let root_scope =
+            VariableScope::from_unresolved(deser.variables).context("In root scope")?;
+        let variables = VariableResolver::root(root_scope);
+        let coat_of_arms: HashMap<_, _> = deser
+            .coat_of_arms
+            .into_iter()
+            .map(|(name, coat_of_arms)| {
+                let coat_of_arms = CoatOfArms::from_parsed(coat_of_arms, &variables)
+                    .with_context(|| format!("In {name}"))?;
+                Ok((name, coat_of_arms))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let coa = coat_of_arms.get("FRA_revolutionary_republic").unwrap();
+
+        return Ok(());
     }
 }

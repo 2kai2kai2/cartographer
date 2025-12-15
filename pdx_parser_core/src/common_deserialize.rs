@@ -277,9 +277,28 @@ impl Rgb {
     pub fn unwrap(self) -> [u8; 3] {
         return self.0;
     }
+    pub fn to_hsv360(&self) -> Hsv360 {
+        let r = self.0[0] as f64 / 255.0;
+        let g = self.0[1] as f64 / 255.0;
+        let b = self.0[2] as f64 / 255.0;
+        let max = r.max(g.max(b));
+        let min = r.min(g.min(b));
+        let chroma = (max - min).abs(); // abs just in case
+        let hue = if chroma == 0.0 {
+            0.0
+        } else if max == r {
+            60.0 * ((g - b) / chroma) % 360.0
+        } else if max == g {
+            60.0 * ((b - r) / chroma + 2.0) % 360.0
+        } else {
+            60.0 * ((r - g) / chroma + 4.0) % 360.0
+        };
+        let saturation = if max == 0.0 { 0.0 } else { chroma / max };
+        return Hsv360::new(hue, saturation, max);
+    }
 }
-impl<'de> BinDeserialize<'de> for Rgb {
-    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+impl BinDeserialize<'_> for Rgb {
+    fn take(mut stream: BinDeserializer<'_>) -> Result<(Self, BinDeserializer<'_>), BinError> {
         stream.parse_token(pdx_parser_macros::eu5_token!("rgb"))?;
         stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
         let r: u32 = stream.parse()?;
@@ -291,10 +310,10 @@ impl<'de> BinDeserialize<'de> for Rgb {
         return Ok((Rgb([r as u8, g as u8, b as u8]), stream));
     }
 }
-impl<'de> TextDeserialize<'de> for Rgb {
+impl TextDeserialize<'_> for Rgb {
     fn take_text(
-        mut stream: TextDeserializer<'de>,
-    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        mut stream: TextDeserializer<'_>,
+    ) -> Result<(Self, TextDeserializer<'_>), TextError> {
         stream.parse_token(TextToken::StringUnquoted("rgb"))?;
         stream.parse_token(TextToken::OpenBracket)?;
         let r: u8 = stream.parse()?;
@@ -302,5 +321,103 @@ impl<'de> TextDeserialize<'de> for Rgb {
         let b: u8 = stream.parse()?;
         stream.parse_token(TextToken::CloseBracket)?;
         return Ok((Rgb([r, g, b]), stream));
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Hsv360 {
+    /// hue 0-360
+    pub h: f64,
+    /// saturation 0-1 (game files are 0-100, this is converted to 0-1)
+    pub s: f64,
+    /// value 0-1 (game files are 0-100, this is converted to 0-1)
+    pub v: f64,
+}
+impl Hsv360 {
+    /// Creates a new HSV360 with the given values, constrained to 0-360 and 0-1
+    pub fn new(h: f64, s: f64, v: f64) -> Self {
+        return Self { h, s, v }.constrained();
+    }
+    /// Constrains hue to 0-360 (cyclically) and clamps saturation and value to 0-1
+    pub fn constrained(&self) -> Self {
+        return Self {
+            h: self.h.rem_euclid(360.0),
+            s: self.s.clamp(0.0, 1.0),
+            v: self.v.clamp(0.0, 1.0),
+        };
+    }
+    pub fn to_rgb(&self) -> Rgb {
+        let hsv = self.constrained();
+        let h = hsv.h / 60.0;
+        let s = hsv.s;
+        let v = hsv.v;
+        let chroma = s * v;
+        let x = chroma * (1.0 - f64::abs(h % 2.0 - 1.0));
+        let min = v - chroma;
+
+        let (r, g, b) = match h {
+            0.0..1.0 => (chroma, x, 0.0),
+            1.0..2.0 => (x, chroma, 0.0),
+            2.0..3.0 => (0.0, chroma, x),
+            3.0..4.0 => (0.0, x, chroma),
+            4.0..5.0 => (x, 0.0, chroma),
+            5.0..=6.0 => (chroma, 0.0, x),
+            v if v.is_nan() => (0.0, 0.0, 0.0), // fallback to black
+            _ => unreachable!(),
+        };
+        let r = ((r + min) * 255.0) as u8;
+        let g = ((g + min) * 255.0) as u8;
+        let b = ((b + min) * 255.0) as u8;
+        return Rgb([r, g, b]);
+    }
+}
+impl TextDeserialize<'_> for Hsv360 {
+    fn take_text(
+        mut stream: TextDeserializer<'_>,
+    ) -> Result<(Self, TextDeserializer<'_>), TextError> {
+        stream.parse_token(TextToken::StringUnquoted("hsv360"))?;
+        stream.parse_token(TextToken::OpenBracket)?;
+        let h: f64 = stream.parse()?;
+        let s: f64 = stream.parse()?;
+        let s = s / 100.0;
+        let v: f64 = stream.parse()?;
+        let v = v / 100.0;
+        stream.parse_token(TextToken::CloseBracket)?;
+        return Ok((Hsv360 { h, s, v }, stream));
+    }
+}
+
+/// A color, without needing to reference a palette
+#[derive(Debug, PartialEq, Clone)]
+pub enum NumericColor {
+    Rgb(Rgb),
+    Hsv360(Hsv360),
+}
+impl NumericColor {
+    pub fn to_rgb(&self) -> Rgb {
+        match self {
+            NumericColor::Rgb(rgb) => rgb.clone(),
+            NumericColor::Hsv360(hsv) => hsv.to_rgb(),
+        }
+    }
+}
+impl TextDeserialize<'_> for NumericColor {
+    fn take_text(
+        mut stream: TextDeserializer<'_>,
+    ) -> Result<(Self, TextDeserializer<'_>), TextError> {
+        let peek = stream.peek_token().ok_or(TextError::EOF)?;
+        match peek {
+            TextToken::StringUnquoted("rgb") => {
+                let rgb: Rgb = stream.parse().context("While parsing rgb value")?;
+                return Ok((NumericColor::Rgb(rgb), stream));
+            }
+            TextToken::StringUnquoted("hsv360") => {
+                let hsv: Hsv360 = stream.parse().context("While parsing hsv value")?;
+                return Ok((NumericColor::Hsv360(hsv), stream));
+            }
+            _ => {
+                return Err(TextError::UnexpectedToken);
+            }
+        }
     }
 }
