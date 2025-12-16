@@ -32,10 +32,11 @@ impl syn::parse::Parse for GameId {
 /// - the `no_brackets` attribute means no outer brackets should be expected around the parsed object, used for the root of the file.
 /// - the `default(value: T)` attribute means the field will be initialized to the given value if it is not present in the file.
 ///   The field should be single, so not an `Option` or using the `multiple` attribute.
+/// - the `enum_key` attribute overrides the string key for enums.
 ///
 /// ## Generics
 /// If the struct needs a lifetime repesenting the original text, it must be named `de`.
-#[proc_macro_derive(BinDeserialize, attributes(multiple, bin_token, no_brackets, default))]
+#[proc_macro_derive(BinDeserialize, attributes(multiple, bin_token, no_brackets, default, enum_key))]
 pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     bin_deserialize::derive_bin_deserialize(stream)
 }
@@ -80,10 +81,11 @@ pub fn eu5_token(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// - the `no_brackets` attribute means no outer brackets should be expected around the parsed object, used for the root of the file.
 /// - the `default(value: T)` attribute means the field will be initialized to the given value if it is not present in the file.
 ///   The field should be single, so not an `Option` or using the `multiple` attribute.
+/// - the `enum_key` attribute overrides the string key for enums.
 ///
 /// ## Generics
 /// If the struct needs a lifetime repesenting the original text, it must be named `de`.
-#[proc_macro_derive(TextDeserialize, attributes(multiple, no_brackets, default))]
+#[proc_macro_derive(TextDeserialize, attributes(multiple, no_brackets, default, enum_key))]
 pub fn derive_text_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     text_deserialize::derive_text_deserialize(stream)
 }

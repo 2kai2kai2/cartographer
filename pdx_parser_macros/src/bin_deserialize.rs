@@ -449,10 +449,30 @@ fn derive_bin_deserialize_enum_plain(
     let enum_name = ident.to_string();
 
     let match_arms = variants.into_iter().map(|variant| {
+        let mut enum_key = None;
+        for attr in &variant.attrs {
+            let Some(attr_ident) = attr.path().get_ident() else {
+                continue; // not our attribute
+            };
+            match attr_ident.to_string().as_str() {
+                "enum_key" => {
+                    let attr_value = match attr.parse_args::<syn::LitStr>() {
+                        Ok(value) => value,
+                        Err(err) => {
+                            return err.to_compile_error();
+                        }
+                    };
+                    enum_key = Some(attr_value.value());
+                }
+                _ => continue, // not our attribute
+            }
+        }
+
         let variant_ident = &variant.ident;
-        let snake_case = pascal_case_to_snake_case(&variant_ident.to_string());
+        let enum_key =
+            enum_key.unwrap_or_else(|| pascal_case_to_snake_case(&variant_ident.to_string()));
         return quote! {
-            #snake_case => Ok((#ident::#variant_ident, stream)),
+            #enum_key => Ok((#ident::#variant_ident, stream)),
         };
     });
 

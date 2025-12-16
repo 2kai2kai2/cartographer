@@ -219,6 +219,62 @@ impl<'de> TextDeserialize<'de> for SkipValue {
     }
 }
 
+/// A newtype for parsing a list of key-value pairs.
+/// Very similar to `HashMap`, but just stored as a list of key-value pairs.
+/// Also maintains order.
+///
+/// Strict: will error if a non-KV or non-matching type is found.
+pub struct KVs<K, V> {
+    inner: Vec<(K, V)>,
+}
+impl<K, V> KVs<K, V> {
+    pub fn unwrap(self) -> Vec<(K, V)> {
+        return self.inner;
+    }
+}
+impl<'de, K: TextDeserialize<'de>, V: TextDeserialize<'de>> TextDeserialize<'de> for KVs<K, V> {
+    fn take_text(
+        mut stream: TextDeserializer<'de>,
+    ) -> Result<(Self, TextDeserializer<'de>), TextError> {
+        stream.parse_token(TextToken::OpenBracket)?;
+        let mut out = Vec::new();
+        loop {
+            if let Some(TextToken::CloseBracket) = stream.peek_token() {
+                stream.eat_token();
+                return Ok((KVs { inner: out }, stream));
+            }
+            let (key, mut rest) = K::take_text(stream)
+                .with_context(|| format!("While parsing key #{} for KVs", out.len()))?;
+            rest.parse_token(TextToken::Equal)
+                .with_context(|| format!("While parsing eq #{} for KVs", out.len()))?;
+            let (value, rest) = V::take_text(rest)
+                .with_context(|| format!("While parsing value #{} for KVs", out.len()))?;
+            out.push((key, value));
+            stream = rest;
+        }
+    }
+}
+impl<'de, K: BinDeserialize<'de>, V: BinDeserialize<'de>> BinDeserialize<'de> for KVs<K, V> {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        stream.parse_token(BinToken::ID_OPEN_BRACKET)?;
+        let mut out = Vec::new();
+        loop {
+            if let Some(BinToken::ID_CLOSE_BRACKET) = stream.peek_token() {
+                stream.eat_token();
+                return Ok((KVs { inner: out }, stream));
+            }
+            let (key, mut rest) = K::take(stream)
+                .with_context(|| format!("While parsing key #{} for KVs", out.len()))?;
+            rest.parse_token(BinToken::ID_EQUAL)
+                .with_context(|| format!("While parsing eq #{} for KVs", out.len()))?;
+            let (value, rest) = V::take(rest)
+                .with_context(|| format!("While parsing value #{} for KVs", out.len()))?;
+            out.push((key, value));
+            stream = rest;
+        }
+    }
+}
+
 /// A newtype for parsing a list of key-value pairs from an input with no outer brackets `{}`.
 /// Very similar to `HashMap`.
 ///
@@ -240,23 +296,12 @@ impl<'de, K: TextDeserialize<'de>, V: TextDeserialize<'de>> TextDeserialize<'de>
     ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         let mut out = Vec::new();
         while let Some(_) = stream.peek_token() {
-            let (key, mut rest) = K::take_text(stream).map_err(|err| {
-                TextError::Custom(format!(
-                    "{err} while parsing key #{} for UnbracketedKVs",
-                    out.len()
-                ))
-            })?;
-            rest.parse_token(TextToken::Equal).map_err(|err| {
-                TextError::Custom(format!(
-                    "{err} while parsing eq #{} for UnbracketedKVs",
-                    out.len()
-                ))
-            })?;
-            let (value, rest) = V::take_text(rest).map_err(|err| {
-                TextError::Custom(format!(
-                    "{err} while parsing value #{} for UnbracketedKVs",
-                    out.len()
-                ))
+            let (key, mut rest) = K::take_text(stream)
+                .with_context(|| format!("While parsing key #{} for UnbracketedKVs", out.len()))?;
+            rest.parse_token(TextToken::Equal)
+                .with_context(|| format!("While parsing eq #{} for UnbracketedKVs", out.len()))?;
+            let (value, rest) = V::take_text(rest).with_context(|| {
+                format!("While parsing value #{} for UnbracketedKVs", out.len())
             })?;
             out.push((key, value));
             stream = rest;

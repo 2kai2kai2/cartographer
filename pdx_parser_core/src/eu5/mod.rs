@@ -5,6 +5,7 @@ mod gamestate;
 mod metadata;
 mod subunit_manager;
 mod unit_manager;
+mod war_manager;
 
 pub use countries::*;
 pub use date::*;
@@ -13,3 +14,4 @@ pub use gamestate::*;
 pub use metadata::*;
 pub use subunit_manager::*;
 pub use unit_manager::*;
+pub use war_manager::*;

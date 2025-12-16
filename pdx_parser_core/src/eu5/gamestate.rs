@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::eu5::{Countries, DiplomacyManager, RawMeta, SubunitManager, UnitManager};
+use crate::eu5::{Countries, DiplomacyManager, RawMeta, SubunitManager, UnitManager, WarManager};
 use pdx_parser_macros::BinDeserialize;
 use serde::{Deserialize, Serialize};
 
@@ -86,4 +86,7 @@ pub struct RawGamestate {
     pub subunit_manager: SubunitManager,
     #[bin_token("eu5")]
     pub diplomacy_manager: DiplomacyManager,
+    #[cfg(any())]
+    #[bin_token("eu5")]
+    pub war_manager: WarManager,
 }
