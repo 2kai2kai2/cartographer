@@ -1,8 +1,11 @@
 use crate::{eu5::assets::UnownableLocations, utils::MaybeIndexedMap};
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use imageproc::definitions::HasBlack;
-use pdx_parser_core::eu5::{Location, RawCountriesEntry, RawGamestate};
+use pdx_parser_core::{
+    common_deserialize,
+    eu5::{Location, RawCountriesEntry, RawGamestate},
+};
 use std::collections::HashMap;
 
 pub const UNCLAIMED_COLOR: Rgb<u8> = Rgb([150, 150, 150]);
@@ -44,20 +47,10 @@ fn determine_unownable_color(
         return Ok(UNCLAIMED_COLOR);
     }
 
-    let Some(RawCountriesEntry::Country(owner)) = gamestate.countries.database.get(&owner) else {
-        return Err(anyhow!(
-            "Failed to find entry for owner (by adjacency) {} of location {loc_name:?}",
-            owner,
-        ));
-    };
-    if let Some(color) = owner.color {
-        return Ok(Rgb(color.0));
-    } else {
-        return Err(anyhow!(
-            "Failed to find color for owner (by adjacency) {} of location {loc_name:?}",
-            owner.definition.as_ref().unwrap_or(&"UNKNOWN".into()),
-        ));
-    }
+    let color = compute_country_map_color(owner, gamestate).with_context(|| {
+        format!("While determining color for owner (by adjacency) of {loc_name}")
+    })?;
+    return Ok(Rgb(color.0));
 }
 
 /// ## Parameters
@@ -117,23 +110,10 @@ pub fn generate_map_colors_config(
                 };
                 return determine_unownable_color(loc_name, adj, &grayscale_to_loc, gamestate);
             };
-            let Some(RawCountriesEntry::Country(owner)) = gamestate.countries.database.get(&owner)
-            else {
-                return Err(anyhow!(
-                    "Failed to find entry for owner {} of location {:?}",
-                    owner,
-                    locations.get(grayscale),
-                ));
-            };
-            if let Some(color) = owner.color {
-                return Ok(Rgb(color.0));
-            } else {
-                return Err(anyhow!(
-                    "Failed to find color for owner {} of location {:?}",
-                    owner.definition.as_ref().unwrap_or(&"UNKNOWN".into()),
-                    locations.get(grayscale),
-                ));
-            }
+
+            let color = compute_country_map_color(owner, gamestate)
+                .with_context(|| format!("While determining color for owner of {loc_name}"))?;
+            return Ok(Rgb(color.0));
         })
         .collect::<Result<Vec<_>, _>>();
 }
@@ -151,4 +131,72 @@ pub fn make_base_map(
             .unwrap_or(&Rgb::black())
             .clone()
     });
+}
+
+/// Returns the color of the given country, based on the owner of the country.
+/// Includes blending with the overlord's color.
+///
+/// TODO: how are subjects of subjects handled? currently just blending once with top overlord
+pub fn compute_country_map_color(
+    owner_id: u32,
+    gamestate: &RawGamestate,
+) -> anyhow::Result<common_deserialize::Rgb> {
+    let Some(RawCountriesEntry::Country(owner)) = gamestate.countries.database.get(&owner_id)
+    else {
+        return Err(anyhow!("Failed to find entry for country {owner_id}"));
+    };
+    let Some(owner_color) = owner.color else {
+        return Err(anyhow!("Failed to find color for country {owner_id}"));
+    };
+    let mut overlord_id = owner_id;
+    while let Some(dep) = gamestate.diplomacy_manager.overlords.get(&overlord_id) {
+        if dep.subject_type.as_ref() == "tributary" {
+            // TODO: this currently hard codes vanilla subject types, where tributary is the only
+            // type that does not blend. We should dynamically determine which subject types to blend on.
+            break;
+        }
+        overlord_id = dep.first;
+    }
+    if overlord_id == owner_id {
+        // no overlord, so just use the owner's color
+        return Ok(owner_color);
+    }
+
+    let Some(RawCountriesEntry::Country(overlord)) = gamestate.countries.database.get(&overlord_id)
+    else {
+        return Err(anyhow!(
+            "Failed to find entry for overlord country {overlord_id}"
+        ));
+    };
+    let Some(overlord_color) = overlord.color else {
+        return Err(anyhow!(
+            "Failed to find color for overlord country {overlord_id}"
+        ));
+    };
+
+    return Ok(blend_subject_color(owner_color, overlord_color));
+}
+
+/// The best approximation of the in-game subject blending algorithm I could reproduce using a bunch of data points.
+///
+/// Hue is a decent approximation, but not perfect.
+/// Saturation and value are almost always spot-on, though there are a few outliers.
+pub fn blend_subject_color(
+    subject: common_deserialize::Rgb,
+    overlord: common_deserialize::Rgb,
+) -> common_deserialize::Rgb {
+    let subject = subject.to_hsv360();
+    let overlord = overlord.to_hsv360();
+
+    const HUE_BASE_AMPLITUDE: f64 = 10.0;
+    let hue = overlord.h + HUE_BASE_AMPLITUDE / subject.s * (subject.h - overlord.h).sin();
+    const SATURATION_SLOPE: f64 = 3.0 / 5.0;
+    let saturation = overlord
+        .s
+        .min(SATURATION_SLOPE * (subject.s - overlord.s) + overlord.s - 0.1);
+    const VALUE_SLOPE: f64 = 3.0 / 5.0;
+    let value = VALUE_SLOPE * (subject.v - overlord.v) + overlord.v - 0.1;
+
+    let blended = common_deserialize::Hsv360::new(hue, saturation, value);
+    return blended.to_rgb();
 }

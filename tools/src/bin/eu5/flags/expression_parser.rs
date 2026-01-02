@@ -186,7 +186,7 @@ impl ExpressionToken {
                     stream = rest;
                     out.push(ExpressionToken::Div);
                 }
-                [b'a'..=b'z' | b'A'..=b'Z' | b'_', rest @ ..] => {
+                [b'a'..=b'z' | b'A'..=b'Z' | b'_', ..] => {
                     // hope that variable names never start with a digit
                     let (var_name, rest) = stream
                         .split_at_first_inclusive(|b| !b.is_ascii_alphanumeric() && *b != b'_')
