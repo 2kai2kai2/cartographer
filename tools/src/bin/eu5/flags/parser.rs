@@ -255,7 +255,7 @@ pub struct RawCOASub {
 
 #[derive(TextDeserialize)]
 pub struct RawCOAInstance {
-    #[default([VariableValue::Literal(0.0), VariableValue::Literal(0.0)])]
+    #[default([VariableValue::Literal(0.5), VariableValue::Literal(0.5)])]
     pub position: [VariableValue; 2],
     #[default(VariableValue::Literal(0.0))]
     pub rotation: VariableValue,
