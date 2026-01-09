@@ -112,12 +112,14 @@ impl SkipValue {
                     stream.eat_token();
                     return Ok(stream);
                 }
-                TextToken::Equal => return Err(TextError::UnexpectedToken),
+                op if op.is_operator() => return Err(TextError::UnexpectedToken),
                 _ => {
                     stream = SkipValue::take_text(stream)
                         .map_err(|err| err.context("While skipping value or KV key"))?
                         .1;
-                    if let Some(TextToken::Equal) = stream.peek_token() {
+                    if let Some(op) = stream.peek_token()
+                        && op.is_operator()
+                    {
                         stream.eat_token();
                         stream = SkipValue::take_text(stream)
                             .map_err(|err| err.context("While skipping KV value"))?
@@ -210,7 +212,7 @@ impl<'de> TextDeserialize<'de> for SkipValue {
             TextToken::OpenBracket => {
                 stream = SkipValue::finish_object_text(stream)?;
             }
-            TextToken::CloseBracket | TextToken::Equal => {
+            op if op == TextToken::CloseBracket || op.is_operator() => {
                 return Err(TextError::UnexpectedToken);
             }
             _ => {}
@@ -272,6 +274,162 @@ impl<'de, K: BinDeserialize<'de>, V: BinDeserialize<'de>> BinDeserialize<'de> fo
             out.push((key, value));
             stream = rest;
         }
+    }
+}
+
+pub enum TriggerValue {
+    Scope(String),
+    SubTrigger(Trigger),
+    Num(f64),
+    Bool(bool),
+}
+impl TextDeserialize<'_> for TriggerValue {
+    fn take_text(
+        mut stream: TextDeserializer<'_>,
+    ) -> Result<(Self, TextDeserializer<'_>), TextError> {
+        match stream.expect_token()? {
+            TextToken::OpenBracket => {
+                let (trigger, rest) = Trigger::take_text(stream)?;
+                return Ok((TriggerValue::SubTrigger(trigger), rest));
+            }
+            TextToken::Int(int) => Ok((TriggerValue::Num(int as f64), stream)),
+            TextToken::UInt(uint) => Ok((TriggerValue::Num(uint as f64), stream)),
+            TextToken::Float(float) => Ok((TriggerValue::Num(float), stream)),
+            TextToken::Bool(bool) => Ok((TriggerValue::Bool(bool), stream)),
+            TextToken::StringQuoted(string) => {
+                Ok((TriggerValue::Scope(string.to_string()), stream))
+            }
+            TextToken::StringUnquoted(string) => {
+                Ok((TriggerValue::Scope(string.to_string()), stream))
+            }
+            _ => Err(TextError::UnexpectedToken),
+        }
+    }
+}
+
+pub enum TriggerClause {
+    Equals(String, TriggerValue),
+    QuestionEquals(String, TriggerValue),
+    NotEquals(String, TriggerValue),
+    GreaterThan(String, TriggerValue),
+    LessThan(String, TriggerValue),
+    GreaterThanOrEqual(String, TriggerValue),
+    LessThanOrEqual(String, TriggerValue),
+
+    And(Trigger),
+    Or(Trigger),
+    Not(Trigger),
+    Nand(Trigger),
+    Nor(Trigger),
+}
+impl TextDeserialize<'_> for TriggerClause {
+    fn take_text(
+        mut stream: TextDeserializer<'_>,
+    ) -> Result<(Self, TextDeserializer<'_>), TextError> {
+        let key: &str = stream.parse()?;
+        match key.to_ascii_uppercase().as_str() {
+            "AND" => {
+                stream
+                    .parse_token(TextToken::Equal)
+                    .context("token after AND was not '='")?;
+                let (value, rest) = Trigger::take_text(stream)?;
+                return Ok((TriggerClause::And(value), rest));
+            }
+            "OR" => {
+                stream
+                    .parse_token(TextToken::Equal)
+                    .context("token after OR was not '='")?;
+                let (value, rest) = Trigger::take_text(stream)?;
+                return Ok((TriggerClause::Or(value), rest));
+            }
+            "NOT" => {
+                stream
+                    .parse_token(TextToken::Equal)
+                    .context("token after NOT was not '='")?;
+                let (value, rest) = Trigger::take_text(stream)?;
+                return Ok((TriggerClause::Not(value), rest));
+            }
+            "NAND" => {
+                stream
+                    .parse_token(TextToken::Equal)
+                    .context("token after NAND was not '='")?;
+                let (value, rest) = Trigger::take_text(stream)?;
+                return Ok((TriggerClause::Nand(value), rest));
+            }
+            "NOR" => {
+                stream
+                    .parse_token(TextToken::Equal)
+                    .context("token after NOR was not '='")?;
+                let (value, rest) = Trigger::take_text(stream)?;
+                return Ok((TriggerClause::Nor(value), rest));
+            }
+            _ => {}
+        }
+        match stream.expect_token()? {
+            TextToken::Equal => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((TriggerClause::Equals(key.to_string(), value), rest));
+            }
+            TextToken::QuestionEqual => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((TriggerClause::QuestionEquals(key.to_string(), value), rest));
+            }
+            TextToken::NotEqual => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((TriggerClause::NotEquals(key.to_string(), value), rest));
+            }
+            TextToken::GreaterThan => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((TriggerClause::GreaterThan(key.to_string(), value), rest));
+            }
+            TextToken::LessThan => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((TriggerClause::LessThan(key.to_string(), value), rest));
+            }
+            TextToken::GreaterThanOrEqual => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((
+                    TriggerClause::GreaterThanOrEqual(key.to_string(), value),
+                    rest,
+                ));
+            }
+            TextToken::LessThanOrEqual => {
+                let (value, rest) = TriggerValue::take_text(stream)?;
+                return Ok((TriggerClause::LessThanOrEqual(key.to_string(), value), rest));
+            }
+            _ => {
+                return Err(TextError::UnexpectedToken);
+            }
+        }
+    }
+}
+
+pub struct Trigger {
+    pub conditions: Vec<TriggerClause>,
+}
+impl TextDeserialize<'_> for Trigger {
+    fn take_text(
+        mut stream: TextDeserializer<'_>,
+    ) -> Result<(Self, TextDeserializer<'_>), TextError> {
+        stream.parse_token(TextToken::OpenBracket)?;
+        let mut conditions = Vec::new();
+        loop {
+            match stream.expect_peek_token()? {
+                TextToken::StringQuoted(_) | TextToken::StringUnquoted(_) => {
+                    let (condition, rest) = TriggerClause::take_text(stream)?;
+                    conditions.push(condition);
+                    stream = rest;
+                }
+                TextToken::CloseBracket => {
+                    stream.eat_token();
+                    break;
+                }
+                _ => {
+                    return Err(TextError::UnexpectedToken);
+                }
+            }
+        }
+        return Ok((Trigger { conditions }, stream));
     }
 }
 

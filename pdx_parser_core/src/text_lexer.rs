@@ -19,9 +19,22 @@ pub enum TextToken<'a> {
     Variable(&'a str),
     /// Only in game files, `@[expr]` will become `Expr("expr")`
     Expr(&'a str),
+
+    /// Only in game files, `!=`
+    NotEqual,
+    /// Only in game files, `?=`
+    QuestionEqual,
+    /// Only in game files, `<`
+    LessThan,
+    /// Only in game files, `<=`
+    LessThanOrEqual,
+    /// Only in game files, `>`
+    GreaterThan,
+    /// Only in game files, `>=`
+    GreaterThanOrEqual,
 }
 impl<'a> TextToken<'a> {
-    pub fn is_base_scalar(&self) -> bool {
+    pub const fn is_base_scalar(&self) -> bool {
         return matches!(
             self,
             TextToken::Int(_)
@@ -32,7 +45,19 @@ impl<'a> TextToken<'a> {
                 | TextToken::StringUnquoted(_)
         );
     }
-    pub fn token_type_repr(&self) -> &'static str {
+    pub const fn is_operator(&self) -> bool {
+        return matches!(
+            self,
+            TextToken::Equal
+                | TextToken::NotEqual
+                | TextToken::QuestionEqual
+                | TextToken::LessThan
+                | TextToken::LessThanOrEqual
+                | TextToken::GreaterThan
+                | TextToken::GreaterThanOrEqual
+        );
+    }
+    pub const fn token_type_repr(&self) -> &'static str {
         return match self {
             TextToken::Equal => "=",
             TextToken::OpenBracket => "{",
@@ -45,6 +70,12 @@ impl<'a> TextToken<'a> {
             TextToken::StringUnquoted(_) => "string_unquoted",
             TextToken::Variable(_) => "variable",
             TextToken::Expr(_) => "expr",
+            TextToken::NotEqual => "!=",
+            TextToken::QuestionEqual => "?=",
+            TextToken::LessThan => "<",
+            TextToken::LessThanOrEqual => "<=",
+            TextToken::GreaterThan => ">",
+            TextToken::GreaterThanOrEqual => ">=",
         };
     }
 }
@@ -62,6 +93,12 @@ impl<'a> Display for TextToken<'a> {
             TextToken::StringUnquoted(text) => f.write_str(text),
             TextToken::Variable(var) => f.write_fmt(format_args!("@{var}")),
             TextToken::Expr(expr) => f.write_fmt(format_args!("@[{expr}]")),
+            TextToken::NotEqual => f.write_str("!="),
+            TextToken::QuestionEqual => f.write_str("?="),
+            TextToken::LessThan => f.write_str("<"),
+            TextToken::LessThanOrEqual => f.write_str("<="),
+            TextToken::GreaterThan => f.write_str(">"),
+            TextToken::GreaterThanOrEqual => f.write_str(">="),
         };
     }
 }
@@ -69,7 +106,7 @@ impl<'a> Display for TextToken<'a> {
 #[derive(Clone)]
 pub struct TextLexer<'a>(&'a str);
 impl<'a> TextLexer<'a> {
-    pub fn new(buffer: &'a str) -> TextLexer<'a> {
+    pub const fn new(buffer: &'a str) -> TextLexer<'a> {
         return TextLexer(buffer);
     }
 
@@ -124,6 +161,36 @@ impl<'a> Iterator for TextLexer<'a> {
                     }
                 }
                 return None; // unclosed string
+            }
+            '!' => {
+                let Some(rest) = rest.strip_prefix('=') else {
+                    return None;
+                };
+                self.0 = rest;
+                return Some(TextToken::NotEqual);
+            }
+            '?' => {
+                let Some(rest) = rest.strip_prefix('=') else {
+                    return None;
+                };
+                self.0 = rest;
+                return Some(TextToken::QuestionEqual);
+            }
+            '<' => {
+                if let Some(rest) = rest.strip_prefix('=') {
+                    self.0 = rest;
+                    return Some(TextToken::LessThanOrEqual);
+                };
+                self.0 = rest;
+                return Some(TextToken::LessThan);
+            }
+            '>' => {
+                if let Some(rest) = rest.strip_prefix('=') {
+                    self.0 = rest;
+                    return Some(TextToken::GreaterThanOrEqual);
+                };
+                self.0 = rest;
+                return Some(TextToken::GreaterThan);
             }
             '#' => {
                 // escape comment
@@ -204,6 +271,6 @@ impl<'a> Iterator for TextLexer<'a> {
     }
 }
 
-fn char_ends_token(c: &char) -> bool {
-    *c == '=' || *c == '{' || *c == '}' || c.is_ascii_whitespace()
+const fn char_ends_token(c: &char) -> bool {
+    c.is_ascii_whitespace() || matches!(c, '=' | '{' | '}' | '!' | '?' | '<' | '>')
 }
