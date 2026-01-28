@@ -19,6 +19,7 @@ Secrets*.toml
 #Files created upon testing
 **/*.eu4
 .env
+stats.png
 
 #Build
 *.zip

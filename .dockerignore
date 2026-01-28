@@ -1,2 +1,6 @@
 .env
 images/
+target/
+**/node_modules
+stats.png
+cartographer_web/pkg
