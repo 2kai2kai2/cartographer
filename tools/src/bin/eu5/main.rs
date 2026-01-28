@@ -1,11 +1,16 @@
 mod flags;
 mod map;
+mod map_objects;
+mod setup_country;
 
-use crate::map::{HexRgb, adjacencies};
-use anyhow::{Context, Result};
+use crate::{
+    map::{HexRgb, adjacencies},
+    map_objects::MapObject,
+};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use image::{DynamicImage, GenericImageView, imageops};
-use pdx_parser_core::TextDeserializer;
+use pdx_parser_core::{TextDeserialize, TextDeserializer, common_deserialize::KVs};
 use std::{
     collections::HashMap,
     fs::File,
@@ -150,5 +155,103 @@ pub fn main() -> Result<()> {
     )?;
     std::fs::write(format!("{destination_web}/flags.txt"), flags.join("\n"))?;
 
+    let reservations_capitals =
+        get_reservations_capitals(&dir).context("While getting capitals for reservations")?;
+    let reservations_capitals: String = reservations_capitals
+        .into_iter()
+        .map(|(tag, (x, y))| format!("{tag};{x};{y}\n"))
+        .collect();
+    std::fs::write(
+        format!("{destination_bot}/capitals.txt"),
+        reservations_capitals,
+    )?;
+
     return Ok(());
+}
+
+fn get_reservations_capitals(dir: &ModdableDir) -> anyhow::Result<Vec<(String, (f64, f64))>> {
+    let mut out = Vec::new();
+
+    let files = dir.moddable_read_dir("game/in_game/gfx/map/map_objects")?;
+    let mut location_cities_object = None;
+    for entry in files {
+        if !entry.file_type.is_file() {
+            continue;
+        }
+        if !entry.name.ends_with(".txt") {
+            continue; // there are `.bin` files too, we don't care about them
+        }
+        let text = std::fs::read_to_string(&entry.path)?;
+        let text = text.strip_prefix("\u{FEFF}").unwrap_or(&text); // remove BOM
+        #[derive(TextDeserialize)]
+        #[no_brackets]
+        struct MapObjectsFile {
+            #[multiple]
+            game_object_locator: Vec<MapObject>,
+        }
+        let map_obj_file: MapObjectsFile = TextDeserializer::from_str(&text)
+            .parse()
+            .with_context(|| format!("While parsing map objects in {}", entry.path.display()))?;
+        if let Some(cities_obj) = map_obj_file
+            .game_object_locator
+            .into_iter()
+            .find(|map_obj| map_obj.name == "city")
+        {
+            location_cities_object = Some(cities_obj);
+            break;
+        }
+    }
+    let Some(location_cities_object) = location_cities_object else {
+        return Err(anyhow::anyhow!(
+            "Could not find `game_object_locator` with name `city`"
+        ));
+    };
+
+    let files = dir.moddable_read_dir("game/main_menu/setup/start")?;
+    let mut setup_countries = None;
+    for entry in files {
+        if !entry.file_type.is_file() {
+            continue;
+        }
+        let text = std::fs::read_to_string(&entry.path)?;
+        let text = text.strip_prefix("\u{FEFF}").unwrap_or(&text); // remove BOM
+        #[derive(TextDeserialize)]
+        #[no_brackets]
+        struct SetupFile {
+            countries: Option<crate::setup_country::Countries>,
+        }
+        let items: SetupFile = TextDeserializer::from_str(&text)
+            .parse()
+            .with_context(|| format!("While parsing setup file {}", entry.path.display()))?;
+        setup_countries = items.countries;
+        if setup_countries.is_some() {
+            break;
+        }
+    }
+    let Some(setup_countries) = setup_countries else {
+        return Err(anyhow::anyhow!("Could not find setup countries"));
+    };
+
+    let city_locations: HashMap<String, (f64, f64)> = location_cities_object
+        .instances
+        .ok_or(anyhow!("Field `instances` was missing from cities object."))?
+        .into_iter()
+        .map(|instance| (instance.id, (instance.position[0], instance.position[2])))
+        .collect();
+    for (tag, country) in setup_countries.countries {
+        let Some(capital) = country.capital else {
+            continue;
+        };
+        let Some(capital_city_location) = city_locations.get(&capital) else {
+            return Err(anyhow!(
+                "Could not find city location for capital {} of {}",
+                capital,
+                tag
+            ));
+        };
+        out.push((tag, *capital_city_location));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+
+    return Ok(out);
 }
