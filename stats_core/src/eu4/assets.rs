@@ -1,7 +1,7 @@
 use std::{collections::HashMap, num::ParseIntError};
 
 use crate::Fetcher;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use image::{GenericImageView, ImageBuffer, Luma, Rgb, RgbImage, RgbaImage};
 
 /// Stats assets that don't change based on mods

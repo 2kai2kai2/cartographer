@@ -8,11 +8,11 @@ use image::{GenericImage, GenericImageView};
 use map::{parse_wasteland_provinces, parse_water_provinces};
 use std::{
     fs::File,
-    io::{stdout, Write},
+    io::{Write, stdout},
     path::{Path, PathBuf},
     str::FromStr,
 };
-use tools::{read_cp1252, stdin_line, ModdableDir};
+use tools::{ModdableDir, read_cp1252, stdin_line};
 
 #[derive(Parser)]
 pub struct Eu4Args {}

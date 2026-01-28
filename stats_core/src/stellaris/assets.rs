@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use image::RgbaImage;
 
 use crate::{
-    stellaris::flags::{FlagFrames, FlagParts},
     Fetcher,
+    stellaris::flags::{FlagFrames, FlagParts},
 };
 
 pub struct MapAssets {

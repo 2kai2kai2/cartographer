@@ -1,6 +1,6 @@
 mod flags;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 
 #[derive(Parser)]

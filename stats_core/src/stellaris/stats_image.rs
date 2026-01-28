@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::Fetcher;
 
-use super::assets::StatsImageAssets;
 use super::STELLARIS_MAP_IMAGE_SIZE;
+use super::assets::StatsImageAssets;
 use ab_glyph::{Font, FontRef};
-use anyhow::{anyhow, Result};
-use image::{imageops, GenericImageView, Rgb, RgbImage, Rgba, RgbaImage};
+use anyhow::{Result, anyhow};
+use image::{GenericImageView, Rgb, RgbImage, Rgba, RgbaImage, imageops};
 use imageproc::{
     definitions::{HasBlack, HasWhite},
     drawing,

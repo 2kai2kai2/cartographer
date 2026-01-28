@@ -2,12 +2,12 @@ use std::cmp::Reverse;
 
 use super::assets::FlagImages;
 use crate::{
+    Fetcher,
     eu4::assets::{MapAssets, StatsImageDefaultAssets},
     utils::{display_num_thousands, text_wrap},
-    Fetcher,
 };
 use ab_glyph::{Font, FontRef};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use image::{DynamicImage, GenericImage, GenericImageView, RgbImage, Rgba, RgbaImage};
 use imageproc::definitions::HasWhite;
 use imageproc::drawing;
@@ -175,7 +175,10 @@ pub fn make_image_top(
             x as i64 + 290 - 12 - 32,
             y as i64 + 156,
         );
-        let attacker_losses_str = format!("Losses: {}", display_num_thousands(w.attacker_losses as f64));
+        let attacker_losses_str = format!(
+            "Losses: {}",
+            display_num_thousands(w.attacker_losses as f64)
+        );
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),
@@ -209,7 +212,10 @@ pub fn make_image_top(
             x as i64 + 12 + 585,
             y as i64 + 156,
         );
-        let defender_losses_str = format!("Losses: {}", display_num_thousands(w.defender_losses as f64));
+        let defender_losses_str = format!(
+            "Losses: {}",
+            display_num_thousands(w.defender_losses as f64)
+        );
         drawing::draw_text_mut(
             &mut out,
             Rgba::white(),

@@ -36,7 +36,10 @@ impl syn::parse::Parse for GameId {
 ///
 /// ## Generics
 /// If the struct needs a lifetime repesenting the original text, it must be named `de`.
-#[proc_macro_derive(BinDeserialize, attributes(multiple, bin_token, no_brackets, default, enum_key))]
+#[proc_macro_derive(
+    BinDeserialize,
+    attributes(multiple, bin_token, no_brackets, default, enum_key)
+)]
 pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     bin_deserialize::derive_bin_deserialize(stream)
 }

@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use pdx_parser_core::raw_parser::RawPDXObject;
 use std::collections::{HashMap, HashSet};
-use tools::{lines_without_comments, read_cp1252, ModdableDir};
+use tools::{ModdableDir, lines_without_comments, read_cp1252};
 
 /// A file in steamfiles `Europa Universalis IV/history/countries`
 #[derive(Debug, Clone)]

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use image::{GenericImageView, Pixel, Rgba, RgbaImage, SubImage};
 use imageproc::{definitions::HasBlack, pixelops::interpolate, point::Point};
 use pdx_parser_core::stellaris_save_parser::CountryFlag;

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use image::RgbaImage;
 use pdx_parser_core::raw_parser::{RawPDXScalar, RawPDXValue};
 
