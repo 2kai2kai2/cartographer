@@ -190,11 +190,22 @@ impl Handler {
             ",
         )
         .bind(game_id as i64);
-        let mut tr = self.db.begin().await.or(Err(None))?;
-        delete_query.execute(&mut *tr).await.or(Err(None))?;
-        let reservations = items_query.fetch_all(&mut *tr).await.or(Err(None))?;
-        tr.commit().await.or(Err(None))?;
-        println!("queries done");
+        let mut tr = self
+            .db
+            .begin()
+            .await
+            .or(Err("Failed to begin database transaction".to_string()))?;
+        delete_query
+            .execute(&mut *tr)
+            .await
+            .or(Err("Failed to delete reservations".to_string()))?;
+        let reservations = items_query
+            .fetch_all(&mut *tr)
+            .await
+            .or(Err("Failed to fetch new set of reservations".to_string()))?;
+        tr.commit()
+            .await
+            .or(Err("Failed to commit database transaction".to_string()))?;
 
         let reservations = reservations.into_iter().map(Reservation::from).collect();
         let reservations = ReservationsData { reservations };
@@ -307,6 +318,12 @@ impl Handler {
         ctx: &serenity::client::Context,
         interaction: &CommandInteraction,
     ) -> Result<CreateInteractionResponse, Option<String>> {
+        return Err(Some(
+            "This command is currently disabled due to resource constraints.
+        Use https://2kai2kai2.github.io/cartographer/ instead."
+                .to_string(),
+        ));
+
         let options = interaction.data.options();
         let save_file = options
             .iter()
@@ -401,7 +418,8 @@ impl Handler {
                 EditInteractionResponse::new()
                     .new_attachment(CreateAttachment::bytes(png_buffer, "image.png")),
             )
-            .await;
+            .await
+            .map_err(|err| format!("ERROR: while editing response: {err}"))?;
 
         timings.push((std::time::Instant::now(), "upload_done"));
         print!("Stats for {:9}", game.id());
@@ -451,7 +469,7 @@ impl Handler {
                 self.handle_unreserve_interaction(interaction, game_id)
                     .await
             }
-            _ => Err(None),
+            _ => Err(Some("Unknown component button identifier".to_string())),
         };
     }
 
@@ -478,7 +496,7 @@ impl Handler {
                     .handle_reserve_modal(interaction, country, game_id)
                     .await;
             }
-            _ => Err(None),
+            _ => Err(Some("Unknown modal button identifier".to_string())),
         };
     }
 }
@@ -493,7 +511,10 @@ impl EventHandler for Handler {
                         .create_response(ctx.http, response)
                         .await
                         .inspect_err(|msg| println!("ERROR: {msg}")),
-                    Err(Some(msg)) => command.create_response(ctx.http, make_error_msg(msg)).await,
+                    Err(Some(msg)) => {
+                        println!("An error occurred during a command interaction: {msg}");
+                        command.create_response(ctx.http, make_error_msg(msg)).await
+                    }
                     Err(None) => Ok(()),
                 }
             }
@@ -501,7 +522,7 @@ impl EventHandler for Handler {
                 match self.handle_component_interaction(&ctx, interaction).await {
                     Ok(response) => interaction.create_response(ctx.http, response).await,
                     Err(Some(msg)) => {
-                        println!("An error occurred during an interaction: {msg}");
+                        println!("An error occurred during a component interaction: {msg}");
                         interaction
                             .create_response(ctx.http, make_error_msg(msg))
                             .await
