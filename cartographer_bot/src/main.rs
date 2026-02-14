@@ -658,7 +658,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let db = PgPool::connect_lazy(&env.postgres_string)?;
     let mut client = Client::builder(&env.discord_token, GatewayIntents::empty())
         .event_handler(Handler { db })
-        .activity(ActivityData::custom("Taking EU4 Reservations"))
+        .activity(ActivityData::custom("Taking EU4 & EU5 Reservations"))
         .await
         .context("While creating client.")?;
 
