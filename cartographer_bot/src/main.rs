@@ -1,74 +1,41 @@
 use anyhow::Context;
-use lazy_static::lazy_static;
 use reservations::{Reservation, ReservationsData};
 use serenity::all::{ActivityData, CacheHttp, Ready};
 use serenity::async_trait;
 use serenity::model::application::*;
 use serenity::{
+    Client,
     all::{EventHandler, GatewayIntents},
     builder::*,
-    Client,
 };
 use sqlx::PgPool;
 use stats_core::{EU4ParserStepText, GameSaveType, StellarisParserStepText};
-use std::collections::HashMap;
 use std::io::Cursor;
+use std::str::FromStr;
 
+use crate::assets::Tags;
+use crate::reservations::GameType;
+
+mod assets;
 mod db_types;
 mod reservations;
+
+const ASSETS_BASE_PATH: &str = "/app/assets";
+lazy_static::lazy_static! {
+    static ref TAGS_EU4_VANILLA: Tags = Tags::parse_new(std::fs::read_to_string(format!("{ASSETS_BASE_PATH}/eu4/vanilla/tags.txt")).unwrap()).unwrap();
+    static ref TAGS_EU5_VANILLA: Tags = Tags::parse_new(std::fs::read_to_string(format!("{ASSETS_BASE_PATH}/eu5/vanilla/tags.txt")).unwrap()).unwrap();
+}
+pub fn get_tags(game_type: GameType) -> &'static Tags {
+    return match game_type {
+        GameType::EU4 => &TAGS_EU4_VANILLA,
+        GameType::EU5 => &TAGS_EU5_VANILLA,
+    };
+}
 
 #[derive(serde::Deserialize, Debug)]
 struct Env {
     discord_token: String,
     postgres_string: String,
-}
-
-const PNG_MAP_1444: &[u8] = include_bytes!("../assets/eu4/vanilla/1444.png");
-const PNG_ICON_X: &[u8] = include_bytes!("../assets/eu4/xIcon.png");
-
-lazy_static! {
-    pub static ref TAGS: HashMap<String, Vec<String>> = {
-        let tags = include_str!("../../cartographer_web/resources/eu4/vanilla/tags.txt");
-        tags.lines()
-            .map(|line| {
-                let mut it = line.split(';');
-                let tag = it.next().expect("Invalid tags file");
-                return (tag.to_string(), it.map(str::to_string).collect());
-            })
-            .collect()
-    };
-    pub static ref CAPITAL_LOCATIONS: HashMap<String, (f64, f64)> = {
-        let locations = include_str!("../assets/eu4/vanilla/capitals.txt");
-        locations
-            .lines()
-            .map(|line| {
-                let mut it = line.split(';');
-                let tag = it.next().expect("Missing tag on line");
-                let x = it.next().expect("Missing x on line");
-                let y = it.next().expect("Missing y on line");
-                if tag.len() != 3 || !tag.chars().all(|c| c.is_ascii_uppercase()) {
-                    panic!("Invalid tag '{tag}'");
-                }
-                let x: f64 = x.parse().expect("Failed to parse x location");
-                let y: f64 = y.parse().expect("Failed to parse y location");
-                (tag.to_string(), (x, y))
-            })
-            .collect()
-    };
-}
-
-/// Gets the tag for a country name or tag.
-fn get_tag(country: &str) -> Option<String> {
-    let country = country.trim();
-    if country.len() == 3 && TAGS.contains_key(&country.to_uppercase()) {
-        return Some(country.to_uppercase());
-    }
-    return TAGS.iter().find_map(|(tag, names)| {
-        names
-            .iter()
-            .find(|name| name.eq_ignore_ascii_case(country))
-            .and(Some(tag.to_uppercase()))
-    });
 }
 
 fn make_error_msg(text: impl Into<String>) -> CreateInteractionResponse {
@@ -98,24 +65,38 @@ struct Handler {
 impl Handler {
     async fn handle_reservations_command(
         &self,
+        ctx: &serenity::client::Context,
         interaction: &CommandInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
+    ) -> Result<(), String> {
         println!("Handling /reservations");
+        let game_type = interaction
+            .data
+            .options
+            .iter()
+            .find(|option| option.name == "game")
+            .ok_or_else(|| "Missing game option".to_string())?;
+        let game_type = match &game_type.value {
+            CommandDataOptionValue::String(game_type) => game_type,
+            _ => return Err("Invalid game option".to_string()),
+        };
+        let game_type = GameType::from_str(game_type)
+            .map_err(|_| format!("Unknown game name '{game_type}'"))?;
+
         // TODO: check permissions
         let query = sqlx::query_scalar(
             "
-            INSERT INTO games(server_id)
-            VALUES($1)
+            INSERT INTO games(server_id, game_type)
+            VALUES($1, $2)
             RETURNING game_id
             ",
         )
-        .bind(interaction.guild_id.map(|id| id.get() as i64));
+        .bind(interaction.guild_id.map(|id| id.get() as i64))
+        .bind(game_type);
         let game_id: i64 = query
             .fetch_one(&self.db)
             .await
-            .map_err(|err| Some(err.to_string()))?;
+            .map_err(|err| err.to_string())?;
         let game_id = game_id as u64;
-        println!("Gameid {game_id}");
 
         let reserve_input = CreateButton::new(format!("reserve:{game_id}")).label("Reserve");
         let unreserve_button = CreateButton::new(format!("unreserve:{game_id}"))
@@ -126,25 +107,36 @@ impl Handler {
             unreserve_button,
         ])];
 
-        let reservations = ReservationsData::new();
+        let reservations = ReservationsData::new(game_type);
+
+        let tags = std::fs::read_to_string(game_type.get_tags_path(ASSETS_BASE_PATH))
+            .map_err(|err| err.to_string())?;
+        let tags = Tags::parse_new(tags).map_err(|err| err.to_string())?;
+        let msg =
+            std::fmt::from_fn(|f| reservations.format_with_game(game_type, &tags, f)).to_string();
         let msg = CreateInteractionResponseMessage::new()
-            .content(reservations.to_string())
+            .content(msg)
             .components(action_row);
-        let msg = match reservations.make_map_png() {
+        let msg = match reservations.make_map_png().await {
             Ok(img) => msg.files([CreateAttachment::bytes(img, "reservation_map.png")]),
             Err(err) => {
                 println!("{err}");
                 msg.files([])
             }
         };
-        return Ok(CreateInteractionResponse::Message(msg));
+
+        interaction
+            .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
+            .await
+            .map_err(|err| err.to_string())
     }
 
     async fn handle_reserve_button(
         &self,
+        ctx: &serenity::client::Context,
         interaction: &ComponentInteraction,
         game_id: u64,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
+    ) -> Result<(), String> {
         // temp: add server id to games since we currently don't have them
         let query = sqlx::query(
             "
@@ -155,23 +147,27 @@ impl Handler {
         )
         .bind(interaction.guild_id.map(|id| id.get() as i64))
         .bind(game_id as i64);
-        query
-            .execute(&self.db)
-            .await
-            .map_err(|err| Some(err.to_string()))?;
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let _ = query.execute(&db).await;
+        });
 
-        let tag_input = CreateInputText::new(InputTextStyle::Short, "EU4 Country Tag", "tag")
+        let tag_input = CreateInputText::new(InputTextStyle::Short, "Country Tag", "tag")
             .placeholder("Name (Sweden) or tag (SWE)");
         let modal = CreateModal::new(format!("reserve:{game_id}"), "Select country tag")
             .components(vec![CreateActionRow::InputText(tag_input)]);
-        return Ok(CreateInteractionResponse::Modal(modal));
+        interaction
+            .create_response(ctx.http(), CreateInteractionResponse::Modal(modal))
+            .await
+            .map_err(|err| err.to_string())
     }
 
     async fn handle_unreserve_interaction(
         &self,
+        ctx: &serenity::client::Context,
         interaction: &ComponentInteraction,
         game_id: u64,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
+    ) -> Result<(), String> {
         let delete_query = sqlx::query(
             "
             DELETE FROM reservations
@@ -181,6 +177,14 @@ impl Handler {
         .bind(game_id as i64)
         .bind(interaction.user.id.get() as i64);
 
+        let game_query = sqlx::query_scalar(
+            "
+            SELECT game_type
+            FROM games
+            WHERE game_id = $1
+            ",
+        )
+        .bind(game_id as i64);
         let items_query = sqlx::query_as::<_, db_types::RawReservation>(
             "
             SELECT user_id, timestamp, tag
@@ -199,6 +203,10 @@ impl Handler {
             .execute(&mut *tr)
             .await
             .or(Err("Failed to delete reservations".to_string()))?;
+        let game_type: GameType = game_query
+            .fetch_one(&mut *tr)
+            .await
+            .or(Err("Failed to fetch game type".to_string()))?;
         let reservations = items_query
             .fetch_all(&mut *tr)
             .await
@@ -208,25 +216,68 @@ impl Handler {
             .or(Err("Failed to commit database transaction".to_string()))?;
 
         let reservations = reservations.into_iter().map(Reservation::from).collect();
-        let reservations = ReservationsData { reservations };
-        let msg = CreateInteractionResponseMessage::new().content(reservations.to_string());
-        let msg = match reservations.make_map_png() {
-            Ok(img) => msg.files([CreateAttachment::bytes(img, "reservation_map.png")]),
+        let reservations = ReservationsData {
+            reservations,
+            game_type,
+        };
+        let msg =
+            std::fmt::from_fn(|f| reservations.format_with_game(game_type, get_tags(game_type), f))
+                .to_string();
+        let msg = CreateInteractionResponseMessage::new().content(msg);
+
+        let (msg, img) = tokio::join!(
+            interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(msg)),
+            tokio::spawn(async move { reservations.make_map_png().await })
+        );
+        msg.map_err(|err| err.to_string())?;
+
+        let attachments = match img {
+            Ok(Ok(img)) => {
+                EditAttachments::new().add(CreateAttachment::bytes(img, "reservation_map.png"))
+            }
+            Ok(Err(err)) => {
+                println!("{err}");
+                EditAttachments::new()
+            }
             Err(err) => {
                 println!("{err}");
-                msg.files([])
+                EditAttachments::new()
             }
         };
-        return Ok(CreateInteractionResponse::UpdateMessage(msg));
+        interaction
+            .edit_response(
+                ctx.http(),
+                EditInteractionResponse::new().attachments(attachments),
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+        Ok(())
     }
 
     async fn handle_reserve_modal(
         &self,
+        ctx: &serenity::client::Context,
         interaction: &ModalInteraction,
         country: &String,
         game_id: u64,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
-        let tag = get_tag(&country).ok_or(Some("Unrecognized country name or tag.".to_string()))?;
+    ) -> Result<(), String> {
+        let game_query = sqlx::query_scalar(
+            "
+            SELECT game_type
+            FROM games
+            WHERE game_id = $1
+            ",
+        )
+        .bind(game_id as i64);
+        let game_type: GameType = game_query
+            .fetch_one(&self.db)
+            .await
+            .map_err(|err| format!("ERROR: while fetching game type: {err}"))?;
+
+        let tags = get_tags(game_type);
+        let tag = tags
+            .get_tag_for_name(country)
+            .ok_or("Unrecognized country name or tag.".to_string())?;
 
         let check_query = sqlx::query_scalar::<_, bool>(
             "
@@ -281,8 +332,8 @@ impl Handler {
             .await
             .map_err(|err| format!("ERROR: while initiating transaction: {err}"))?;
         match check_query.fetch_one(&mut *tr).await {
-            Err(err) => return Err(Some(format!("ERROR: while checking tag: {err}"))),
-            Ok(true) => return Err(Some(format!("The tag {tag} is already reserved."))),
+            Err(err) => return Err(format!("ERROR: while checking tag: {err}")),
+            Ok(true) => return Err(format!("The tag {tag} is already reserved.")),
             Ok(false) => (),
         };
         insert_query
@@ -298,16 +349,42 @@ impl Handler {
             .map_err(|err| format!("ERROR: while committing transaction: {err}"))?;
 
         let reservations = reservations.into_iter().map(Reservation::from).collect();
-        let reservations = ReservationsData { reservations };
-        let msg = CreateInteractionResponseMessage::new().content(reservations.to_string());
-        let msg = match reservations.make_map_png() {
-            Ok(img) => msg.files([CreateAttachment::bytes(img, "reservation_map.png")]),
+        let reservations = ReservationsData {
+            reservations,
+            game_type,
+        };
+        let msg =
+            std::fmt::from_fn(|f| reservations.format_with_game(game_type, get_tags(game_type), f))
+                .to_string();
+        let msg = CreateInteractionResponseMessage::new().content(msg);
+
+        let (msg, img) = tokio::join!(
+            interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(msg)),
+            tokio::spawn(async move { reservations.make_map_png().await })
+        );
+        msg.map_err(|err| err.to_string())?;
+
+        let attachments = match img {
+            Ok(Ok(img)) => {
+                EditAttachments::new().add(CreateAttachment::bytes(img, "reservation_map.png"))
+            }
+            Ok(Err(err)) => {
+                println!("{err}");
+                EditAttachments::new()
+            }
             Err(err) => {
                 println!("{err}");
-                msg.files([])
+                EditAttachments::new()
             }
         };
-        return Ok(CreateInteractionResponse::UpdateMessage(msg));
+        interaction
+            .edit_response(
+                ctx.http(),
+                EditInteractionResponse::new().attachments(attachments),
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+        Ok(())
     }
 }
 
@@ -317,22 +394,22 @@ impl Handler {
         &self,
         ctx: &serenity::client::Context,
         interaction: &CommandInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
-        return Err(Some(
+    ) -> Result<(), String> {
+        return Err(
             "This command is currently disabled due to resource constraints.
         Use https://2kai2kai2.github.io/cartographer/ instead."
                 .to_string(),
-        ));
+        );
 
         let options = interaction.data.options();
         let save_file = options
             .iter()
             .find(|option| option.name == "save_file")
-            .ok_or(Some("A save file must be specified.".to_string()))?;
+            .ok_or("A save file must be specified.".to_string())?;
         let ResolvedValue::Attachment(attachment) = save_file.value else {
-            return Err(Some(
+            return Err(
                 "Unexpected option value type. `save_file` should be an attachment.".to_string(),
-            ));
+            );
         };
 
         let _ = interaction
@@ -340,19 +417,16 @@ impl Handler {
                 ctx.http(),
                 CreateInteractionResponse::Defer(CreateInteractionResponseMessage::new()),
             )
-            .await;
+            .await
+            .map_err(|err| err.to_string())?;
 
         let time_download_start = std::time::Instant::now();
         let save_file_name = attachment.filename.clone();
-        let raw_save = attachment
-            .download()
-            .await
-            .map_err(|err| Some(err.to_string()))?;
+        let raw_save = attachment.download().await.map_err(|err| err.to_string())?;
 
         let time_parse_preprocess_start = std::time::Instant::now();
-        let game = GameSaveType::determine_from_filename(&save_file_name).ok_or(Some(
-            "Could not determine the game type from the filename.".to_string(),
-        ))?;
+        let game = GameSaveType::determine_from_filename(&save_file_name)
+            .ok_or("Could not determine the game type from the filename.".to_string())?;
         let (final_img, mut timings) = match game {
             GameSaveType::EU4 => {
                 let mut timings = vec![
@@ -360,20 +434,20 @@ impl Handler {
                     (time_parse_preprocess_start, "downloaded"),
                 ];
 
-                let text = EU4ParserStepText::decode_from(&raw_save)
-                    .map_err(|err| Some(err.to_string()))?;
+                let text =
+                    EU4ParserStepText::decode_from(&raw_save).map_err(|err| err.to_string())?;
                 timings.push((std::time::Instant::now(), "preprocess_done"));
 
-                let raw = text.parse().map_err(|err| Some(err.to_string()))?;
+                let raw = text.parse().map_err(|err| err.to_string())?;
                 timings.push((std::time::Instant::now(), "parse1_done"));
 
-                let save = raw.parse().map_err(|err| Some(err.to_string()))?;
+                let save = raw.parse().map_err(|err| err.to_string())?;
                 drop(text);
                 timings.push((std::time::Instant::now(), "parse2_done"));
 
                 let img = stats_core::eu4::render_stats_image(&LocalFetcher, save)
                     .await
-                    .map_err(|err| Some(err.to_string()))?;
+                    .map_err(|err| err.to_string())?;
                 timings.push((std::time::Instant::now(), "render_done"));
 
                 (img, timings)
@@ -385,32 +459,32 @@ impl Handler {
                 ];
 
                 let text = StellarisParserStepText::decode_from(&raw_save)
-                    .map_err(|err| Some(err.to_string()))?;
+                    .map_err(|err| err.to_string())?;
                 timings.push((std::time::Instant::now(), "preprocess_done"));
 
-                let raw = text.parse().map_err(|err| Some(err.to_string()))?;
+                let raw = text.parse().map_err(|err| err.to_string())?;
                 timings.push((std::time::Instant::now(), "parse1_done"));
 
-                let save = raw.parse().map_err(|err| Some(err.to_string()))?;
+                let save = raw.parse().map_err(|err| err.to_string())?;
                 drop(text);
                 timings.push((std::time::Instant::now(), "parse2_done"));
 
                 let img = stats_core::stellaris::render_stats_image_stellaris(&LocalFetcher, save)
                     .await
-                    .map_err(|err| Some(err.to_string()))?;
+                    .map_err(|err| err.to_string())?;
                 timings.push((std::time::Instant::now(), "render_done"));
 
                 (img, timings)
             }
             GameSaveType::EU5 => {
-                return Err(Some("EU5 not yet implemented for bot".to_string()));
+                return Err("EU5 not yet implemented for bot".to_string());
             }
         };
 
         let mut png_buffer: Vec<u8> = Vec::new();
         final_img
             .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
-            .map_err(|_| Some("Failed to save image to PNG.".to_string()))?;
+            .map_err(|_| "Failed to save image to PNG.".to_string())?;
 
         let _ = interaction
             .edit_response(
@@ -430,7 +504,7 @@ impl Handler {
             print!(" | {name} {:5.2}s", end.duration_since(start).as_secs_f32(),);
         }
         println!("");
-        return Err(None); // we handle responses internally since we have updating messages
+        return Ok(());
     }
 }
 
@@ -439,11 +513,11 @@ impl Handler {
         &self,
         ctx: &serenity::client::Context,
         interaction: &CommandInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
+    ) -> Result<(), String> {
         match interaction.data.name.as_str() {
-            "reservations" => self.handle_reservations_command(interaction).await,
+            "reservations" => self.handle_reservations_command(ctx, interaction).await,
             "stats" => self.handle_stats_command(ctx, interaction).await,
-            _ => Err(Some("Unsupported command".to_string())),
+            _ => Err("Unsupported command".to_string()),
         }
     }
 
@@ -451,25 +525,25 @@ impl Handler {
         &self,
         ctx: &serenity::client::Context,
         interaction: &ComponentInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
+    ) -> Result<(), String> {
         return match (
             &interaction.data.kind,
             interaction.data.custom_id.split_once(':'),
         ) {
             (ComponentInteractionDataKind::Button, Some(("reserve", game_id))) => {
                 let Ok(game_id) = game_id.parse::<u64>() else {
-                    return Err(Some("ERROR: failed to parse game id".to_string()));
+                    return Err("ERROR: failed to parse game id".to_string());
                 };
-                self.handle_reserve_button(interaction, game_id).await
+                self.handle_reserve_button(ctx, interaction, game_id).await
             }
             (ComponentInteractionDataKind::Button, Some(("unreserve", game_id))) => {
                 let Ok(game_id) = game_id.parse::<u64>() else {
-                    return Err(Some("ERROR: failed to parse game id".to_string()));
+                    return Err("ERROR: failed to parse game id".to_string());
                 };
-                self.handle_unreserve_interaction(interaction, game_id)
+                self.handle_unreserve_interaction(ctx, interaction, game_id)
                     .await
             }
-            _ => Err(Some("Unknown component button identifier".to_string())),
+            _ => Err("Unknown component button identifier".to_string()),
         };
     }
 
@@ -477,26 +551,26 @@ impl Handler {
         &self,
         ctx: &serenity::client::Context,
         interaction: &ModalInteraction,
-    ) -> Result<CreateInteractionResponse, Option<String>> {
+    ) -> Result<(), String> {
         return match interaction.data.custom_id.split_once(':') {
             Some(("reserve", game_id)) => {
                 let Some(row) = interaction.data.components.get(0) else {
-                    return Err(Some("Missing action row".to_string()));
+                    return Err("Missing action row".to_string());
                 };
                 let [ActionRowComponent::InputText(input_text)] = row.components.as_slice() else {
-                    return Err(Some("Incorrect modal contents".to_string()));
+                    return Err("Incorrect modal contents".to_string());
                 };
                 let Ok(game_id) = game_id.parse::<u64>() else {
-                    return Err(Some("ERROR: failed to parse game id".to_string()));
+                    return Err("ERROR: failed to parse game id".to_string());
                 };
                 let Some(country) = &input_text.value else {
-                    return Err(None);
+                    return Ok(());
                 };
                 return self
-                    .handle_reserve_modal(interaction, country, game_id)
+                    .handle_reserve_modal(ctx, interaction, country, game_id)
                     .await;
             }
-            _ => Err(Some("Unknown modal button identifier".to_string())),
+            _ => Err("Unknown modal button identifier".to_string()),
         };
     }
 }
@@ -504,46 +578,40 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: serenity::client::Context, interaction: Interaction) {
-        let _ = match &interaction {
+        match &interaction {
             Interaction::Command(command) => {
                 match self.handle_command_interaction(&ctx, command).await {
-                    Ok(response) => command
-                        .create_response(ctx.http, response)
-                        .await
-                        .inspect_err(|msg| println!("ERROR: {msg}")),
-                    Err(Some(msg)) => {
+                    Ok(()) => {}
+                    Err(msg) => {
                         println!("An error occurred during a command interaction: {msg}");
-                        command.create_response(ctx.http, make_error_msg(msg)).await
+                        let _ = command.create_response(ctx.http, make_error_msg(msg)).await;
                     }
-                    Err(None) => Ok(()),
                 }
             }
             Interaction::Component(interaction) => {
                 match self.handle_component_interaction(&ctx, interaction).await {
-                    Ok(response) => interaction.create_response(ctx.http, response).await,
-                    Err(Some(msg)) => {
+                    Ok(()) => {}
+                    Err(msg) => {
                         println!("An error occurred during a component interaction: {msg}");
-                        interaction
+                        let _ = interaction
                             .create_response(ctx.http, make_error_msg(msg))
-                            .await
+                            .await;
                     }
-                    Err(None) => Ok(()),
                 }
             }
             Interaction::Modal(interaction) => {
                 match self.handle_modal_interaction(&ctx, interaction).await {
-                    Ok(response) => interaction.create_response(ctx.http, response).await,
-                    Err(Some(msg)) => {
+                    Ok(()) => {}
+                    Err(msg) => {
                         println!("An error occurred during a modal interaction: {msg}");
-                        interaction
+                        let _ = interaction
                             .create_response(ctx.http, make_error_msg(msg))
-                            .await
+                            .await;
                     }
-                    Err(None) => Ok(()),
                 }
             }
             _ => return,
-        };
+        }
     }
     async fn ready(&self, ctx: serenity::client::Context, ready: Ready) {
         register_commands(&ctx.http).await;
@@ -553,7 +621,17 @@ impl EventHandler for Handler {
 
 async fn register_commands(http: &impl serenity::http::CacheHttp) {
     let reservations_command = CreateCommand::new("reservations")
-        .description("Creates a new Cartographer EU4 reservations message.");
+        .description("Creates a new Cartographer reservations message.")
+        .add_option(
+            CreateCommandOption::new(
+                CommandOptionType::String,
+                "game",
+                "Which game to create reservations for.",
+            )
+            .add_string_choice("EU5", "EU5")
+            .add_string_choice("EU4", "EU4")
+            .required(true),
+        );
     let _ = Command::create_global_command(&http, reservations_command)
         .await
         .unwrap();

@@ -9,13 +9,28 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(BinDeserialize, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CountryBasisType {
     Location,
     Building,
     Army,
     Navy,
     Pop,
+    Unknown(Box<str>),
+}
+impl<'de> BinDeserialize<'de> for CountryBasisType {
+    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
+        let text: &'de str = stream.parse()?;
+        let out = match text {
+            "location" => CountryBasisType::Location,
+            "building" => CountryBasisType::Building,
+            "army" => CountryBasisType::Army,
+            "navy" => CountryBasisType::Navy,
+            "pop" => CountryBasisType::Pop,
+            other => CountryBasisType::Unknown(other.into()),
+        };
+        return Ok((out, stream));
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -193,12 +208,12 @@ pub struct RawCountry {
     #[bin_token("eu5")]
     pub historical: SkipValue,
     #[bin_token("eu5")]
-    pub country_type: CountryType,
+    pub country_type: Option<CountryType>,
     #[cfg(any())]
     #[bin_token("eu5")]
     pub score: SkipValue,
     #[bin_token("eu5")]
-    pub currency_data: CountryCurrencyData,
+    pub currency_data: Option<CountryCurrencyData>,
     #[cfg(any())]
     #[bin_token("eu5")]
     #[default(0)]
@@ -225,6 +240,7 @@ pub struct RawCountry {
     #[default(0.0)]
     pub max_sailors: f64,
     #[bin_token("eu5")]
+    #[default(CountryEconomy { expense: 0.0, income: 0.0 })]
     pub economy: CountryEconomy,
     /// Usually present
     #[bin_token("eu5")]

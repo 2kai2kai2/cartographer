@@ -10,7 +10,7 @@ use crate::{
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use image::{DynamicImage, GenericImageView, imageops};
-use pdx_parser_core::{TextDeserialize, TextDeserializer, common_deserialize::KVs};
+use pdx_parser_core::{TextDeserialize, TextDeserializer, helpers::SplitAtFirst};
 use std::{
     collections::HashMap,
     fs::File,
@@ -155,11 +155,35 @@ pub fn main() -> Result<()> {
     )?;
     std::fs::write(format!("{destination_web}/flags.txt"), flags.join("\n"))?;
 
+    let all_localization = load_all_localizations(&dir).context("While loading localizations")?;
     let reservations_capitals =
         get_reservations_capitals(&dir).context("While getting capitals for reservations")?;
-    let reservations_capitals: String = reservations_capitals
+    let reservations_tags: Vec<_> = reservations_capitals
+        .iter()
+        .filter_map(|(tag, _)| {
+            let loc = all_localization.get(tag)?;
+            if let Ok(normalized) =
+                decancer::cure(loc, decancer::Options::default().retain_capitalization())
+                && normalized != loc
+            {
+                return Some((
+                    tag.to_string(),
+                    vec![loc.to_string(), normalized.to_string()],
+                ));
+            } else {
+                return Some((tag.to_string(), vec![loc.to_string()]));
+            }
+        })
+        .collect();
+    drop(all_localization);
+    let reservations_tags: String = reservations_tags
         .into_iter()
-        .map(|(tag, (x, y))| format!("{tag};{x};{y}\n"))
+        .map(|(tag, names)| format!("{tag};{}\n", names.join(";")))
+        .collect();
+    std::fs::write(format!("{destination_bot}/tags.txt"), reservations_tags)?;
+    let reservations_capitals: String = reservations_capitals
+        .iter()
+        .map(|(tag, (x, y))| format!("{tag};{};{}\n", x / 4.0, y / 4.0))
         .collect();
     std::fs::write(
         format!("{destination_bot}/capitals.txt"),
@@ -253,5 +277,35 @@ fn get_reservations_capitals(dir: &ModdableDir) -> anyhow::Result<Vec<(String, (
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
 
+    return Ok(out);
+}
+
+fn load_all_localizations(dir: &ModdableDir) -> anyhow::Result<HashMap<String, String>> {
+    let loc_files = dir.moddable_read_dir("game/main_menu/localization/english")?;
+    let mut out = HashMap::new();
+    for loc_file in loc_files {
+        if !loc_file.file_type.is_file() || !loc_file.name.ends_with(".yml") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&loc_file.path)?;
+        let text = text.strip_prefix("\u{FEFF}").unwrap_or(&text); // remove BOM
+        let lines = text.lines().filter_map(|line| {
+            let line = line.strip_prefix(' ')?;
+            let (key, value) = line.split_once(':')?;
+            let key = key.trim();
+            let value = value.trim();
+            if key.is_empty() || value.is_empty() {
+                return None;
+            }
+
+            if let Some(value) = value.strip_prefix('"') {
+                let (value, _) = value.split_at_first(|c| *c == '"')?;
+                return Some((key.to_string(), value.to_string()));
+            } else {
+                return Some((key.to_string(), value.to_string()));
+            }
+        });
+        out.extend(lines);
+    }
     return Ok(out);
 }

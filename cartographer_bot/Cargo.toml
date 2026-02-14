@@ -1,7 +1,8 @@
 [package]
 name = "cartographer_bot"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.93"
 
 [dependencies]
 anyhow = "1.0.86"
@@ -30,6 +31,7 @@ lazy_static = "1.5.0"
 image = "0.25.2"
 dotenvy = "0.15.7"
 envy = "0.4.2"
+ouroboros = "0.18.5"
 
 [profile.release]
 lto = true

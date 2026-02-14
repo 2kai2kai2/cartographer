@@ -221,7 +221,7 @@ pub fn main() -> Result<()> {
         .iter()
         .flat_map(|(tag, name)| format!("{tag};{}\n", name.join(";")).into_bytes())
         .collect();
-    File::create(format!("{destination_web}/tags.txt"))
+    File::create(format!("{destination_bot}/tags.txt"))
         .unwrap()
         .write(&country_names)
         .unwrap();

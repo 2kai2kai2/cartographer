@@ -1,6 +1,9 @@
+CREATE TYPE IF NOT EXISTS game_type AS ENUM ('EU4', 'EU5');
+
 CREATE TABLE IF NOT EXISTS games (
     game_id BIGSERIAL PRIMARY KEY,
-    server_id BIGINT
+    server_id BIGINT,
+    game_type game_type NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS reservations (

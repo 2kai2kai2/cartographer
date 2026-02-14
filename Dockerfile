@@ -1,4 +1,5 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+FROM rust:1 AS chef 
+RUN cargo install cargo-chef 
 WORKDIR /app
 
 FROM chef AS planner
@@ -11,11 +12,13 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY . .
+RUN cargo --version
 RUN cargo build --release --bin cartographer_bot
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/cartographer_bot /usr/local/bin
 COPY cartographer_web/resources /app/resources
+COPY cartographer_bot/assets /app/assets
 RUN apt-get update && apt-get install -y openssl
 ENTRYPOINT ["/usr/local/bin/cartographer_bot"]
