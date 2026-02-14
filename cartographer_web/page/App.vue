@@ -43,7 +43,7 @@ async function on_click_copy_img() {
     ]);
     if (!clicked_copy_img.value) {
         // unless it's broken, we don't care about multiple clicks
-        umami.track("clicked-copy-image");
+        umami?.track("clicked-copy-image");
     }
     clicked_copy_img.value = true;
 }
@@ -70,7 +70,7 @@ async function do_rendering() {
                 time_render_start.name,
                 time_render_end.name
             );
-            umami.track("render-completed", {
+            umami?.track("render-completed", {
                 render_duration: time_render_measure.duration,
             });
             img_value.value = `data:image/png;base64,${img_b64}`;
@@ -87,7 +87,7 @@ async function do_rendering() {
                 time_render_start.name,
                 time_render_end.name
             );
-            umami.track("render-completed", {
+            umami?.track("render-completed", {
                 render_duration: time_render_measure.duration,
             });
             img_value.value = `data:image/png;base64,${img_b64}`;
@@ -106,7 +106,7 @@ async function do_rendering() {
                 time_render_start.name,
                 time_render_end.name
             );
-            umami.track("render-completed", {
+            umami?.track("render-completed", {
                 render_duration: time_render_measure.duration,
             });
             img_value.value = `data:image/png;base64,${img_b64}`;
@@ -135,7 +135,7 @@ async function on_file_picked(file: File) {
         const player_count = count_players(_save);
         const game_mod = _save[0] == "EU5" ? "vanilla" : _save[1].game_mod;
         const date = _save[0] == "EU5" ? _save[1].metadata.date : _save[1].date;
-        umami.track("file-upload", {
+        umami?.track("file-upload", {
             game: _save[0],
             mod: game_mod,
             player_count,
@@ -158,7 +158,7 @@ async function on_file_picked(file: File) {
     }
 }
 async function on_player_edit_confirm() {
-    umami.track("player-edit-confirm");
+    umami?.track("player-edit-confirm");
     stage.value = "rendering";
     do_rendering();
 }
