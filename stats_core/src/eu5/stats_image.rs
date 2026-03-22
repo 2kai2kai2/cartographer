@@ -45,12 +45,12 @@ pub fn make_image_top(
         let x = LEFT_MARGIN + (2986 / 2) * (i as i32 / 8);
         let y = TOP_MARGIN + 128 * (i as i32 % 8);
 
-        let (regular_army, regular_navy, _, _) = nation.military_size(&save)?;
+        let (regular_army, regular_navy, _, _) = nation.military_size(save)?;
 
         // x+0: flag
         image::imageops::overlay(&mut out, &assets.flag_frame, x as i64, y as i64 + 4);
         if tag.len() == 3 {
-            if let Some(flag) = gamedata_assets.flags.get_normal_flag(&tag) {
+            if let Some(flag) = gamedata_assets.flags.get_normal_flag(tag) {
                 let flag = flag.to_image();
                 let flag = image::DynamicImage::ImageRgb8(flag).to_rgba8();
                 image::imageops::overlay(&mut out, &flag, x as i64 + 10, y as i64 + 14);
@@ -185,7 +185,7 @@ pub fn make_image_top(
         &date_str,
     );
 
-    return Ok(DynamicImage::ImageRgba8(out).to_rgb8());
+    Ok(DynamicImage::ImageRgba8(out).to_rgb8())
 }
 
 pub async fn render_stats_image(
@@ -215,5 +215,5 @@ pub async fn render_stats_image(
     let Some(final_img) = RgbImage::from_raw(4096, 1024 + 2048, image_top) else {
         unreachable!("We just rendered these images at this size");
     };
-    return Ok(final_img);
+    Ok(final_img)
 }

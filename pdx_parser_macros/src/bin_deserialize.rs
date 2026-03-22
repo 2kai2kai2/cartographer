@@ -1,5 +1,4 @@
 use crate::common::*;
-use proc_macro;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{FieldsNamed, Ident, PathArguments, Type, Variant};
@@ -73,12 +72,12 @@ fn extract_bin_token_attr(
             let _: syn::Token![,] = input.parse()?;
 
             if input.is_empty() {
-                return Ok(BinTokenParse {
+                Ok(BinTokenParse {
                     game,
                     token_name: Some(token_name),
-                });
+                })
             } else {
-                return Err(syn::Error::new(Span::call_site(), "Too many arguments"));
+                Err(syn::Error::new(Span::call_site(), "Too many arguments"))
             }
         }
     }
@@ -86,7 +85,7 @@ fn extract_bin_token_attr(
     let args: BinTokenParse = attr.parse_args()?;
 
     let token_name = args.token_name.unwrap_or(field_name);
-    return Ok(match args.game {
+    Ok(match args.game {
         crate::GameId::EU5 => quote! { ::pdx_parser_macros::eu5_token!(#token_name) },
         crate::GameId::Test => match token_name.as_str() {
             "asdf" => quote! { 0x0101u16 },
@@ -94,7 +93,7 @@ fn extract_bin_token_attr(
             "true_false_maybe" => quote! { 0x1234u16 },
             _ => syn::Error::new(Span::call_site(), "Unknown token").to_compile_error(),
         },
-    });
+    })
 }
 
 struct DeserNamedField {
@@ -106,10 +105,10 @@ struct DeserNamedField {
     default: Option<syn::Expr>,
 }
 impl DeserNamedField {
-    fn get_quantifier<'a>(
-        ty: &'a syn::Type,
+    fn get_quantifier(
+        ty: &syn::Type,
         is_multiple: bool,
-    ) -> Result<(&'a syn::Type, Quantifier), syn::Error> {
+    ) -> Result<(&syn::Type, Quantifier), syn::Error> {
         let Type::Path(path) = ty else {
             return Ok((ty, Quantifier::Single));
         };
@@ -139,7 +138,7 @@ impl DeserNamedField {
         let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() else {
             return Ok((ty, Quantifier::Single));
         };
-        return Ok((inner_ty, quantifier));
+        Ok((inner_ty, quantifier))
     }
 
     pub fn new(field: syn::Field) -> Result<Self, syn::Error> {
@@ -175,13 +174,13 @@ impl DeserNamedField {
             ));
         }
 
-        return Ok(DeserNamedField {
+        Ok(DeserNamedField {
             ident: ident.clone(),
             ty: ty.clone(),
             quantifier,
             use_token,
             default,
-        });
+        })
     }
 }
 
@@ -208,13 +207,13 @@ fn derive_bin_deserialize_struct_named(
             ..
         } = field;
         if let Quantifier::Multiple = quantifier {
-            return quote! {
+            quote! {
                 let mut #ident: ::std::vec::Vec<#ty> = ::std::vec::Vec::new();
-            };
+            }
         } else {
-            return quote! {
+            quote! {
                 let mut #ident: ::std::option::Option<#ty> = ::std::option::Option::None;
-            };
+            }
         }
     });
 
@@ -237,7 +236,7 @@ fn derive_bin_deserialize_struct_named(
             quote! { #ident = ::std::option::Option::Some(value); }
         };
 
-        return quote! {
+        quote! {
             Some(#use_token) => {
                 stream.eat_token();
                 stream.parse_token(#ID_EQUAL)
@@ -247,7 +246,7 @@ fn derive_bin_deserialize_struct_named(
                 stream = rest;
                 #add_value
             }
-        };
+        }
     });
 
     let string_match_cases: TokenStream = fields
@@ -260,7 +259,7 @@ fn derive_bin_deserialize_struct_named(
                 use_token,
                 ..
             } = field;
-            if let Some(_) = use_token {
+            if use_token.is_some() {
                 return TokenStream::new();
             }
 
@@ -271,14 +270,14 @@ fn derive_bin_deserialize_struct_named(
             };
 
             let key = ident.to_string();
-            return quote! {
+            quote! {
                 #key => {
                     let (value, rest) = <#ty>::take(stream)
                         .map_err(|err| err.context(format!("While parsing value for {key} in {}", #struct_name)))?;
                     stream = rest;
                     #add_value
                 }
-            };
+            }
         })
         .collect();
 
@@ -290,13 +289,13 @@ fn derive_bin_deserialize_struct_named(
             let ident_str = ident.to_string();
 
             if let Some(default) = default {
-                return quote! {
+                quote! {
                     let #ident = #ident.unwrap_or(#default);
-                };
+                }
             } else {
-                return quote! {
+                quote! {
                     let #ident = #ident.ok_or(BinError::MissingExpectedField(#ident_str.to_string()))?;
-                };
+                }
             }
         });
 
@@ -421,7 +420,7 @@ fn derive_bin_deserialize_struct_named(
             }
         }
     };
-    return Ok(impl_block.into());
+    Ok(impl_block.into())
 }
 
 fn pascal_case_to_snake_case(s: &str) -> String {
@@ -436,7 +435,7 @@ fn pascal_case_to_snake_case(s: &str) -> String {
             out.push(c);
         }
     }
-    return out;
+    out
 }
 
 /// For enums that have no fields
@@ -471,9 +470,9 @@ fn derive_bin_deserialize_enum_plain(
         let variant_ident = &variant.ident;
         let enum_key =
             enum_key.unwrap_or_else(|| pascal_case_to_snake_case(&variant_ident.to_string()));
-        return quote! {
+        quote! {
             #enum_key => Ok((#ident::#variant_ident, stream)),
-        };
+        }
     });
 
     let has_lifetime_de = generics.params.iter().any(|generic| match generic {
@@ -510,7 +509,7 @@ fn derive_bin_deserialize_enum_plain(
             }
         }
     };
-    return Ok(impl_block.into());
+    Ok(impl_block.into())
 }
 
 pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -582,14 +581,13 @@ pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::To
 
     let impl_block = impl_block.map(|block| -> TokenStream {
         let block: proc_macro2::TokenStream = block.into();
-        return quote! {
+        quote! {
            #[automatically_derived]
            #block
         }
-        .into();
     });
-    return match impl_block {
+    match impl_block {
         Ok(impl_block) => proc_macro::TokenStream::from(impl_block),
         Err(err) => err.into_compile_error().into(),
-    };
+    }
 }

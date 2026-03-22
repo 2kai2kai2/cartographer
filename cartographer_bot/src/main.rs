@@ -26,10 +26,10 @@ lazy_static::lazy_static! {
     static ref TAGS_EU5_VANILLA: Tags = Tags::parse_new(std::fs::read_to_string(format!("{ASSETS_BASE_PATH}/eu5/vanilla/tags.txt")).unwrap()).unwrap();
 }
 pub fn get_tags(game_type: GameType) -> &'static Tags {
-    return match game_type {
+    match game_type {
         GameType::EU4 => &TAGS_EU4_VANILLA,
         GameType::EU5 => &TAGS_EU5_VANILLA,
-    };
+    }
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -39,11 +39,11 @@ struct Env {
 }
 
 fn make_error_msg(text: impl Into<String>) -> CreateInteractionResponse {
-    return CreateInteractionResponse::Message(
+    CreateInteractionResponse::Message(
         CreateInteractionResponseMessage::new()
             .content(text)
             .ephemeral(true),
-    );
+    )
 }
 
 struct LocalFetcher;
@@ -54,7 +54,7 @@ impl LocalFetcher {
 impl stats_core::Fetcher for LocalFetcher {
     async fn get(&self, path: &str) -> anyhow::Result<Vec<u8>> {
         let path = std::path::PathBuf::from(LocalFetcher::LOCAL_PATH).join(path);
-        return std::fs::read(path).context("While trying to read file.");
+        std::fs::read(path).context("While trying to read file.")
     }
 }
 
@@ -258,7 +258,7 @@ impl Handler {
         &self,
         ctx: &serenity::client::Context,
         interaction: &ModalInteraction,
-        country: &String,
+        country: &str,
         game_id: u64,
     ) -> Result<(), String> {
         let game_query = sqlx::query_scalar(
@@ -290,7 +290,7 @@ impl Handler {
             ",
         )
         .bind(game_id as i64)
-        .bind(&tag);
+        .bind(tag);
 
         let insert_query = sqlx::query(
             "
@@ -314,7 +314,7 @@ impl Handler {
         .bind(game_id as i64)
         .bind(interaction.user.id.get() as i64)
         .bind(chrono::offset::Utc::now())
-        .bind(&tag);
+        .bind(tag);
 
         let items_query = sqlx::query_as::<_, db_types::RawReservation>(
             "
@@ -412,7 +412,7 @@ impl Handler {
             );
         };
 
-        let _ = interaction
+        interaction
             .create_response(
                 ctx.http(),
                 CreateInteractionResponse::Defer(CreateInteractionResponseMessage::new()),
@@ -504,7 +504,7 @@ impl Handler {
             print!(" | {name} {:5.2}s", end.duration_since(start).as_secs_f32(),);
         }
         println!("");
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -526,7 +526,7 @@ impl Handler {
         ctx: &serenity::client::Context,
         interaction: &ComponentInteraction,
     ) -> Result<(), String> {
-        return match (
+        match (
             &interaction.data.kind,
             interaction.data.custom_id.split_once(':'),
         ) {
@@ -544,7 +544,7 @@ impl Handler {
                     .await
             }
             _ => Err("Unknown component button identifier".to_string()),
-        };
+        }
     }
 
     async fn handle_modal_interaction(
@@ -552,9 +552,9 @@ impl Handler {
         ctx: &serenity::client::Context,
         interaction: &ModalInteraction,
     ) -> Result<(), String> {
-        return match interaction.data.custom_id.split_once(':') {
+        match interaction.data.custom_id.split_once(':') {
             Some(("reserve", game_id)) => {
-                let Some(row) = interaction.data.components.get(0) else {
+                let Some(row) = interaction.data.components.first() else {
                     return Err("Missing action row".to_string());
                 };
                 let [ActionRowComponent::InputText(input_text)] = row.components.as_slice() else {
@@ -566,12 +566,11 @@ impl Handler {
                 let Some(country) = &input_text.value else {
                     return Ok(());
                 };
-                return self
-                    .handle_reserve_modal(ctx, interaction, country, game_id)
-                    .await;
+                self.handle_reserve_modal(ctx, interaction, country, game_id)
+                    .await
             }
             _ => Err("Unknown modal button identifier".to_string()),
-        };
+        }
     }
 }
 
@@ -613,7 +612,7 @@ impl EventHandler for Handler {
             _ => return,
         }
     }
-    async fn ready(&self, ctx: serenity::client::Context, ready: Ready) {
+    async fn ready(&self, ctx: serenity::client::Context, _ready: Ready) {
         register_commands(&ctx.http).await;
         println!("Ready!");
     }
@@ -652,7 +651,7 @@ async fn register_commands(http: &impl serenity::http::CacheHttp) {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    if let Ok(_) = dotenvy::dotenv() {
+    if dotenvy::dotenv().is_ok() {
         println!("Loaded .env");
     }
     let env: Env = envy::from_env()?;

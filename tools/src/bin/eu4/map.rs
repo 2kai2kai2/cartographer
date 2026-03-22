@@ -23,7 +23,7 @@ pub fn read_definition_csv(text: &str) -> anyhow::Result<HashMap<[u8; 3], u64>> 
         out.insert([r, g, b], id);
     }
 
-    return Ok(out);
+    Ok(out)
 }
 
 /// wasteland.txt
@@ -65,7 +65,7 @@ pub fn calculate_wasteland_adjacencies(
                 && !water_provinces.contains(province2)
                 && !wasteland_provinces.contains(province2)
             {
-                neighbor_vec.push(province2.clone());
+                neighbor_vec.push(*province2);
             }
         };
 
@@ -92,7 +92,7 @@ pub fn calculate_wasteland_adjacencies(
                 .into_iter()
                 .map(|(p, n)| {
                     std::iter::once(p)
-                        .chain(n.into_iter())
+                        .chain(n)
                         .map(|i| i.to_string())
                         .collect::<Vec<String>>()
                         .join(";")
@@ -132,7 +132,7 @@ pub fn parse_water_provinces(default_map: &str) -> anyhow::Result<Vec<u64>> {
         .filter_map(RawPDXValue::as_scalar)
         .filter_map(RawPDXScalar::as_int)
         .map(|v| v as u64);
-    return Ok(sea_starts.chain(lakes).collect());
+    Ok(sea_starts.chain(lakes).collect())
 }
 
 /// takes in the text of the file `climate.txt`
@@ -153,7 +153,7 @@ pub fn parse_wasteland_provinces(climate_txt: &str) -> anyhow::Result<Vec<u64>> 
         .filter_map(RawPDXValue::as_scalar)
         .filter_map(RawPDXScalar::as_int)
         .map(|v| v as u64);
-    return Ok(impassable.collect());
+    Ok(impassable.collect())
 }
 
 pub fn parse_province_city_positions(
@@ -167,7 +167,7 @@ pub fn parse_province_city_positions(
     else {
         return Err(anyhow!("Failed to parse text of positions.txt"));
     };
-    return parsed
+    parsed
         .iter_all_KVs()
         .map(|(k, v)| {
             let province_id = k.as_int().ok_or(anyhow!("Failed to parse province id"))? as usize;
@@ -193,7 +193,7 @@ pub fn parse_province_city_positions(
                 .ok_or(anyhow!(
                     "Failed to parse x position for province id {province_id}"
                 ))?;
-            return Ok((province_id, (x, y)));
+            Ok((province_id, (x, y)))
         })
-        .collect();
+        .collect()
 }

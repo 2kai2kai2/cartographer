@@ -51,7 +51,7 @@ impl CountryHistory {
             }
         }
 
-        return Ok(out);
+        Ok(out)
     }
     pub fn read_all_countries(
         dir: &ModdableDir,
@@ -97,7 +97,7 @@ impl CountryHistory {
             out.insert(tag.to_string(), country_history);
         }
 
-        return Ok(out);
+        Ok(out)
     }
     pub fn parse_file(text: &str) -> anyhow::Result<CountryHistory> {
         let text: String = lines_without_comments(text)
@@ -124,12 +124,12 @@ impl CountryHistory {
             .ok_or(anyhow!("Field `capital` missing in country history file."))?
             as usize;
 
-        return Ok(CountryHistory {
+        Ok(CountryHistory {
             government,
             technology_group,
             religion,
             primary_culture,
             capital,
-        });
+        })
     }
 }

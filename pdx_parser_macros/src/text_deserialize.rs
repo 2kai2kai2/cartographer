@@ -1,5 +1,4 @@
 use crate::common::*;
-use proc_macro;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{FieldsNamed, GenericArgument, Ident, PathArguments, Type, Variant};
@@ -17,10 +16,10 @@ struct DeserNamedField {
     other_keys: Option<(bool, Type, Type)>,
 }
 impl DeserNamedField {
-    fn get_quantifier<'a>(
-        ty: &'a syn::Type,
+    fn get_quantifier(
+        ty: &syn::Type,
         is_multiple: bool,
-    ) -> Result<(&'a syn::Type, Quantifier), syn::Error> {
+    ) -> Result<(&syn::Type, Quantifier), syn::Error> {
         let Type::Path(path) = ty else {
             return Ok((ty, Quantifier::Single));
         };
@@ -50,7 +49,7 @@ impl DeserNamedField {
         let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() else {
             return Ok((ty, Quantifier::Single));
         };
-        return Ok((inner_ty, quantifier));
+        Ok((inner_ty, quantifier))
     }
 
     pub fn new(field: syn::Field) -> Result<Self, syn::Error> {
@@ -135,14 +134,14 @@ impl DeserNamedField {
             None
         };
 
-        return Ok(DeserNamedField {
+        Ok(DeserNamedField {
             name,
             ident: ident.clone(),
             ty: ty.clone(),
             quantifier,
             default,
             other_keys,
-        });
+        })
     }
 }
 
@@ -183,11 +182,11 @@ fn derive_text_deserialize_struct_named(
             ..
         } = field;
         if let Quantifier::Multiple = quantifier {
-            return quote! {
+            quote! {
                 let mut #ident: ::std::vec::Vec<#ty> = ::std::vec::Vec::new();
-            };
+            }
         } else if let Some((is_vec, k, v)) = other_keys {
-            return if *is_vec {
+            if *is_vec {
                 quote! {
                     let mut #ident: ::std::vec::Vec<(#k, #pdx_parser_core::common_deserialize::Operator, #v)> =
                         ::std::vec::Vec::new();
@@ -199,11 +198,11 @@ fn derive_text_deserialize_struct_named(
                         (#pdx_parser_core::common_deserialize::Operator, #v)
                     > = ::std::collections::HashMap::new();
                 }
-            };
+            }
         } else {
-            return quote! {
+            quote! {
                 let mut #ident: ::std::option::Option<#ty> = ::std::option::Option::None;
-            };
+            }
         }
     });
 
@@ -225,7 +224,7 @@ fn derive_text_deserialize_struct_named(
             };
 
             let key = name.clone().unwrap_or_else(|| ident.to_string());
-            return quote! {
+            quote! {
                 Some(TextToken::StringQuoted(key) | TextToken::StringUnquoted(key)) if key == #key => {
                     stream.eat_token();
                     #pdx_parser_core::Context::with_context(
@@ -238,7 +237,7 @@ fn derive_text_deserialize_struct_named(
                     )?;
                     #add_value
                 }
-            };
+            }
         });
 
     let normalize_single = fields
@@ -248,14 +247,14 @@ fn derive_text_deserialize_struct_named(
             let DeserNamedField { ident, default, .. } = field;
 
             if let Some(default) = default {
-                return quote! {
+                quote! {
                     let #ident = #ident.unwrap_or(#default);
-                };
+                }
             } else {
                 let ident_str = ident.to_string();
-                return quote! {
+                quote! {
                     let #ident = #ident.ok_or(TextError::MissingExpectedField(::std::borrow::Cow::Borrowed(#ident_str)))?;
-                };
+                }
             }
         });
 
@@ -382,7 +381,7 @@ fn derive_text_deserialize_struct_named(
             }
         }
     };
-    return Ok(impl_block.into());
+    Ok(impl_block.into())
 }
 
 fn pascal_case_to_snake_case(s: &str) -> String {
@@ -397,7 +396,7 @@ fn pascal_case_to_snake_case(s: &str) -> String {
             out.push(c);
         }
     }
-    return out;
+    out
 }
 
 /// For enums that have no fields
@@ -432,9 +431,9 @@ fn derive_text_deserialize_enum_plain(
         let enum_key =
             enum_key.unwrap_or_else(|| pascal_case_to_snake_case(&variant_ident.to_string()));
 
-        return quote! {
+        quote! {
             #enum_key => Ok((#ident::#variant_ident, stream)),
-        };
+        }
     });
 
     let has_lifetime_de = generics.params.iter().any(|generic| match generic {
@@ -468,7 +467,7 @@ fn derive_text_deserialize_enum_plain(
             }
         }
     };
-    return Ok(impl_block.into());
+    Ok(impl_block.into())
 }
 
 pub fn derive_text_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -538,8 +537,8 @@ pub fn derive_text_deserialize(stream: proc_macro::TokenStream) -> proc_macro::T
         }
     };
 
-    return match impl_block {
-        Ok(impl_block) => proc_macro::TokenStream::from(impl_block),
+    match impl_block {
+        Ok(impl_block) => impl_block,
         Err(err) => err.into_compile_error().into(),
-    };
+    }
 }

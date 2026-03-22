@@ -31,7 +31,7 @@ impl<'de> BinDeserialize<'de> for CountItems {
                 }
             }
         }
-        return Ok((CountItems(out), stream));
+        Ok((CountItems(out), stream))
     }
 }
 impl<'de> TextDeserialize<'de> for CountItems {
@@ -58,7 +58,7 @@ impl<'de> TextDeserialize<'de> for CountItems {
             }
         }
 
-        return Ok((CountItems(out), stream));
+        Ok((CountItems(out), stream))
     }
 }
 
@@ -109,9 +109,9 @@ impl<'de> ViewDisplayValueBin<'de> {
     }
     pub fn display_type_with(&self, tokens: Option<&impl BinTokenLookup>) -> String {
         match self {
-            ViewDisplayValueBin::Object(_) => format!("{{...}}"),
+            ViewDisplayValueBin::Object(_) => "{...}".to_string(),
             ViewDisplayValueBin::Scalar(token) => match token.token_type_repr() {
-                Ok(token) => format!("{token}"),
+                Ok(token) => token.to_string(),
                 Err(token_u16) => {
                     if let Some(token) = tokens
                         .as_ref()
@@ -130,15 +130,15 @@ impl<'de> BinDeserialize<'de> for ViewDisplayValueBin<'de> {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         match stream.peek_token().ok_or(BinError::EOF)? {
             token @ (BinToken::ID_EQUAL | BinToken::ID_CLOSE_BRACKET) => {
-                return Err(BinError::UnexpectedToken(token));
+                Err(BinError::UnexpectedToken(token))
             }
             BinToken::ID_OPEN_BRACKET => {
                 let CountItems(count) = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Object(count), stream));
+                Ok((ViewDisplayValueBin::Object(count), stream))
             }
             _ => {
                 let scalar: BinToken<'de> = stream.parse()?;
-                return Ok((ViewDisplayValueBin::Scalar(scalar), stream));
+                Ok((ViewDisplayValueBin::Scalar(scalar), stream))
             }
         }
     }
@@ -162,14 +162,14 @@ impl<'de> TextDeserialize<'de> for ViewDisplayValueText<'de> {
         mut stream: TextDeserializer<'de>,
     ) -> Result<(Self, TextDeserializer<'de>), TextError> {
         match stream.peek_token().ok_or(TextError::EOF)? {
-            TextToken::Equal | TextToken::CloseBracket => return Err(TextError::UnexpectedToken),
+            TextToken::Equal | TextToken::CloseBracket => Err(TextError::UnexpectedToken),
             TextToken::OpenBracket => {
                 let CountItems(count) = stream.parse()?;
-                return Ok((ViewDisplayValueText::Object(count), stream));
+                Ok((ViewDisplayValueText::Object(count), stream))
             }
             scalar => {
                 stream.eat_token();
-                return Ok((ViewDisplayValueText::Scalar(scalar), stream));
+                Ok((ViewDisplayValueText::Scalar(scalar), stream))
             }
         }
     }

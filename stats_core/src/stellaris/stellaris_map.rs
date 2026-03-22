@@ -20,7 +20,7 @@ fn systems_to_img_space<'a>(
     let image_diameter = std::cmp::min(width, height) as f64;
     let scale = image_diameter / (save.galaxy_radius * 2.0);
 
-    return (
+    (
         scale,
         save.galactic_objects.iter().map(move |system| {
             (
@@ -28,7 +28,7 @@ fn systems_to_img_space<'a>(
                 system.coordinate.y * scale + height as f64 / 2.0,
             )
         }),
-    );
+    )
 }
 
 /// Adds stars, blackholes, and stuff to the map.
@@ -43,11 +43,11 @@ pub fn draw_systems(mut image: RgbImage, save: &SaveGame) -> RgbImage {
             Rgb([255, 255, 255]),
         );
     }
-    return image;
+    image
 }
 
 pub fn draw_hyperlanes(mut image: RgbImage, save: &SaveGame) -> RgbImage {
-    let (scale, locations) = systems_to_img_space(image.dimensions(), save);
+    let (_scale, locations) = systems_to_img_space(image.dimensions(), save);
     let locations: Vec<_> = locations.collect();
 
     for (system_idx, ((x, y), system)) in
@@ -70,7 +70,7 @@ pub fn draw_hyperlanes(mut image: RgbImage, save: &SaveGame) -> RgbImage {
             );
         }
     }
-    return image;
+    image
 }
 
 /// Returns for each galactic object (system) by index
@@ -83,7 +83,7 @@ fn make_galactic_object_ownership<'a, 'b>(
 where
     'a: 'b,
 {
-    return save.galactic_objects.iter().map(|system| {
+    save.galactic_objects.iter().map(|system| {
         let Some(owner_id) = system.map_owner else {
             return Ok(None);
         };
@@ -93,13 +93,13 @@ where
         let Some(map_color) = owner.flag.index_map_color(owner.color_index, colors) else {
             return Err(());
         };
-        return Ok(Some((owner_id, owner, map_color)));
-    });
+        Ok(Some((owner_id, owner, map_color)))
+    })
 }
 
-pub fn draw_political_map<'a>(
+pub fn draw_political_map(
     mut image: RgbImage,
-    save: &'a SaveGame,
+    save: &SaveGame,
     colors: &HashMap<String, ([u8; 3], [u8; 3], [u8; 3])>,
 ) -> RgbImage {
     let (scale, locations) = systems_to_img_space(image.dimensions(), save);
@@ -195,12 +195,12 @@ pub fn draw_political_map<'a>(
         if nearest_distance_squared > MAX_BORDER_RANGE_SQUARED {
             return original_color; // Out of border range, leave unchanged.
         }
-        return match &systems[nearest_idx].owner {
+        match &systems[nearest_idx].owner {
             Ok(Some((_, _, map_color))) => Rgb(*map_color),
             Ok(None) => original_color,
             Err(()) => ERROR_PINK,
-        };
+        }
     });
 
-    return image;
+    image
 }

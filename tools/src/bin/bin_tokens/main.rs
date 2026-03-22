@@ -37,7 +37,7 @@ impl<'b> Iterator for SillyDeironmanizer<'b> {
             self.0.next(); // true
             return self.0.next();
         }
-        return Some(item);
+        Some(item)
     }
 }
 
@@ -82,7 +82,7 @@ fn get_bin_tokens<'b, 't>(
                 TextToken::StringQuoted(text) | TextToken::StringUnquoted(text),
             ) => {
                 combined_output.push_str(format!("{:indent$}<token {id:5}>/{text}\n", "").as_str());
-                if let None = found_tokens[id as usize] {
+                if found_tokens[id as usize].is_none() {
                     found_tokens[id as usize] = Some(text.to_string());
                     println!("Token {id:5}: {text}");
                 }
@@ -91,13 +91,13 @@ fn get_bin_tokens<'b, 't>(
         }
     }
 
-    return Ok(combined_output);
+    Ok(combined_output)
 }
 
 pub fn main() -> Result<()> {
     let args = BinTokensArgs::parse();
     fn trim_cli(c: char) -> bool {
-        return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
+        c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?'
     }
 
     let binary_file_name = match args.binary_file_path {
@@ -149,7 +149,7 @@ pub fn main() -> Result<()> {
         return Err(anyhow!("Expected decompressed text"));
     }
     let text_gamestate = str::from_utf8(text_header.all)?;
-    let text_gamestate = TextLexer::new(&text_gamestate);
+    let text_gamestate = TextLexer::new(text_gamestate);
 
     // std::fs::write("bin.txt", bin_gamestate.clone().print_to_string())?;
     // std::fs::write("text.txt", text_gamestate.clone().print_to_string())?;
@@ -167,23 +167,23 @@ pub fn main() -> Result<()> {
         };
 
     let combined_gamestate = get_bin_tokens(&mut found_tokens, bin_gamestate, text_gamestate)?;
-    if let Some(gamestate_out) = &args.gamestate {
-        if let Err(_) = std::fs::write(gamestate_out, combined_gamestate) {
-            eprintln!("Failed to write gamestate to {gamestate_out:?}");
-        };
-    }
+    if let Some(gamestate_out) = &args.gamestate
+        && std::fs::write(gamestate_out, combined_gamestate).is_err()
+    {
+        eprintln!("Failed to write gamestate to {gamestate_out:?}");
+    };
 
     let out_text: String = found_tokens
         .iter()
         .enumerate()
         .map(|(id, token)| {
             if let Some(token) = token {
-                return format!("{id};{token}\n");
+                format!("{id};{token}\n")
             } else {
-                return String::new();
+                String::new()
             }
         })
         .collect();
     std::fs::write(out_file_name, out_text)?;
-    return Ok(());
+    Ok(())
 }

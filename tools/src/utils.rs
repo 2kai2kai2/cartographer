@@ -14,23 +14,23 @@ pub fn from_cp1252<T: Read>(buffer: T) -> Result<String, std::io::Error> {
         .encoding(Some(WINDOWS_1252))
         .build(buffer)
         .read_to_string(&mut text)?;
-    return Ok(text);
+    Ok(text)
 }
 
 pub fn read_cp1252(path: impl AsRef<Path>) -> Result<String, std::io::Error> {
-    return from_cp1252(File::open(path)?);
+    from_cp1252(File::open(path)?)
 }
 
 pub fn stdin_line() -> std::io::Result<String> {
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
-    return Ok(line);
+    Ok(line)
 }
 
-pub fn lines_without_comments<'a>(input: &'a str) -> impl Iterator<Item = &'a str> {
-    return input
+pub fn lines_without_comments(input: &str) -> impl Iterator<Item = &str> {
+    input
         .lines()
-        .map(|line| line.split('#').next().unwrap_or(line));
+        .map(|line| line.split('#').next().unwrap_or(line))
 }
 
 #[derive(Clone)]
@@ -40,20 +40,20 @@ pub struct ModdableDir {
 }
 impl ModdableDir {
     pub fn new(default: impl AsRef<Path>, modded: Option<impl AsRef<Path>>) -> Self {
-        return ModdableDir {
+        ModdableDir {
             default: default.as_ref().to_path_buf(),
             modded: modded.map(|modded| modded.as_ref().to_path_buf()),
-        };
+        }
     }
 
     pub fn join(&self, relative_path: impl AsRef<Path>) -> ModdableDir {
-        return ModdableDir {
+        ModdableDir {
             default: self.default.join(&relative_path),
             modded: self
                 .modded
                 .as_ref()
                 .map(|modded| modded.join(relative_path)),
-        };
+        }
     }
 
     /// Reads (from `cp1252` encoding rather than utf8) a file,
@@ -63,7 +63,7 @@ impl ModdableDir {
         relative_path: impl AsRef<Path>,
     ) -> Result<String, std::io::Error> {
         let file = self.moddable_open_file(relative_path)?;
-        return from_cp1252(file);
+        from_cp1252(file)
     }
 
     /// Reads a utf8 file, optionally trying a modded version of the file first.
@@ -72,7 +72,7 @@ impl ModdableDir {
         relative_path: impl AsRef<Path>,
     ) -> Result<String, std::io::Error> {
         let file = self.moddable_open_file(relative_path)?;
-        return std::io::read_to_string(file);
+        std::io::read_to_string(file)
     }
 
     /// Reads an image, optionally trying a modded version of the file first.
@@ -81,13 +81,13 @@ impl ModdableDir {
         relative_path: &str,
     ) -> Result<image::DynamicImage, image::ImageError> {
         if let Some(modded) = &self.modded {
-            let modded_file = modded.join(&relative_path);
+            let modded_file = modded.join(relative_path);
             if std::fs::exists(&modded_file)? {
                 return image::open(modded_file);
             }
         }
         let default_file = self.default.join(relative_path);
-        return image::open(default_file);
+        image::open(default_file)
     }
 
     /// Reads both the default and (optionally) mod directories and merges them with preference for mod directory
@@ -134,7 +134,7 @@ impl ModdableDir {
             }
         }
 
-        return Ok(out.into_values().collect());
+        Ok(out.into_values().collect())
     }
 
     pub fn moddable_read_file(
@@ -144,7 +144,7 @@ impl ModdableDir {
         let mut file = self.moddable_open_file(relative_path)?;
         let mut out = Vec::new();
         file.read_to_end(&mut out)?;
-        return Ok(out);
+        Ok(out)
     }
 
     pub fn moddable_open_file(
@@ -158,7 +158,7 @@ impl ModdableDir {
             }
         }
         let default_file = self.default.join(relative_path);
-        return std::fs::File::open(default_file);
+        std::fs::File::open(default_file)
     }
 }
 

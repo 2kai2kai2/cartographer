@@ -20,10 +20,10 @@ pub fn majority_owner(
             owners.push((owner.to_string(), 1));
         }
     }
-    return owners
+    owners
         .into_iter()
         .find(|(_, count)| *count > provinces.len() / 2)
-        .map(|(tag, _)| tag);
+        .map(|(tag, _)| tag)
 }
 
 pub const WASTELAND_COLOR: Rgb<u8> = Rgb([94, 94, 94]);
@@ -36,7 +36,7 @@ pub fn generate_map_colors_config(
     get_province_owner: impl Fn(u64) -> Option<String>,
     get_tag_color: impl Fn(String) -> Option<Rgb<u8>>,
 ) -> Vec<Rgb<u8>> {
-    return (0..provinces_len)
+    (0..provinces_len)
         .map(|id| {
             if water_provinces.contains(&id) {
                 return WATER_COLOR;
@@ -46,11 +46,11 @@ pub fn generate_map_colors_config(
                     .unwrap_or(WASTELAND_COLOR);
             }
 
-            return get_province_owner(id)
+            get_province_owner(id)
                 .and_then(&get_tag_color)
-                .unwrap_or(UNCLAIMED_COLOR);
+                .unwrap_or(UNCLAIMED_COLOR)
         })
-        .collect();
+        .collect()
 }
 
 /// Note that if we can't tell where a province belongs, it will show as unclaimed.
@@ -60,30 +60,26 @@ pub fn generate_save_map_colors_config(
     wasteland_neighbors: &HashMap<u64, Vec<u64>>,
     save: &SaveGame,
 ) -> Vec<Rgb<u8>> {
-    return generate_map_colors_config(
+    generate_map_colors_config(
         provinces_len,
         water_provinces,
         wasteland_neighbors,
         |id| save.provinces.get(&id).map(String::to_string),
         |tag| save.all_nations.get(&tag).map(|owner| Rgb(owner.map_color)),
-    );
+    )
 }
 
 pub fn make_base_map(
     bitmap: &ImageBuffer<Luma<u16>, Vec<u16>>,
     color_map: &Vec<Rgb<u8>>,
 ) -> RgbImage {
-    return imageproc::map::map_colors(bitmap, |color| {
-        color_map
-            .get(color.0[0] as usize)
-            .unwrap_or(&Rgb::black())
-            .clone()
-    });
+    imageproc::map::map_colors(bitmap, |color| {
+        *color_map.get(color.0[0] as usize).unwrap_or(&Rgb::black())
+    })
 }
 
 pub fn generate_player_borders_config(save: &SaveGame) -> HashMap<Rgb<u8>, Rgb<u8>> {
-    return save
-        .all_nations
+    save.all_nations
         .values()
         .filter_map(|nation| {
             let mut overlord = nation;
@@ -98,16 +94,16 @@ pub fn generate_player_borders_config(save: &SaveGame) -> HashMap<Rgb<u8>, Rgb<u
             if !save.player_tags.contains_key(&overlord.tag) {
                 return None;
             }
-            return Some((
+            Some((
                 Rgb(nation.map_color),
                 Rgb([
                     255 - overlord.map_color[0],
                     255 - overlord.map_color[1],
                     255 - overlord.map_color[2],
                 ]),
-            ));
+            ))
         })
-        .collect();
+        .collect()
 }
 
 /**
@@ -115,10 +111,9 @@ pub fn generate_player_borders_config(save: &SaveGame) -> HashMap<Rgb<u8>, Rgb<u
  */
 pub fn apply_borders(map_image: &RgbImage, color_map: &HashMap<Rgb<u8>, Rgb<u8>>) -> RgbImage {
     // TODO: this could probably be optimized
-    let matches_owner = |a: &Rgb<u8>, b: &Rgb<u8>| -> bool {
-        return a == b || color_map.get(a) == color_map.get(b);
-    };
-    return imageproc::map::map_pixels(map_image, |x, y, color| {
+    let matches_owner =
+        |a: &Rgb<u8>, b: &Rgb<u8>| -> bool { a == b || color_map.get(a) == color_map.get(b) };
+    imageproc::map::map_pixels(map_image, |x, y, color| {
         let Some(inverse_color) = color_map.get(&color) else {
             return color;
         };
@@ -134,10 +129,6 @@ pub fn apply_borders(map_image: &RgbImage, color_map: &HashMap<Rgb<u8>, Rgb<u8>>
             || !matches_owner(map_image.get_pixel(x + 1, y - 1), &color)
             || !matches_owner(map_image.get_pixel(x + 1, y), &color)
             || !matches_owner(map_image.get_pixel(x + 1, y + 1), &color);
-        return if is_border {
-            inverse_color.clone()
-        } else {
-            color
-        };
-    });
+        if is_border { *inverse_color } else { color }
+    })
 }

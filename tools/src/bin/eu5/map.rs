@@ -64,27 +64,25 @@ impl<'de> TextDeserialize<'de> for HexRgb {
                     return Err(TextError::IntegerOverflow);
                 };
                 let [_, r, g, b] = hex.to_be_bytes();
-                return Ok((HexRgb([r, g, b]), stream));
+                Ok((HexRgb([r, g, b]), stream))
             }
             TextToken::StringUnquoted(hex) => {
                 let Ok(hex) = u32::from_str_radix(hex, 16) else {
                     return Err(TextError::IntegerOverflow);
                 };
                 let [_, r, g, b] = hex.to_be_bytes();
-                return Ok((HexRgb([r, g, b]), stream));
+                Ok((HexRgb([r, g, b]), stream))
             }
-            _ => {
-                return Err(TextError::UnexpectedToken);
-            }
+            _ => Err(TextError::UnexpectedToken),
         }
     }
 }
 impl std::fmt::Display for HexRgb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
-            return write!(f, "#{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2]);
+            write!(f, "#{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2])
         } else {
-            return write!(f, "{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2]);
+            write!(f, "{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2])
         }
     }
 }
@@ -102,13 +100,13 @@ pub fn parse_named_locations(dir: &ModdableDir) -> anyhow::Result<Vec<(String, H
             let text = std::fs::read_to_string(&entry.path)?;
             let text = text.strip_prefix("\u{FEFF}").unwrap_or(&text); // remove BOM
             let items: UnbracketedKVs<String, HexRgb> =
-                TextDeserializer::from_str(&text).parse().with_context(|| {
+                TextDeserializer::from_str(text).parse().with_context(|| {
                     format!("While parsing named locations in {}", entry.path.display())
                 })?;
-            return Ok(items.unwrap());
+            Ok(items.unwrap())
         })
         .collect::<anyhow::Result<_>>()?;
-    return Ok(files.into_iter().flatten().collect());
+    Ok(files.into_iter().flatten().collect())
 }
 
 /// Will ignore `u16::MAX` values as these are for water tiles
@@ -144,5 +142,5 @@ pub fn adjacencies(
             insert(&mut out, bottom[0], pixel[0]);
         }
     }
-    return Ok(out);
+    Ok(out)
 }

@@ -48,16 +48,16 @@ struct UniqueWriter {
 }
 impl UniqueWriter {
     pub fn new() -> UniqueWriter {
-        return UniqueWriter {
+        UniqueWriter {
             buf: Vec::new(),
             set: HashSet::new(),
-        };
+        }
     }
     fn try_print_line(&mut self, line: &[u8]) -> std::io::Result<usize> {
         if !self.set.insert(line.to_vec()) {
             return Ok(line.len());
         }
-        return std::io::stdout().write(line);
+        std::io::stdout().write(line)
     }
 }
 impl Write for UniqueWriter {
@@ -77,7 +77,7 @@ impl Write for UniqueWriter {
             self.buf.clear();
         } else {
             self.buf.extend(first);
-            assert!(matches!(lines.next(), None));
+            assert!(lines.next().is_none());
             return Ok(buf.len());
         }
         assert!(self.buf.is_empty());
@@ -87,16 +87,16 @@ impl Write for UniqueWriter {
                 self.try_print_line(line)?;
             } else {
                 // save partial line
-                assert!(matches!(lines.next(), None));
+                assert!(lines.next().is_none());
                 self.buf.extend(line);
             }
         }
 
-        return Ok(buf.len());
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        return std::io::stdout().flush();
+        std::io::stdout().flush()
     }
 }
 
@@ -109,10 +109,10 @@ impl LoadedFile {
     fn from_modern_save(header: ModernHeader) -> Result<Self> {
         match header.save_format {
             SaveFormat::SplitCompressedBinary | SaveFormat::UncompressedBinary => {
-                return Err(anyhow!("We currently do not support binary save formats."));
+                Err(anyhow!("We currently do not support binary save formats."))
             }
             SaveFormat::SplitCompressedText => {
-                return Err(anyhow!("We currently do not support split save formats."));
+                Err(anyhow!("We currently do not support split save formats."))
             }
             SaveFormat::UnifiedCompressedBinary => {
                 let mut zip_file = zip::ZipArchive::new(Cursor::new(header.gamestate))?;
@@ -141,16 +141,14 @@ impl LoadedFile {
                 zip_gamestate.read_to_end(&mut gamestate)?;
                 gamestate.extend(BinToken::ID_CLOSE_BRACKET.to_le_bytes());
 
-                return Ok(Self::Binary(gamestate, string_lookup));
+                Ok(Self::Binary(gamestate, string_lookup))
             }
-            SaveFormat::UnifiedCompressedText => {
-                return Err(anyhow!(
-                    "We currently do not support compressed save formats."
-                ));
-            }
+            SaveFormat::UnifiedCompressedText => Err(anyhow!(
+                "We currently do not support compressed save formats."
+            )),
             SaveFormat::UncompressedText => {
                 let gamestate = str::from_utf8(header.all)?; // to include meta in gamestate
-                return Ok(Self::Text(format!("{{{gamestate}}}")));
+                Ok(Self::Text(format!("{{{gamestate}}}")))
             }
         }
     }
@@ -172,7 +170,7 @@ impl LoadedFile {
         };
         let text = format!("{{{text}}}");
 
-        return Ok(LoadedFile::Text(text));
+        Ok(LoadedFile::Text(text))
     }
 }
 
@@ -190,7 +188,7 @@ fn run_text_view(text: &str) -> Result<()> {
 
         if let [first, rest @ ..] = path.as_slice() {
             first.walk_text(
-                TextDeserializer::from_str(&text),
+                TextDeserializer::from_str(text),
                 rest,
                 &mut UniqueWriter::new(),
             )?;
@@ -225,12 +223,12 @@ fn run_bin_view(
 
         if let [first, rest @ ..] = path.as_slice() {
             let bin_rest = first.walk_bin(
-                BinDeserializer::from_bytes(&bin, string_lookup),
+                BinDeserializer::from_bytes(bin, string_lookup),
                 rest,
                 &mut UniqueWriter::new(),
                 tokens,
             )?;
-            if bin_rest.input.len() != 0 {
+            if !bin_rest.input.is_empty() {
                 eprintln!(
                     "WARNING: Binary deserializer did not consume all input, {} bytes left.",
                     bin_rest.input.len()
@@ -256,10 +254,10 @@ pub fn main() -> Result<()> {
 
     let file = std::fs::File::open(args.file)?;
     let loaded = LoadedFile::from_file(file, args.cp1252)?;
-    return match loaded {
+    match loaded {
         LoadedFile::Text(text) => run_text_view(&text),
         LoadedFile::Binary(bin, string_lookup) => {
             run_bin_view(&bin, &string_lookup, bin_tokens.as_ref())
         }
-    };
+    }
 }

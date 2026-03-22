@@ -24,13 +24,13 @@ pub enum PathItem<'a> {
 impl<'a> PathItem<'a> {
     pub fn from_str(path_item: &'a str) -> PathItem<'a> {
         if path_item == "$" {
-            return PathItem::Values;
+            PathItem::Values
         } else if path_item == "*" {
-            return PathItem::AllKVs;
+            PathItem::AllKVs
         } else if path_item == "@" {
-            return PathItem::Keys;
+            PathItem::Keys
         } else {
-            return PathItem::MatchingKVs(path_item);
+            PathItem::MatchingKVs(path_item)
         }
     }
 
@@ -93,14 +93,12 @@ fn try_walk_possible_next_obj_bin<'de, 'a, W: Write>(
 ) -> Result<BinDeserializer<'de>, BinError> {
     match stream.peek_token().ok_or(BinError::EOF)? {
         token @ (BinToken::ID_EQUAL | BinToken::ID_CLOSE_BRACKET) => {
-            return Err(BinError::UnexpectedToken(token));
+            Err(BinError::UnexpectedToken(token))
         }
-        BinToken::ID_OPEN_BRACKET => {
-            return path_next.walk_bin(stream, path_rest, write, tokens);
-        }
+        BinToken::ID_OPEN_BRACKET => path_next.walk_bin(stream, path_rest, write, tokens),
         _scalar => {
             let SkipValue = stream.parse()?;
-            return Ok(stream);
+            Ok(stream)
         }
     }
 }
@@ -220,18 +218,16 @@ fn walk_obj_bin_kvs_matching<'de, 'a, W: Write>(
                     } else {
                         let SkipValue = stream.parse()?;
                     }
+                } else if is_match {
+                    let value: ViewDisplayValueBin = stream.parse()?;
+                    let _ = writeln!(
+                        write,
+                        "{} = {}",
+                        key.display_with(tokens),
+                        value.display_with(tokens)
+                    );
                 } else {
-                    if is_match {
-                        let value: ViewDisplayValueBin = stream.parse()?;
-                        let _ = writeln!(
-                            write,
-                            "{} = {}",
-                            key.display_with(tokens),
-                            value.display_with(tokens)
-                        );
-                    } else {
-                        let SkipValue = stream.parse()?;
-                    }
+                    let SkipValue = stream.parse()?;
                 }
             }
         }
@@ -287,13 +283,11 @@ fn try_walk_possible_next_obj_text<'de, 'a, W: Write>(
     write: &'a mut W,
 ) -> Result<TextDeserializer<'de>, TextError> {
     match stream.peek_token().ok_or(TextError::EOF)? {
-        TextToken::Equal | TextToken::CloseBracket => return Err(TextError::UnexpectedToken),
-        TextToken::OpenBracket => {
-            return path_next.walk_text(stream, path_rest, write);
-        }
+        TextToken::Equal | TextToken::CloseBracket => Err(TextError::UnexpectedToken),
+        TextToken::OpenBracket => path_next.walk_text(stream, path_rest, write),
         _scalar => {
             stream.eat_token();
-            return Ok(stream);
+            Ok(stream)
         }
     }
 }

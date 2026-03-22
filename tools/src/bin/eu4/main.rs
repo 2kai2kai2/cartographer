@@ -28,9 +28,10 @@ fn load_flagfiles(
         .skip(1)
         .map(|item| item.strip_suffix(".tga").unwrap().to_string())
         .collect();
-    while flagfiles_tags.last().map_or(false, |tag| {
-        tag.len() != 3 || tag.chars().any(|c| !c.is_ascii_uppercase())
-    }) {
+    while flagfiles_tags
+        .last()
+        .is_some_and(|tag| tag.len() != 3 || tag.chars().any(|c| !c.is_ascii_uppercase()))
+    {
         flagfiles_tags.pop().unwrap();
     }
     let flag_image_lines = flagfiles_tags.len().div_ceil(16);
@@ -75,17 +76,17 @@ fn load_flagfiles(
         )
         .unwrap();
 
-    return Ok(flagfiles_tags);
+    Ok(flagfiles_tags)
 }
 
 /// Returns a hashmap `tag -> name`
-pub fn load_tag_names(dir: &ModdableDir, tags: &Vec<String>) -> Result<Vec<(String, Vec<String>)>> {
-    fn parse_line<'a>(line: &'a str) -> Option<(&'a str, &'a str)> {
+pub fn load_tag_names(dir: &ModdableDir, tags: &[String]) -> Result<Vec<(String, Vec<String>)>> {
+    fn parse_line(line: &str) -> Option<(&str, &str)> {
         let line = line.strip_prefix(" ")?;
         let (key, line) = line.split_once(':')?;
         let (_, value) = line.split_once('"')?;
         let value = value.strip_suffix('"')?;
-        return Some((key, value));
+        Some((key, value))
     }
     fn generate_name_variants(name: &str) -> Result<Vec<String>> {
         let mut names = vec![name.to_string()];
@@ -101,7 +102,7 @@ pub fn load_tag_names(dir: &ModdableDir, tags: &Vec<String>) -> Result<Vec<(Stri
             names.push(normalized);
         }
 
-        return Ok(names);
+        Ok(names)
     }
 
     let items = dir.moddable_read_dir("localisation")?;
@@ -110,23 +111,22 @@ pub fn load_tag_names(dir: &ModdableDir, tags: &Vec<String>) -> Result<Vec<(Stri
         .filter(|entry| entry.name.ends_with("_l_english.yml"))
         .flat_map(|entry| {
             let text = std::fs::read_to_string(entry.path).expect("Failed to open file");
-            return text
-                .lines()
+            text.lines()
                 .filter_map(parse_line)
                 .filter(|(k, _)| tags.contains(&k.to_string()))
                 .map(|(k, v)| (k.to_string(), generate_name_variants(v).unwrap()))
-                .collect::<Vec<_>>();
+                .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
     items.sort();
-    return Ok(items);
+    Ok(items)
 }
 
 pub fn main() -> Result<()> {
-    let args = Eu4Args::parse();
+    let _args = Eu4Args::parse();
 
     fn trim_cli(c: char) -> bool {
-        return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
+        c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?'
     }
 
     print!("Target name: ");
@@ -226,5 +226,5 @@ pub fn main() -> Result<()> {
         .write(&country_names)
         .unwrap();
 
-    return Ok(());
+    Ok(())
 }

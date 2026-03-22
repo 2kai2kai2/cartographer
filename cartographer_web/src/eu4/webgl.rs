@@ -12,7 +12,7 @@ const U_CONTROLLER_COLORS: &str = "u_controller_colors";
 pub fn webgl_draw_map(
     canvas: HtmlCanvasElement,
     assets: MapAssets,
-) -> Result<impl Fn(&Vec<image::Rgb<u8>>, &Vec<image::Rgb<u8>>) -> (), JsValue> {
+) -> Result<impl Fn(&Vec<image::Rgb<u8>>, &Vec<image::Rgb<u8>>), JsValue> {
     let gl = canvas
         .get_context("webgl2")?
         .unwrap()
@@ -61,7 +61,7 @@ pub fn webgl_draw_map(
     let fragment_shader = compile_shader(
         &gl,
         WebGl2RenderingContext::FRAGMENT_SHADER,
-        &fragment_shader_code,
+        fragment_shader_code,
     )
     .inspect_err(|err| log!("ERROR COMPILING FRAGMENT SHADER: {err}"))
     .expect("Failed to compile fragment shader");
@@ -212,7 +212,7 @@ pub fn webgl_draw_map(
     gl.uniform1i(Some(&u_controller_colors), 2);
     log!("Setup controller palette");
 
-    return Ok(
+    Ok(
         move |color_map: &Vec<image::Rgb<u8>>, controller_map: &Vec<image::Rgb<u8>>| {
             let rs_color_map_array: Vec<u8> =
                 color_map.iter().flat_map(|image::Rgb(x)| *x).collect();
@@ -256,7 +256,7 @@ pub fn webgl_draw_map(
 
             gl.draw_arrays(WebGl2RenderingContext::TRIANGLE_STRIP, 0, 4);
         },
-    );
+    )
 }
 
 pub fn compile_shader(

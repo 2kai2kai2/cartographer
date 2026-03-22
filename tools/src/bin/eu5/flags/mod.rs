@@ -45,8 +45,8 @@ pub fn do_flags(gamefiles: &ModdableDir) -> anyhow::Result<(RgbImage, Vec<String
 
     let mut include_sorted: Vec<_> = coats_of_arms
         .keys()
+        .filter(|&key| key.len() == 3 && key.bytes().all(|b| b.is_ascii_uppercase()))
         .cloned()
-        .filter(|key| key.len() == 3 && key.bytes().all(|b| b.is_ascii_uppercase()))
         .collect();
     include_sorted.sort();
 
@@ -64,5 +64,5 @@ pub fn do_flags(gamefiles: &ModdableDir) -> anyhow::Result<(RgbImage, Vec<String
         let resized = image::imageops::resize(&rendered, 150, 100, image::imageops::Triangle);
         out_img.copy_from(&resized, 0, i as u32 * 100)?;
     }
-    return Ok((out_img, include_sorted));
+    Ok((out_img, include_sorted))
 }

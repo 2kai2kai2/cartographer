@@ -21,33 +21,33 @@ const END_COLOR: Rgba<u8> = Rgba([180, 202, 195, 255]);
 fn signed_display_number(num: f64) -> String {
     let abs = num.abs();
     if abs < 10.0 {
-        return format!("{num:+.1}");
+        format!("{num:+.1}")
     } else if abs < 1_000.0 {
-        return format!("{num:+.0}");
+        format!("{num:+.0}")
     } else if abs < 10_000.0 {
-        return format!("{:+.1}k", num / 1_000.0);
+        format!("{:+.1}k", num / 1_000.0)
     } else if abs < 1_000_000.0 {
-        return format!("{:+.0}k", num / 1_000.0);
+        format!("{:+.0}k", num / 1_000.0)
     } else if abs < 10_000_000.0 {
-        return format!("{:+.1}M", num / 1_000_000.0);
+        format!("{:+.1}M", num / 1_000_000.0)
     } else {
-        return format!("{:+.0}M", num / 1_000_000.0);
+        format!("{:+.0}M", num / 1_000_000.0)
     }
 }
 fn unsigned_display_number(num: f64) -> String {
     let abs = num.abs();
     if abs < 10.0 {
-        return format!("{num:.1}");
+        format!("{num:.1}")
     } else if abs < 1_000.0 {
-        return format!("{num:.0}");
+        format!("{num:.0}")
     } else if abs < 10_000.0 {
-        return format!("{:.1}k", num / 1_000.0);
+        format!("{:.1}k", num / 1_000.0)
     } else if abs < 1_000_000.0 {
-        return format!("{:.0}k", num / 1_000.0);
+        format!("{:.0}k", num / 1_000.0)
     } else if abs < 10_000_000.0 {
-        return format!("{:.1}M", num / 1_000_000.0);
+        format!("{:.1}M", num / 1_000_000.0)
     } else {
-        return format!("{:.0}M", num / 1_000_000.0);
+        format!("{:.0}M", num / 1_000_000.0)
     }
 }
 
@@ -213,8 +213,8 @@ pub fn make_final_image(
         imageops::overlay(
             &mut stats_img.0,
             &flag,
-            base_x as i64 + (PLAYER_BOX_HEIGHT - 160) / 2,
-            base_y as i64 + (PLAYER_BOX_HEIGHT - 160) / 2,
+            base_x + (PLAYER_BOX_HEIGHT - 160) / 2,
+            base_y + (PLAYER_BOX_HEIGHT - 160) / 2,
         );
 
         // Player Name
@@ -225,7 +225,7 @@ pub fn make_final_image(
             (base_y + 16) as i32,
             48.0,
             font,
-            &player_name,
+            player_name,
         );
         drawing::draw_text_mut(
             &mut stats_img,
@@ -431,7 +431,7 @@ pub fn make_final_image(
         0,
     );
     let img_out = image::DynamicImage::ImageRgba8(img_out).to_rgb8();
-    return Ok(img_out);
+    Ok(img_out)
 }
 
 pub async fn render_stats_image_stellaris(
@@ -459,5 +459,5 @@ pub async fn render_stats_image_stellaris(
     // log!("Drawing stats...");
 
     let final_img = make_final_image(&map_image, &jura, &stats_assets, &save, &map_assets.colors)?;
-    return Ok(final_img);
+    Ok(final_img)
 }

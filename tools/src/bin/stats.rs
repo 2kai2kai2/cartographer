@@ -7,14 +7,13 @@ struct LocalFetcher {
 impl LocalFetcher {
     fn new(root: impl Into<std::path::PathBuf>) -> Self {
         let root = root.into();
-        return LocalFetcher { root };
+        LocalFetcher { root }
     }
 }
 impl stats_core::Fetcher for LocalFetcher {
     async fn get(&self, path: &str) -> anyhow::Result<Vec<u8>> {
         let path = self.root.join(path);
-        return std::fs::read(&path)
-            .with_context(|| format!("While reading file {}", path.display()));
+        std::fs::read(&path).with_context(|| format!("While reading file {}", path.display()))
     }
 }
 

@@ -8,7 +8,7 @@ use crate::{
 };
 use ab_glyph::{Font, FontRef};
 use anyhow::{Result, anyhow};
-use image::{DynamicImage, GenericImage, GenericImageView, RgbImage, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImage, GenericImageView, RgbImage, Rgba};
 use imageproc::definitions::HasWhite;
 use imageproc::drawing;
 use pdx_parser_core::eu4_save_parser::{Nation, SaveGame, WarResult};
@@ -158,7 +158,7 @@ pub fn make_image_top(
             .filter(|tag| save.tag_player(tag).is_some());
         for (i, attacker) in player_attackers.take(8).enumerate() {
             let flag = flag_images
-                .get_normal_flag(&attacker)
+                .get_normal_flag(attacker)
                 .ok_or(anyhow!("failed to get flag for tag {}", attacker))?;
             let resized =
                 image::imageops::resize(&*flag, 64, 64, image::imageops::FilterType::Nearest);
@@ -195,7 +195,7 @@ pub fn make_image_top(
             .filter(|tag| save.tag_player(tag).is_some());
         for (i, defender) in player_defenders.take(8).enumerate() {
             let flag = flag_images
-                .get_normal_flag(&defender)
+                .get_normal_flag(defender)
                 .ok_or(anyhow!("failed to get flag for tag {}", defender))?;
             let resized =
                 image::imageops::resize(&*flag, 64, 64, image::imageops::FilterType::Nearest);
@@ -297,7 +297,7 @@ pub fn make_image_top(
         &date_str,
     );
 
-    return Ok(DynamicImage::ImageRgba8(out).to_rgb8());
+    Ok(DynamicImage::ImageRgba8(out).to_rgb8())
 }
 
 /// Just combines the two parts
@@ -312,7 +312,7 @@ pub fn make_final_image(map_image: RgbImage, top_image: RgbImage) -> Result<RgbI
     drop(map_image);
 
     out.copy_from(&top_image, 0, 0)?;
-    return Ok(out);
+    Ok(out)
 }
 
 pub async fn render_stats_image(
@@ -355,5 +355,5 @@ pub async fn render_stats_image(
     drop(save);
 
     let final_img = super::make_final_image(map_image, top_image)?;
-    return Ok(final_img);
+    Ok(final_img)
 }

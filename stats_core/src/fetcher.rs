@@ -11,7 +11,7 @@ pub fn from_cp1252<T: Read>(buffer: T) -> Result<String, std::io::Error> {
         .encoding(Some(WINDOWS_1252))
         .build(buffer)
         .read_to_string(&mut text)?;
-    return Ok(text);
+    Ok(text)
 }
 
 /// A unified interface for fetching assets whether they are local or web-based
@@ -21,23 +21,22 @@ pub trait Fetcher {
     fn get(&self, path: &str) -> impl std::future::Future<Output = anyhow::Result<Vec<u8>>>;
 
     fn get_utf8(&self, path: &str) -> impl std::future::Future<Output = anyhow::Result<String>> {
-        return self.get(path).and_then(async |raw_file| {
-            String::from_utf8(raw_file).context("While decoding utf8.")
-        });
+        self.get(path)
+            .and_then(async |raw_file| String::from_utf8(raw_file).context("While decoding utf8."))
     }
 
     fn get_cp1252(&self, path: &str) -> impl std::future::Future<Output = anyhow::Result<String>> {
-        return self.get(path).and_then(async |raw_file| {
+        self.get(path).and_then(async |raw_file| {
             from_cp1252(Cursor::new(raw_file)).context("While decoding cp1252.")
-        });
+        })
     }
 
     fn get_image(
         &self,
         path: &str,
     ) -> impl std::future::Future<Output = anyhow::Result<image::DynamicImage>> {
-        return self.get(path).and_then(async |raw_file| {
+        self.get(path).and_then(async |raw_file| {
             image::load_from_memory(&raw_file).context("While loading image.")
-        });
+        })
     }
 }

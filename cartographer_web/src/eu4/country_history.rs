@@ -13,7 +13,7 @@ pub enum CountryHistoryEvent {
 impl CountryHistoryEvent {
     /// Should be passed the `history` object for a country
     pub fn extract_events<'a>(object: &RawPDXObject<'a>) -> Vec<(EU4Date, CountryHistoryEvent)> {
-        return object
+        object
             .iter_all_KVs()
             .filter_map(|(k, v)| Some((k.as_date()?, v.as_object()?)))
             .flat_map(|(date, obj)| {
@@ -26,7 +26,7 @@ impl CountryHistoryEvent {
                         _ => None,
                     })
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
     }
 
     pub fn combine_events(
@@ -38,7 +38,7 @@ impl CountryHistoryEvent {
                 out.entry(date).or_default().push((id.clone(), event));
             }
         }
-        return out;
+        out
     }
 }
 
@@ -56,7 +56,7 @@ pub fn make_combined_events(
             ))
         })
         .collect();
-    return CountryHistoryEvent::combine_events(province_histories);
+    CountryHistoryEvent::combine_events(province_histories)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -99,6 +99,6 @@ impl WarHistoryEvent {
                 }
             }
         }
-        return Ok(out);
+        Ok(out)
     }
 }

@@ -50,7 +50,7 @@ fn determine_unownable_color(
     let color = compute_country_map_color(owner, gamestate).with_context(|| {
         format!("While determining color for owner (by adjacency) of {loc_name}")
     })?;
-    return Ok(Rgb(color.0));
+    Ok(Rgb(color.0))
 }
 
 /// ## Parameters
@@ -83,18 +83,18 @@ pub fn generate_map_colors_config(
             let Some(save_idx) = meta_locs_inverse.get(loc_name) else {
                 return None;
             };
-            let Some(location) = gamestate.locations.locations.get(&save_idx) else {
+            let Some(location) = gamestate.locations.locations.get(save_idx) else {
                 return Some(Err(anyhow!(
                     "Failed to find location {loc_name} in gamestate."
                 )));
             };
             let value = (loc_name, *save_idx, location);
-            return Some(Ok((i, value)));
+            Some(Ok((i, value)))
         })
         .collect::<anyhow::Result<_>>()?;
     drop(meta_locs_inverse);
 
-    return locations
+    locations
         .iter()
         .enumerate()
         .map(|(grayscale, _)| {
@@ -113,24 +113,21 @@ pub fn generate_map_colors_config(
 
             let color = compute_country_map_color(owner, gamestate)
                 .with_context(|| format!("While determining color for owner of {loc_name}"))?;
-            return Ok(Rgb(color.0));
+            Ok(Rgb(color.0))
         })
-        .collect::<Result<Vec<_>, _>>();
+        .collect::<Result<Vec<_>, _>>()
 }
 
 pub fn make_base_map(
     bitmap: &ImageBuffer<Luma<u16>, Vec<u16>>,
     color_map: &Vec<Rgb<u8>>,
 ) -> RgbImage {
-    return imageproc::map::map_colors(bitmap, |color| {
+    imageproc::map::map_colors(bitmap, |color| {
         if color.0[0] == u16::MAX {
             return WATER_COLOR;
         }
-        color_map
-            .get(color.0[0] as usize)
-            .unwrap_or(&Rgb::black())
-            .clone()
-    });
+        *color_map.get(color.0[0] as usize).unwrap_or(&Rgb::black())
+    })
 }
 
 /// Returns the color of the given country, based on the owner of the country.
@@ -174,7 +171,7 @@ pub fn compute_country_map_color(
         ));
     };
 
-    return Ok(blend_subject_color(owner_color, overlord_color));
+    Ok(blend_subject_color(owner_color, overlord_color))
 }
 
 /// The best approximation of the in-game subject blending algorithm I could reproduce using a bunch of data points.
@@ -198,5 +195,5 @@ pub fn blend_subject_color(
     let value = VALUE_SLOPE * (subject.v - overlord.v) + overlord.v - 0.1;
 
     let blended = common_deserialize::Hsv360::new(hue, saturation, value);
-    return blended.to_rgb();
+    blended.to_rgb()
 }

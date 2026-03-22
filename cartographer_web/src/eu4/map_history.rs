@@ -32,7 +32,7 @@ pub enum ProvinceHistoryEvent {
 impl ProvinceHistoryEvent {
     /// Should be passed the `history` object for a province
     pub fn extract_events<'a>(object: &RawPDXObject<'a>) -> Vec<(EU4Date, ProvinceHistoryEvent)> {
-        return object
+        object
             .iter_all_KVs()
             .filter_map(|(k, v)| Some((k.as_date()?, v.as_object()?)))
             .flat_map(|(date, obj)| {
@@ -70,7 +70,7 @@ impl ProvinceHistoryEvent {
                         _ => None,
                     })
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
     }
 
     pub fn combine_events(
@@ -82,7 +82,7 @@ impl ProvinceHistoryEvent {
                 out.entry(date).or_default().push((id, event));
             }
         }
-        return out;
+        out
     }
 }
 
@@ -95,12 +95,12 @@ pub fn make_combined_events(
         .iter_all_KVs()
         .filter_map(|(k, v)| {
             Some((
-                k.as_int()?.abs() as u16,
+                k.as_int()?.unsigned_abs() as u16,
                 ProvinceHistoryEvent::extract_events(v.as_object()?.get_first_obj("history")?),
             ))
         })
         .collect();
-    return ProvinceHistoryEvent::combine_events(province_histories);
+    ProvinceHistoryEvent::combine_events(province_histories)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -121,7 +121,7 @@ impl ColorMapEvent {
         events: &Vec<(u16, ColorMapEvent)>,
     ) {
         events
-            .into_iter()
+            .iter()
             .for_each(|event| ColorMapEvent::apply(target, event));
     }
 }
@@ -209,7 +209,7 @@ impl ColorMapManager {
                 for (id, event) in events {
                     match event {
                         ProvinceHistoryEvent::Owner(tag) => {
-                            let color = tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR).clone();
+                            let color = *tag_colors.get(tag).unwrap_or(&UNCLAIMED_COLOR);
                             if owners[*id as usize] == color {
                                 continue;
                             }
@@ -230,7 +230,7 @@ impl ColorMapManager {
                                 // has both the old and new tags. It seems the contemporary tag is always first.
                                 continue;
                             }
-                            let color = tag_colors.get(tag).unwrap_or(&Rgb::black()).clone();
+                            let color = *tag_colors.get(tag).unwrap_or(&Rgb::black());
                             if controllers[*id as usize] == color {
                                 set_controller.push(*id);
                                 continue;
@@ -278,11 +278,11 @@ impl ColorMapManager {
                 out.i_frames
                     .insert(date, (owners.clone(), controllers.clone()));
             }
-            if diffs.len() > 0 {
+            if !diffs.is_empty() {
                 out.diffs.insert(date, diffs);
             }
         }
-        return out;
+        out
     }
 
     /// Gets the color maps for a specified date.
@@ -291,7 +291,7 @@ impl ColorMapManager {
     ///
     /// Returns the color maps for the date, or `None` if the date is before the earliest available date.
     pub fn get_date(&self, date: &EU4Date) -> Option<(Vec<Rgb<u8>>, Vec<Rgb<u8>>)> {
-        if let Some(i_frame) = self.i_frames.get(&date) {
+        if let Some(i_frame) = self.i_frames.get(date) {
             return Some(i_frame.clone());
         }
 
@@ -302,7 +302,7 @@ impl ColorMapManager {
             self.apply_diffs(&iter_date, &mut i_frame);
             iter_date = iter_date.tomorrow();
         }
-        return Some(i_frame);
+        Some(i_frame)
     }
 
     pub fn apply_diffs(&self, date: &EU4Date, color_maps: &mut (Vec<Rgb<u8>>, Vec<Rgb<u8>>)) {
@@ -320,7 +320,7 @@ pub struct SerializedColorMapManager {
 }
 impl SerializedColorMapManager {
     pub fn encode(manager: &ColorMapManager) -> Self {
-        return Self {
+        Self {
             start_date: manager.start_date.to_string(),
             end_date: manager.end_date.to_string(),
             diffs: manager
@@ -332,14 +332,14 @@ impl SerializedColorMapManager {
                         base64::Engine::encode(
                             &base64::engine::general_purpose::STANDARD,
                             events
-                                .into_iter()
+                                .iter()
                                 .flat_map(|(id, ev)| {
                                     id.to_be_bytes().into_iter().chain(match ev {
                                         ColorMapEvent::Owner(Rgb(color)) => {
-                                            std::iter::once(0u8).chain(color.into_iter().cloned())
+                                            std::iter::once(0u8).chain(color.iter().cloned())
                                         }
                                         ColorMapEvent::Controller(Rgb(color)) => {
-                                            std::iter::once(1u8).chain(color.into_iter().cloned())
+                                            std::iter::once(1u8).chain(color.iter().cloned())
                                         }
                                     })
                                 })
@@ -348,7 +348,7 @@ impl SerializedColorMapManager {
                     )
                 })
                 .collect::<HashMap<String, String>>(),
-        };
+        }
     }
     pub fn decode(&self, assets: &MapAssets) -> anyhow::Result<ColorMapManager> {
         let start_date: EU4Date = self.start_date.parse()?;
@@ -382,7 +382,7 @@ impl SerializedColorMapManager {
                     }
                 }
 
-                return Ok((date.parse()?, out_events));
+                Ok((date.parse()?, out_events))
             })
             .collect::<anyhow::Result<_>>()?;
 
@@ -414,11 +414,11 @@ impl SerializedColorMapManager {
             }
         }
 
-        return Ok(ColorMapManager {
+        Ok(ColorMapManager {
             start_date,
             end_date,
             diffs,
             i_frames,
-        });
+        })
     }
 }

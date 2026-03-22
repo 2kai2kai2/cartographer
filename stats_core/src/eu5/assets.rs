@@ -56,7 +56,7 @@ impl CommonAssets {
         let noto_serif_italic = ab_glyph::FontVec::try_from_vec(noto_serif_italic)
             .context("Failed to parse NotoSerif-Italic.ttf")?;
 
-        return Ok(CommonAssets {
+        Ok(CommonAssets {
             stats_frame,
             flag_frame,
             population,
@@ -65,7 +65,7 @@ impl CommonAssets {
             monthly_gold,
             noto_serif_regular,
             noto_serif_italic,
-        });
+        })
     }
 }
 
@@ -103,14 +103,14 @@ impl MapAssets {
                         })
                     })
                     .collect::<anyhow::Result<_>>()?;
-                return Ok((key, adjs));
+                Ok((key, adjs))
             })
             .collect::<anyhow::Result<_>>()?;
-        return Ok(MapAssets {
+        Ok(MapAssets {
             base_map,
             locations,
             unownable: UnownableLocations(unownable),
-        });
+        })
     }
 
     /// `dir_url` should be, for example, `"vanilla"`
@@ -124,18 +124,18 @@ impl MapAssets {
             fetcher.get_utf8(&url_locations_txt),
             fetcher.get_utf8(&url_unownable_txt),
         )?;
-        return MapAssets::new(base_map.to_luma16(), &locations_txt, &unownable_txt);
+        MapAssets::new(base_map.to_luma16(), &locations_txt, &unownable_txt)
     }
 }
 
 pub struct UnownableLocations(Vec<(u16, Vec<u16>)>);
 impl UnownableLocations {
-    pub fn get<'a>(&'a self, grayscale: u16) -> Option<&'a [u16]> {
+    pub fn get(&self, grayscale: u16) -> Option<&[u16]> {
         let idx = self
             .0
             .binary_search_by_key(&grayscale, |(grayscale, _)| *grayscale)
             .ok()?;
-        return Some(&self.0[idx].1);
+        Some(&self.0[idx].1)
     }
 }
 
@@ -152,9 +152,9 @@ impl GameDataAssets {
             fetcher.get_image(&url_flags_img),
             fetcher.get_utf8(&url_flags_tags),
         )?;
-        return Ok(GameDataAssets {
+        Ok(GameDataAssets {
             flags: Flags::new(flags_img.to_rgb8(), &flags_tags)?,
-        });
+        })
     }
 }
 
@@ -178,13 +178,13 @@ impl Flags {
                 tags.len() * 100
             ));
         }
-        return Ok(Flags { imgs, tags });
+        Ok(Flags { imgs, tags })
     }
     pub fn get_normal_flag<'a>(&'a self, tag: &str) -> Option<image::SubImage<&'a RgbImage>> {
         let idx = self
             .tags
             .binary_search_by_key(&tag, |tag| tag.as_str())
             .ok()?;
-        return Some(self.imgs.view(0, idx as u32 * 100, 150, 100));
+        Some(self.imgs.view(0, idx as u32 * 100, 150, 100))
     }
 }

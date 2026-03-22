@@ -21,7 +21,7 @@ pub fn decompress_eu4txt(array: &[u8]) -> anyhow::Result<String> {
 
     let unzipped_gamestate = unzipper.by_name("gamestate")?;
     let gamestate = from_cp1252(unzipped_gamestate)?;
-    return Ok(meta + "\n" + &gamestate);
+    Ok(meta + "\n" + &gamestate)
 }
 
 pub struct EU4ParserStepText(String);
@@ -31,18 +31,17 @@ impl EU4ParserStepText {
             return Err(anyhow!("EU4 save was not a proper zip-compressed file."));
         }
         let text = decompress_eu4txt(file_buf)?;
-        return Ok(EU4ParserStepText(text));
+        Ok(EU4ParserStepText(text))
     }
     pub fn parse<'a>(&'a self) -> anyhow::Result<EU4ParserStepRawParsed<'a>> {
         let (_, raw_save) = RawPDXObject::parse_object_inner(&self.0)
             .ok_or(anyhow!("Failed to parse EU4 save file (at step 1)"))?;
-        return Ok(EU4ParserStepRawParsed(raw_save));
+        Ok(EU4ParserStepRawParsed(raw_save))
     }
 }
 pub struct EU4ParserStepRawParsed<'a>(RawPDXObject<'a>);
 impl<'a> EU4ParserStepRawParsed<'a> {
     pub fn parse(self) -> anyhow::Result<SaveGame> {
-        return SaveGame::new_parser(&self.0)
-            .ok_or(anyhow!("Failed to parse save file (at step 2)"));
+        SaveGame::new_parser(&self.0).ok_or(anyhow!("Failed to parse save file (at step 2)"))
     }
 }

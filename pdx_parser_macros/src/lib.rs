@@ -16,11 +16,11 @@ pub(crate) enum GameId {
 impl syn::parse::Parse for GameId {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let game: syn::LitStr = input.parse()?;
-        return match game.value().as_str() {
+        match game.value().as_str() {
             "eu5" => Ok(Self::EU5),
             "test" => Ok(Self::Test),
             _ => Err(syn::Error::new_spanned(game, "Unknown game.")),
-        };
+        }
     }
 }
 
@@ -53,7 +53,7 @@ fn get_tokens_from(path: &str) -> HashMap<String, u16> {
         .map(|line| {
             let (id, text) = line.split_once(';').expect("invalid tokens file format");
             let id: u16 = id.parse().expect("invalid tokens file format");
-            return (text.to_string(), id);
+            (text.to_string(), id)
         })
         .collect();
 }
@@ -75,7 +75,7 @@ pub fn eu5_token(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
             .into();
     };
 
-    return quote! { #token }.into();
+    quote! { #token }.into()
 }
 
 /// ## Structs

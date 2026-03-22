@@ -26,7 +26,7 @@ pub fn decompress_stellaris(array: &[u8]) -> anyhow::Result<String> {
     let mut unzipped_gamestate = unzipper.by_name("gamestate")?;
     let mut gamestate = String::new();
     unzipped_gamestate.read_to_string(&mut gamestate)?;
-    return Ok(gamestate);
+    Ok(gamestate)
 }
 
 pub struct StellarisParserStepText(String);
@@ -38,18 +38,18 @@ impl StellarisParserStepText {
             ));
         }
         let text = decompress_stellaris(file_buf)?;
-        return Ok(StellarisParserStepText(text));
+        Ok(StellarisParserStepText(text))
     }
     pub fn parse<'a>(&'a self) -> anyhow::Result<StellarisParserStepRawParsed<'a>> {
         let (_, raw_save) = RawPDXObject::parse_object_inner(&self.0)
             .ok_or(anyhow!("Failed to parse Stellaris save file (at step 1)"))?;
-        return Ok(StellarisParserStepRawParsed(raw_save));
+        Ok(StellarisParserStepRawParsed(raw_save))
     }
 }
 pub struct StellarisParserStepRawParsed<'a>(RawPDXObject<'a>);
 impl<'a> StellarisParserStepRawParsed<'a> {
     pub fn parse(self) -> anyhow::Result<SaveGame> {
-        return SaveGame::new_parser(&self.0)
-            .map_err(|err| anyhow!("Failed to parse save file (at step 2): {err}"));
+        SaveGame::new_parser(&self.0)
+            .map_err(|err| anyhow!("Failed to parse save file (at step 2): {err}"))
     }
 }

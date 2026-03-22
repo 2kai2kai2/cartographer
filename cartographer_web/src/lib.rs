@@ -49,7 +49,7 @@ pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue>
             });
             drop(text);
 
-            return Ok(serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)?);
+            serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)
         }
         GameSaveType::Stellaris => {
             perf.as_ref().inspect(|perf| {
@@ -71,7 +71,7 @@ pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue>
             });
             drop(text);
 
-            return Ok(serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)?);
+            serde_wasm_bindgen::to_value(&(game, save)).map_err(map_error)
         }
         GameSaveType::EU5 => {
             perf.as_ref().inspect(|perf| {
@@ -86,13 +86,13 @@ pub fn parse_save_file(array: &[u8], filename: &str) -> Result<JsValue, JsValue>
             perf.as_ref().inspect(|perf| {
                 let _ = perf.mark("parse_end");
             });
-            return Ok(serde_wasm_bindgen::to_value(&(game, gamestate)).map_err(map_error)?);
+            serde_wasm_bindgen::to_value(&(game, gamestate)).map_err(map_error)
         }
     }
 }
 
 fn map_error<E: ToString>(err: E) -> JsValue {
-    return js_sys::Error::new(&err.to_string()).into();
+    js_sys::Error::new(&err.to_string()).into()
 }
 
 struct WebFetcher {
@@ -101,16 +101,15 @@ struct WebFetcher {
 }
 impl WebFetcher {
     pub fn new(base_url: reqwest::Url) -> Self {
-        return WebFetcher {
+        WebFetcher {
             base_url,
             client: reqwest::Client::new(),
-        };
+        }
     }
 }
 impl stats_core::Fetcher for WebFetcher {
     async fn get(&self, path: &str) -> anyhow::Result<Vec<u8>> {
-        return self
-            .client
+        self.client
             .get(self.base_url.join(path)?)
             .send()
             .await?
@@ -118,7 +117,7 @@ impl stats_core::Fetcher for WebFetcher {
             .bytes()
             .await
             .map(|bytes| bytes.to_vec())
-            .context("While getting the body of the response.");
+            .context("While getting the body of the response.")
     }
 }
 
@@ -140,9 +139,9 @@ pub async fn render_stats_image_eu4(save: JsValue) -> Result<JsValue, JsValue> {
     final_img
         .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
         .map_err(map_error)?;
-    return Ok(JsValue::from_str(
+    Ok(JsValue::from_str(
         &base64::engine::general_purpose::STANDARD.encode(png_buffer),
-    ));
+    ))
 }
 
 #[wasm_bindgen]
@@ -163,9 +162,9 @@ pub async fn render_stats_image_eu5(gamestate: JsValue) -> Result<JsValue, JsVal
     final_img
         .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
         .map_err(map_error)?;
-    return Ok(JsValue::from_str(
+    Ok(JsValue::from_str(
         &base64::engine::general_purpose::STANDARD.encode(png_buffer),
-    ));
+    ))
 }
 
 #[wasm_bindgen]
@@ -186,9 +185,9 @@ pub async fn render_stats_image_stellaris(save: JsValue) -> Result<JsValue, JsVa
     final_img
         .write_to(&mut Cursor::new(&mut png_buffer), image::ImageFormat::Png)
         .map_err(map_error)?;
-    return Ok(JsValue::from_str(
+    Ok(JsValue::from_str(
         &base64::engine::general_purpose::STANDARD.encode(png_buffer),
-    ));
+    ))
 }
 
 #[wasm_bindgen]
@@ -227,8 +226,8 @@ pub async fn generate_map_history(save_file: &[u8], base_url: &str) -> Result<St
         save.date,
     );
 
-    return serde_json::to_string(&SerializedColorMapManager::encode(&history))
-        .map_err(|err| JsError::new(&err.to_string()).into());
+    serde_json::to_string(&SerializedColorMapManager::encode(&history))
+        .map_err(|err| JsError::new(&err.to_string()).into())
 }
 
 #[wasm_bindgen]
@@ -256,7 +255,7 @@ pub async fn do_webgl(history: &str, base_url: &str) -> Result<JsValue, JsValue>
 
     // if no date is specified, it just goes to the next one
     // if it is specified, we will try to resolve it, but this may be slower.
-    return Ok(
+    Ok(
         Closure::new(move |date: Option<String>| -> Result<String, JsValue> {
             if let Some(date) = date {
                 let Ok(date) = date.parse::<EU4Date>() else {
@@ -280,8 +279,8 @@ pub async fn do_webgl(history: &str, base_url: &str) -> Result<JsValue, JsValue>
             callback(&current_frame.0, &current_frame.1);
             let ret = current_date.to_string();
             current_date = current_date.tomorrow();
-            return Ok(ret);
+            Ok(ret)
         })
         .into_js_value(),
-    );
+    )
 }

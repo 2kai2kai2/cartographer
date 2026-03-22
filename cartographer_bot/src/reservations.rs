@@ -17,13 +17,13 @@ impl Reservation {
         tags: &Tags,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
-        return write!(
+        write!(
             f,
             "<@{}>: {} <t:{}>",
             self.user_id,
             tags.get_name_for_tag(&self.tag).unwrap_or(&self.tag),
             self.timestamp.timestamp()
-        );
+        )
     }
 }
 
@@ -34,18 +34,18 @@ pub struct ReservationsData {
 }
 impl ReservationsData {
     pub fn new(game_type: GameType) -> ReservationsData {
-        return ReservationsData {
+        ReservationsData {
             reservations: Vec::new(),
             game_type,
-        };
+        }
     }
 
     pub fn len(&self) -> usize {
-        return self.reservations.len();
+        self.reservations.len()
     }
 
     pub fn reserved_tags<'a>(&'a self) -> impl Iterator<Item = &'a String> + 'a {
-        return self.reservations.iter().map(|res| &res.tag);
+        self.reservations.iter().map(|res| &res.tag)
     }
 
     /// Returns `Ok(())` if it succeeds, or `Err(())` if already taken.
@@ -69,7 +69,7 @@ impl ReservationsData {
                 self.reservations.sort();
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn remove(&mut self, user_id: u64) {
@@ -119,7 +119,7 @@ impl ReservationsData {
             let y = img.height() as f64 - y - icon_x.height() as f64 / 2.0;
             image::imageops::overlay(&mut img, &icon_x, x.round() as i64, y.round() as i64);
         }
-        return Ok(img);
+        Ok(img)
     }
 
     pub async fn make_map_png(&self) -> anyhow::Result<Vec<u8>> {
@@ -129,7 +129,7 @@ impl ReservationsData {
             &mut std::io::Cursor::new(&mut img_vec),
             image::ImageFormat::Png,
         )?;
-        return Ok(img_vec);
+        Ok(img_vec)
     }
 
     pub fn format_with_game(
@@ -147,7 +147,7 @@ impl ReservationsData {
             writeln!(f, "*none*")?;
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -162,48 +162,48 @@ impl GameType {
         &self,
         base_path: impl AsRef<std::path::Path>,
     ) -> std::path::PathBuf {
-        return match self {
+        match self {
             GameType::EU4 => base_path.as_ref().join("eu4/vanilla/1444.png"),
             GameType::EU5 => base_path.as_ref().join("eu5/vanilla/1337.png"),
-        };
+        }
     }
     pub fn get_icon_path(&self, base_path: impl AsRef<std::path::Path>) -> std::path::PathBuf {
-        return match self {
+        match self {
             GameType::EU4 => base_path.as_ref().join("eu4/xIcon.png"),
             GameType::EU5 => base_path.as_ref().join("eu5/player.png"),
-        };
+        }
     }
     pub fn get_capital_locations_path(
         &self,
         base_path: impl AsRef<std::path::Path>,
     ) -> std::path::PathBuf {
-        return match self {
+        match self {
             GameType::EU4 => base_path.as_ref().join("eu4/vanilla/capitals.txt"),
             GameType::EU5 => base_path.as_ref().join("eu5/vanilla/capitals.txt"),
-        };
+        }
     }
     pub fn get_tags_path(&self, base_path: impl AsRef<std::path::Path>) -> std::path::PathBuf {
-        return match self {
+        match self {
             GameType::EU4 => base_path.as_ref().join("eu4/vanilla/tags.txt"),
             GameType::EU5 => base_path.as_ref().join("eu5/vanilla/tags.txt"),
-        };
+        }
     }
 }
 impl FromStr for GameType {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        return match s {
+        match s {
             "EU4" => Ok(GameType::EU4),
             "EU5" => Ok(GameType::EU5),
             _ => Err(()),
-        };
+        }
     }
 }
 impl Display for GameType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return match self {
+        match self {
             GameType::EU4 => write!(f, "EU4"),
             GameType::EU5 => write!(f, "EU5"),
-        };
+        }
     }
 }

@@ -30,18 +30,18 @@ impl StatsImageDefaultAssets {
         let url_final_template_png = "eu4/finalTemplate.png";
         let (army, navy, development, income, attacker, defender, star, white_peace, base_template) =
             futures::try_join!(
-                fetcher.get_image(&url_army_png),
-                fetcher.get_image(&url_navy_png),
-                fetcher.get_image(&url_development_png),
-                fetcher.get_image(&url_income_png),
-                fetcher.get_image(&url_bodycount_attacker_button_png),
-                fetcher.get_image(&url_bodycount_defender_button_png),
-                fetcher.get_image(&url_star_png),
-                fetcher.get_image(&url_icon_peace_png),
-                fetcher.get_image(&url_final_template_png),
+                fetcher.get_image(url_army_png),
+                fetcher.get_image(url_navy_png),
+                fetcher.get_image(url_development_png),
+                fetcher.get_image(url_income_png),
+                fetcher.get_image(url_bodycount_attacker_button_png),
+                fetcher.get_image(url_bodycount_defender_button_png),
+                fetcher.get_image(url_star_png),
+                fetcher.get_image(url_icon_peace_png),
+                fetcher.get_image(url_final_template_png),
             )?;
 
-        return Ok(StatsImageDefaultAssets {
+        Ok(StatsImageDefaultAssets {
             army: army.to_rgba8(),
             navy: navy.to_rgba8(),
             development: development.to_rgba8(),
@@ -51,7 +51,7 @@ impl StatsImageDefaultAssets {
             star: star.to_rgba8(),
             white_peace: white_peace.to_rgba8(),
             base_template: base_template.to_rgba8(),
-        });
+        })
     }
 }
 
@@ -62,18 +62,17 @@ pub struct FlagImages {
 }
 impl FlagImages {
     fn read_flagfiles_txt(text: &str) -> HashMap<String, usize> {
-        return text
-            .split_ascii_whitespace()
+        text.split_ascii_whitespace()
             .enumerate()
             .map(|(i, tag)| (tag.to_string(), i))
-            .collect();
+            .collect()
     }
 
     pub fn new(flagfiles_txt: &str, flagfiles_png: image::RgbaImage) -> FlagImages {
-        return FlagImages {
-            tags: FlagImages::read_flagfiles_txt(&flagfiles_txt),
+        FlagImages {
+            tags: FlagImages::read_flagfiles_txt(flagfiles_txt),
             images: flagfiles_png,
-        };
+        }
     }
 
     pub fn get_normal_flag(&self, tag: &str) -> Option<image::SubImage<&image::RgbaImage>> {
@@ -81,7 +80,7 @@ impl FlagImages {
 
         let x = 128 * (index as u32 % 16);
         let y = 128 * (index as u32 / 16);
-        return Some(self.images.view(x, y, 128, 128));
+        Some(self.images.view(x, y, 128, 128))
     }
 }
 
@@ -115,26 +114,24 @@ impl MapAssets {
             out.insert(Rgb([r, g, b]), id);
         }
 
-        return Ok(out);
+        Ok(out)
     }
     pub fn read_wasteland_provinces(text: &str) -> Result<HashMap<u64, Vec<u64>>, anyhow::Error> {
-        return text
-            .lines()
+        text.lines()
             .map(|line| -> anyhow::Result<(u64, Vec<u64>)> {
                 let mut parts = line.split(';').map(str::parse::<u64>);
                 let Some(Ok(first)) = parts.next() else {
                     return Err(anyhow!("Wasteland definition row is missing a first item"));
                 };
 
-                return Ok((first, parts.collect::<Result<_, _>>()?));
+                Ok((first, parts.collect::<Result<_, _>>()?))
             })
-            .collect();
+            .collect()
     }
     pub fn read_water_provinces(text: &str) -> Result<Vec<u64>, ParseIntError> {
-        return text
-            .split_ascii_whitespace()
+        text.split_ascii_whitespace()
             .map(str::parse::<u64>)
-            .collect();
+            .collect()
     }
 
     pub fn new(
@@ -145,23 +142,23 @@ impl MapAssets {
         flagfiles_png: RgbaImage,
         base_map: RgbImage,
     ) -> anyhow::Result<MapAssets> {
-        let map_definitions = MapAssets::read_definition_csv(&csv_file_text)?;
+        let map_definitions = MapAssets::read_definition_csv(csv_file_text)?;
         let base_map: ImageBuffer<Luma<u16>, Vec<u16>> =
             imageproc::map::map_colors(&base_map, |color| {
                 Luma([*map_definitions.get(&color).unwrap_or(&0) as u16])
             });
 
-        return Ok(MapAssets {
+        Ok(MapAssets {
             provinces_len: map_definitions
                 .values()
                 .max()
                 .map(|m| m + 1)
                 .unwrap_or_default(),
-            wasteland: MapAssets::read_wasteland_provinces(&wasteland)?,
-            water: MapAssets::read_water_provinces(&water)?,
-            flags: FlagImages::new(&flagfiles_txt, flagfiles_png),
+            wasteland: MapAssets::read_wasteland_provinces(wasteland)?,
+            water: MapAssets::read_water_provinces(water)?,
+            flags: FlagImages::new(flagfiles_txt, flagfiles_png),
             base_map,
-        });
+        })
     }
 
     /// `dir_url` should be, for example, `"{}/eu4/vanilla"`
@@ -182,13 +179,13 @@ impl MapAssets {
             fetcher.get_image(&url_provinces_png)
         )?;
 
-        return MapAssets::new(
+        MapAssets::new(
             &csv_file_text,
             &wasteland,
             &water,
             &flagfiles_txt,
             flagfiles_png.to_rgba8(),
             base_map.to_rgb8(),
-        );
+        )
     }
 }

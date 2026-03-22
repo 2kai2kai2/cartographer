@@ -89,14 +89,14 @@ pub fn convert_flag_colors(gamefiles: &std::path::Path, target: &std::path::Path
     std::fs::write(&destination, csv)
         .context(format!("While writing to {}", destination.display()))?;
 
-    return Ok(());
+    Ok(())
 }
 
 fn load_dds<P: AsRef<std::path::Path>>(path: P) -> Result<RgbaImage> {
     let image = std::fs::File::open(path)?;
     let image = ddsfile::Dds::read(image)?;
     let image = image_dds::image_from_dds(&image, 0)?;
-    return Ok(image);
+    Ok(image)
 }
 
 /// Makes `flag_parts.png` and `flag_parts.txt`
@@ -148,8 +148,8 @@ pub fn pack_flag_imgs(gamefiles: &std::path::Path, target: &std::path::Path) -> 
     out_img.save(png_destination)?;
 
     let txt_destination = target.join("flag_parts.txt");
-    std::fs::write(txt_destination, &names.join("\n"))?;
-    return Ok(());
+    std::fs::write(txt_destination, names.join("\n"))?;
+    Ok(())
 }
 
 pub fn pack_flag_frames(gamefiles: &std::path::Path, target: &std::path::Path) -> Result<()> {
@@ -164,5 +164,5 @@ pub fn pack_flag_frames(gamefiles: &std::path::Path, target: &std::path::Path) -
 
     let png_destination = target.join("flag_frames.png");
     default_frame.save(png_destination)?;
-    return Ok(());
+    Ok(())
 }

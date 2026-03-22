@@ -22,10 +22,10 @@ impl<'de> TextDeserialize<'de> for VariableValue {
             TextToken::StringUnquoted(value) => {
                 // for some reason, sometimes the files have a `]` at the end of the number
                 let value = value.strip_suffix(']').ok_or(TextError::UnexpectedToken)?;
-                return Ok((
+                Ok((
                     VariableValue::Literal(value.parse().map_err(|_| TextError::UnexpectedToken)?),
                     stream,
-                ));
+                ))
             }
             TextToken::Int(int) => Ok((VariableValue::Literal(int as f64), stream)),
             TextToken::UInt(uint) => Ok((VariableValue::Literal(uint as f64), stream)),
@@ -93,14 +93,14 @@ impl<'de> TextDeserialize<'de> for RawCoatOfArmsFile {
                 }
             }
         }
-        return Ok((
+        Ok((
             RawCoatOfArmsFile {
                 variables,
                 template: template.unwrap_or_default(),
                 coat_of_arms,
             },
             stream,
-        ));
+        ))
     }
 }
 
@@ -278,13 +278,13 @@ impl<'de> TextDeserialize<'de> for ColorValue {
         match peek {
             TextToken::StringUnquoted("rgb" | "hsv360") => {
                 let color: common_deserialize::NumericColor = stream.parse()?;
-                return Ok((ColorValue::Numeric(color), stream));
+                Ok((ColorValue::Numeric(color), stream))
             }
             TextToken::StringQuoted(color) | TextToken::StringUnquoted(color) => {
                 stream.eat_token();
-                return Ok((ColorValue::Named(color.to_string()), stream));
+                Ok((ColorValue::Named(color.to_string()), stream))
             }
-            _ => return Err(TextError::UnexpectedToken),
+            _ => Err(TextError::UnexpectedToken),
         }
     }
 }
@@ -303,7 +303,7 @@ impl ColorReference {
         colors: &[image::Rgb<u8>],
         palette: &ColorPalette,
     ) -> anyhow::Result<image::Rgb<u8>> {
-        return match self {
+        match self {
             ColorReference::Color(ColorValue::Named(name)) => palette
                 .get_rgb(name)
                 .map(|rgb| image::Rgb(rgb.0))
@@ -318,10 +318,10 @@ impl ColorReference {
                     )
                 })
                 .cloned(),
-        };
+        }
     }
     pub fn resolve_color_value(&self, colors: &[ColorValue]) -> anyhow::Result<ColorValue> {
-        return match self {
+        match self {
             ColorReference::Color(color) => Ok(color.clone()),
             ColorReference::Reference(idx) => colors
                 .get(*idx - 1)
@@ -332,7 +332,7 @@ impl ColorReference {
                     )
                 })
                 .cloned(),
-        };
+        }
     }
 }
 impl<'de> TextDeserialize<'de> for ColorReference {
@@ -348,11 +348,11 @@ impl<'de> TextDeserialize<'de> for ColorReference {
                     .ok_or(TextError::UnexpectedToken)?;
                 let color =
                     usize::from_str_radix(color, 10).map_err(|_| TextError::UnexpectedToken)?;
-                return Ok((ColorReference::Reference(color), stream));
+                Ok((ColorReference::Reference(color), stream))
             }
             _ => {
                 let color: ColorValue = stream.parse()?;
-                return Ok((ColorReference::Color(color), stream));
+                Ok((ColorReference::Color(color), stream))
             }
         }
     }
@@ -366,20 +366,20 @@ pub struct ColorPalette {
 }
 impl ColorPalette {
     pub fn get(&self, name: &str) -> Option<NumericColor> {
-        return self.colors.get(name).cloned();
+        self.colors.get(name).cloned()
     }
     pub fn get_rgb(&self, name: &str) -> Option<common_deserialize::Rgb> {
-        return self.get(name).map(|color| color.to_rgb());
+        self.get(name).map(|color| color.to_rgb())
     }
     pub fn get_or(&self, name: &str, default: NumericColor) -> NumericColor {
-        return self.get(name).unwrap_or(default);
+        self.get(name).unwrap_or(default)
     }
     pub fn get_or_rgb(
         &self,
         name: &str,
         default: common_deserialize::Rgb,
     ) -> common_deserialize::Rgb {
-        return self.get_rgb(name).unwrap_or(default);
+        self.get_rgb(name).unwrap_or(default)
     }
 }
 

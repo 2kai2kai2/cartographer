@@ -4,7 +4,7 @@ use imageproc::drawing;
 /// Displays a number in thousands, or millions if over a million.
 /// Expects input to be positive.
 pub fn display_num_thousands(num: f64) -> String {
-    return match num {
+    match num {
         0.0..10000.0 => format!("{:.2}k", num / 1000.0),
         10000.0..100000.0 => format!("{:.1}k", num / 1000.0),
         100000.0..1000000.0 => format!("{:.0}k", num / 1000.0),
@@ -12,12 +12,12 @@ pub fn display_num_thousands(num: f64) -> String {
         10000000.0..100000000.0 => format!("{:.1}M", num / 1000000.0),
         100000000.0.. => format!("{:.0}M", num / 1000000.0),
         _ => "ERROR".to_string(),
-    };
+    }
 }
 
 /// Expects input to be positive.
 pub fn display_num(num: f64) -> String {
-    return match num {
+    match num {
         0.0..1000.0 => format!("{num:.0}"),
         1000.0..10000.0 => format!("{:.2}k", num / 1000.0),
         10000.0..100000.0 => format!("{:.1}k", num / 1000.0),
@@ -26,7 +26,7 @@ pub fn display_num(num: f64) -> String {
         10000000.0..100000000.0 => format!("{:.1}M", num / 1000000.0),
         100000000.0.. => format!("{:.0}M", num / 1000000.0),
         _ => "ERROR".to_string(),
-    };
+    }
 }
 
 /// Assumes whitespace is only a single space between words
@@ -50,7 +50,7 @@ pub fn text_wrap(text: &str, font: &impl Font, scale: f32, width: u32) -> Vec<St
     if !line.is_empty() {
         out.push(line);
     }
-    return out;
+    out
 }
 
 /// Internally is a sorted vec. Ensures every key is unique.
@@ -163,6 +163,6 @@ impl<V> Extend<(usize, V)> for MaybeIndexedMap<V> {
 impl<V> MaybeIndexedMap<V> {
     /// Updates `is_indexed` based on the current state of the map.
     fn compute_is_indexed(inner: &[(usize, V)]) -> bool {
-        return inner.iter().enumerate().all(|(i, (k, _))| i == *k);
+        inner.iter().enumerate().all(|(i, (k, _))| i == *k)
     }
 }

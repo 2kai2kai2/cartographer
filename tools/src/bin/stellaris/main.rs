@@ -41,7 +41,7 @@ pub fn main() -> Result<()> {
         "stellaris",
         &args.target,
     ]);
-    let destination_bot = std::path::PathBuf::from_iter([
+    let _destination_bot = std::path::PathBuf::from_iter([
         "..",
         "cartographer_bot",
         "assets",
@@ -54,5 +54,5 @@ pub fn main() -> Result<()> {
     flags::pack_flag_imgs(&gamefiles, &destination_web).context("While packing flag icons")?;
     flags::pack_flag_frames(&gamefiles, &destination_web).context("While packing flag frames")?;
 
-    return Ok(());
+    Ok(())
 }

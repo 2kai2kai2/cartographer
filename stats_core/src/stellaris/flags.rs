@@ -11,7 +11,7 @@ pub struct FlagParts {
 }
 impl FlagParts {
     pub fn new(img: RgbaImage, list: Vec<String>) -> FlagParts {
-        return FlagParts { img, list };
+        FlagParts { img, list }
     }
     pub fn get<'a>(&'a self, category: &str, file: &str) -> Option<SubImage<&'a RgbaImage>> {
         let (idx, _) = self
@@ -22,7 +22,7 @@ impl FlagParts {
         let view = self
             .img
             .view((idx as u32 % 8) * 128, (idx as u32 / 8) * 128, 128, 128);
-        return Some(view);
+        Some(view)
     }
 }
 
@@ -31,10 +31,10 @@ pub struct FlagFrames {
 }
 impl FlagFrames {
     pub fn new(img: RgbaImage) -> FlagFrames {
-        return FlagFrames { img };
+        FlagFrames { img }
     }
-    pub fn default_frame<'a>(&'a self) -> SubImage<&'a RgbaImage> {
-        return self.img.view(0, 0, 128, 128);
+    pub fn default_frame(&self) -> SubImage<&RgbaImage> {
+        self.img.view(0, 0, 128, 128)
     }
 }
 
@@ -83,7 +83,7 @@ fn render_flag_raw(
         color
     });
     image::imageops::overlay(&mut img, &icon_img, 16, 16);
-    return Ok(img);
+    Ok(img)
 }
 
 fn flag_mask() -> RgbaImage {
@@ -101,7 +101,7 @@ fn flag_mask() -> RgbaImage {
         Rgba::black(),
         interpolate,
     );
-    return mask;
+    mask
 }
 
 pub fn render_flag(
@@ -117,5 +117,5 @@ pub fn render_flag(
     });
     image::imageops::overlay(&mut img, &*flag_frames.default_frame(), 0, 0);
     // TODO: some country types have different flag frames
-    return Ok(img);
+    Ok(img)
 }

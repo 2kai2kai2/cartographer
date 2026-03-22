@@ -11,9 +11,7 @@ impl CapitalLocations {
     pub fn parse_new(text: impl ToString) -> anyhow::Result<CapitalLocations> {
         let text = text.to_string();
 
-        fn parse_line<'a>(
-            (line_idx, line): (usize, &'a str),
-        ) -> anyhow::Result<(&'a str, (f64, f64))> {
+        fn parse_line((line_idx, line): (usize, &str)) -> anyhow::Result<(&str, (f64, f64))> {
             let mut it = line.split(';');
             let tag = it
                 .next()
@@ -37,10 +35,10 @@ impl CapitalLocations {
         let inner = CapitalLocationsInner::try_new(text, |text| {
             text.lines().enumerate().map(parse_line).collect()
         })?;
-        return Ok(CapitalLocations { inner });
+        Ok(CapitalLocations { inner })
     }
     pub fn get(&self, tag: &str) -> Option<(f64, f64)> {
-        return self.inner.borrow_map().get(tag).copied();
+        self.inner.borrow_map().get(tag).copied()
     }
 }
 #[self_referencing]
@@ -86,10 +84,10 @@ impl Tags {
                 name_to_tag,
             })
         })?;
-        return Ok(Tags { inner });
+        Ok(Tags { inner })
     }
     pub fn get_name_for_tag<'a>(&'a self, tag: &str) -> Option<&'a str> {
-        return self.inner.borrow_maps().tag_to_name.get(tag).cloned();
+        self.inner.borrow_maps().tag_to_name.get(tag).cloned()
     }
     /// From some tag or name, returns the tag.
     ///
@@ -104,9 +102,10 @@ impl Tags {
                 .tag_to_name
                 .get_key_value(name.to_uppercase().as_str())
         {
-            return Some(k);
+            Some(k)
+        } else {
+            self.inner.borrow_maps().name_to_tag.get(name).cloned()
         }
-        return self.inner.borrow_maps().name_to_tag.get(name).cloned();
     }
 }
 #[self_referencing]

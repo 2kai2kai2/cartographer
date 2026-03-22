@@ -14,7 +14,7 @@ pub trait VariableGet: Sized {
                 .get(var)
                 .ok_or(anyhow!("Could not find variable {var}")),
             VariableValue::Expression(expr) => {
-                let expr = ExpressionToken::parse_stream(&expr)?;
+                let expr = ExpressionToken::parse_stream(expr)?;
                 let expr = ExpressionNode::from_tokens(&expr)?;
                 let value = expr.eval(&self)?;
                 Ok(value)
@@ -35,9 +35,9 @@ pub struct VariableScope {
 }
 impl VariableScope {
     pub fn new() -> Self {
-        return VariableScope {
+        VariableScope {
             variables: HashMap::new(),
-        };
+        }
     }
     pub fn add_variable(&mut self, name: String, value: f64) {
         self.variables.insert(name, value);
@@ -45,7 +45,7 @@ impl VariableScope {
     pub fn with_variable(self, name: String, value: f64) -> Self {
         let mut out = self;
         out.add_variable(name, value);
-        return out;
+        out
     }
     /// Creates a new scope from the given variables. Does not use any parent scopes in creating the new scope.
     pub fn from_unresolved(
@@ -218,7 +218,7 @@ impl ExpressionToken {
                 }
             }
         }
-        return Ok(out);
+        Ok(out)
     }
 }
 
@@ -234,7 +234,7 @@ pub enum ExpressionNode {
 impl ExpressionNode {
     /// Tries to evaluate the expression to a number. Can error if a variable cannot be resolved.
     pub fn eval(&self, variables: &impl VariableGet) -> Result<f64, TextError> {
-        return match self {
+        match self {
             ExpressionNode::Literal(value) => Ok(*value),
             ExpressionNode::Variable(var) => variables.get(var).ok_or(text_err!(
                 "Variable {var} was not found in the variable resolver"
@@ -245,30 +245,30 @@ impl ExpressionNode {
                 for term in terms {
                     out += term.eval(variables)?;
                 }
-                return Ok(out);
+                Ok(out)
             }
             ExpressionNode::Sub(from, terms) => {
                 let mut out = from.eval(variables)?;
                 for term in terms {
                     out -= term.eval(variables)?;
                 }
-                return Ok(out);
+                Ok(out)
             }
             ExpressionNode::Mul(terms) => {
                 let mut out = 1.0;
                 for term in terms {
                     out *= term.eval(variables)?;
                 }
-                return Ok(out);
+                Ok(out)
             }
             ExpressionNode::Div(from, terms) => {
                 let mut out = from.eval(variables)?;
                 for term in terms {
                     out /= term.eval(variables)?;
                 }
-                return Ok(out);
+                Ok(out)
             }
-        };
+        }
     }
     pub fn from_tokens(tokens: &[ExpressionToken]) -> Result<Self, TextError> {
         let (node, rest) = Self::from_tokens_inner(tokens)?;
@@ -276,11 +276,11 @@ impl ExpressionNode {
             assert!(matches!(rest, ExpressionToken::ParenClose));
             return Err(text_err!("Unmatched parenthesis"));
         }
-        return Ok(node);
+        Ok(node)
     }
-    fn from_tokens_inner<'a>(
-        tokens: &'a [ExpressionToken],
-    ) -> Result<(Self, &'a [ExpressionToken]), TextError> {
+    fn from_tokens_inner(
+        tokens: &[ExpressionToken],
+    ) -> Result<(Self, &[ExpressionToken]), TextError> {
         let (mut last_node, mut tokens) = Self::take_value(tokens)?;
         loop {
             match (tokens, last_node) {
@@ -325,18 +325,14 @@ impl ExpressionNode {
             }
         }
     }
-    fn take_value<'a>(
-        tokens: &'a [ExpressionToken],
-    ) -> Result<(Self, &'a [ExpressionToken]), TextError> {
+    fn take_value(tokens: &[ExpressionToken]) -> Result<(Self, &[ExpressionToken]), TextError> {
         match tokens {
             [] => Err(text_err!(
                 "Unexpected end of expression when value was expected"
             )),
-            [ExpressionToken::Literal(value), rest @ ..] => {
-                return Ok((Self::Literal(*value), rest));
-            }
+            [ExpressionToken::Literal(value), rest @ ..] => Ok((Self::Literal(*value), rest)),
             [ExpressionToken::Variable(var), rest @ ..] => {
-                return Ok((Self::Variable(var.to_string()), rest));
+                Ok((Self::Variable(var.to_string()), rest))
             }
             [ExpressionToken::ParenOpen, rest @ ..] => {
                 let (node, rest) = Self::from_tokens_inner(rest)?;
@@ -345,7 +341,7 @@ impl ExpressionNode {
                     .ok_or(text_err!(
                         "Unbalanced parentheses - subexpression was not closed"
                     ))?;
-                return Ok((Self::Paren(Box::new(node)), rest));
+                Ok((Self::Paren(Box::new(node)), rest))
             }
             _ => Err(text_err!("Expected a value, but found something else")),
         }
@@ -357,25 +353,23 @@ impl ExpressionNode {
         match node {
             ExpressionNode::Mul(mut terms) => {
                 terms.push(value);
-                return Ok(ExpressionNode::Mul(terms));
+                Ok(ExpressionNode::Mul(terms))
             }
             ExpressionNode::Add(mut terms) => {
                 let last = terms
                     .pop()
                     .ok_or(text_err!("INTERNAL ERROR: expression node add was empty"))?;
                 terms.push(Self::recurse_mul(last, value)?);
-                return Ok(ExpressionNode::Add(terms));
+                Ok(ExpressionNode::Add(terms))
             }
             ExpressionNode::Sub(from, mut terms) => {
                 let last = terms
                     .pop()
                     .ok_or(text_err!("INTERNAL ERROR: expression node sub was empty"))?;
                 terms.push(Self::recurse_mul(last, value)?);
-                return Ok(ExpressionNode::Sub(from, terms));
+                Ok(ExpressionNode::Sub(from, terms))
             }
-            other => {
-                return Ok(ExpressionNode::Mul(vec![other, value]));
-            }
+            other => Ok(ExpressionNode::Mul(vec![other, value])),
         }
     }
     fn recurse_div(
@@ -385,25 +379,23 @@ impl ExpressionNode {
         match node {
             ExpressionNode::Div(from, mut terms) => {
                 terms.push(value);
-                return Ok(ExpressionNode::Div(from, terms));
+                Ok(ExpressionNode::Div(from, terms))
             }
             ExpressionNode::Add(mut terms) => {
                 let last = terms
                     .pop()
                     .ok_or(text_err!("INTERNAL ERROR: expression node add was empty"))?;
                 terms.push(Self::recurse_div(last, value)?);
-                return Ok(ExpressionNode::Add(terms));
+                Ok(ExpressionNode::Add(terms))
             }
             ExpressionNode::Sub(from, mut terms) => {
                 let last = terms
                     .pop()
                     .ok_or(text_err!("INTERNAL ERROR: expression node sub was empty"))?;
                 terms.push(Self::recurse_div(last, value)?);
-                return Ok(ExpressionNode::Sub(from, terms));
+                Ok(ExpressionNode::Sub(from, terms))
             }
-            other => {
-                return Ok(ExpressionNode::Div(Box::new(other), vec![value]));
-            }
+            other => Ok(ExpressionNode::Div(Box::new(other), vec![value])),
         }
     }
 }

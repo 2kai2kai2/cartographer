@@ -32,7 +32,7 @@ pub struct Eu5Args {
 pub fn main() -> Result<()> {
     let args = Eu5Args::parse();
     fn trim_cli(c: char) -> bool {
-        return c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?';
+        c.is_ascii_whitespace() || c == '\'' || c == '"' || c == '?'
     }
 
     let target_name = args.target;
@@ -45,7 +45,7 @@ pub fn main() -> Result<()> {
         file!()
     );
 
-    let steam_dir = PathBuf::from_str(&args.steam_dir.as_str())?;
+    let steam_dir = PathBuf::from_str(args.steam_dir.as_str())?;
 
     let mod_dir = if target_name == "vanilla" {
         if args.mod_dir.is_some() {
@@ -90,16 +90,16 @@ pub fn main() -> Result<()> {
     let named_locations_color_indices: HashMap<_, _> = named_locations
         .iter()
         .enumerate()
-        .map(|(idx, (_, v))| (v.clone(), idx))
+        .map(|(idx, (_, v))| (*v, idx))
         .collect();
 
     let mut water: Vec<HexRgb> = std::iter::chain(default_map.lakes, default_map.sea_zones)
-        .map(|k| named_locations_map.get(k).unwrap().clone())
+        .map(|k| *named_locations_map.get(k).unwrap())
         .collect();
     water.sort();
 
     const DEFAULT_MAP_SIZE: (u32, u32) = (16384, 8192);
-    let locations_png = dir_map_data.moddable_read_image(&default_map.provinces)?;
+    let locations_png = dir_map_data.moddable_read_image(default_map.provinces)?;
     assert_eq!(locations_png.dimensions(), DEFAULT_MAP_SIZE);
     let locations_png = locations_png.to_rgb8();
     let locations_png = imageproc::map::map_colors(&locations_png, |rgb: image::Rgb<u8>| {
@@ -111,20 +111,20 @@ pub fn main() -> Result<()> {
             .get(&rgb)
             .expect("Expected to find a location corresponding to location image color.");
 
-        return image::Luma([idx as u16]);
+        image::Luma([idx as u16])
     });
 
     let mut unownable: Vec<u16> =
         std::iter::chain(default_map.impassable_mountains, default_map.non_ownable)
-            .map(|k| named_locations_map.get(k).unwrap().clone())
-            .map(|v| named_locations_color_indices.get(&v).unwrap().clone() as u16)
+            .map(|k| *named_locations_map.get(k).unwrap())
+            .map(|v| *named_locations_color_indices.get(&v).unwrap() as u16)
             .collect();
     unownable.sort();
     let mut adjacencies: Vec<(u16, Vec<u16>)> = adjacencies(&locations_png)?
         .into_iter()
         .filter(|(k, _)| unownable.binary_search(k).is_ok())
         .map(|(k, mut adjs)| {
-            adjs.retain(|adj| !unownable.binary_search(adj).is_ok());
+            adjs.retain(|adj| unownable.binary_search(adj).is_err());
             (k, adjs)
         })
         .collect();
@@ -166,12 +166,12 @@ pub fn main() -> Result<()> {
                 decancer::cure(loc, decancer::Options::default().retain_capitalization())
                 && normalized != loc
             {
-                return Some((
+                Some((
                     tag.to_string(),
                     vec![loc.to_string(), normalized.to_string()],
-                ));
+                ))
             } else {
-                return Some((tag.to_string(), vec![loc.to_string()]));
+                Some((tag.to_string(), vec![loc.to_string()]))
             }
         })
         .collect();
@@ -190,7 +190,7 @@ pub fn main() -> Result<()> {
         reservations_capitals,
     )?;
 
-    return Ok(());
+    Ok(())
 }
 
 fn get_reservations_capitals(dir: &ModdableDir) -> anyhow::Result<Vec<(String, (f64, f64))>> {
@@ -213,7 +213,7 @@ fn get_reservations_capitals(dir: &ModdableDir) -> anyhow::Result<Vec<(String, (
             #[multiple]
             game_object_locator: Vec<MapObject>,
         }
-        let map_obj_file: MapObjectsFile = TextDeserializer::from_str(&text)
+        let map_obj_file: MapObjectsFile = TextDeserializer::from_str(text)
             .parse()
             .with_context(|| format!("While parsing map objects in {}", entry.path.display()))?;
         if let Some(cities_obj) = map_obj_file
@@ -244,7 +244,7 @@ fn get_reservations_capitals(dir: &ModdableDir) -> anyhow::Result<Vec<(String, (
         struct SetupFile {
             countries: Option<crate::setup_country::Countries>,
         }
-        let items: SetupFile = TextDeserializer::from_str(&text)
+        let items: SetupFile = TextDeserializer::from_str(text)
             .parse()
             .with_context(|| format!("While parsing setup file {}", entry.path.display()))?;
         setup_countries = items.countries;
@@ -277,7 +277,7 @@ fn get_reservations_capitals(dir: &ModdableDir) -> anyhow::Result<Vec<(String, (
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
 
-    return Ok(out);
+    Ok(out)
 }
 
 fn load_all_localizations(dir: &ModdableDir) -> anyhow::Result<HashMap<String, String>> {
@@ -300,12 +300,12 @@ fn load_all_localizations(dir: &ModdableDir) -> anyhow::Result<HashMap<String, S
 
             if let Some(value) = value.strip_prefix('"') {
                 let (value, _) = value.split_at_first(|c| *c == '"')?;
-                return Some((key.to_string(), value.to_string()));
+                Some((key.to_string(), value.to_string()))
             } else {
-                return Some((key.to_string(), value.to_string()));
+                Some((key.to_string(), value.to_string()))
             }
         });
         out.extend(lines);
     }
-    return Ok(out);
+    Ok(out)
 }

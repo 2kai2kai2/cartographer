@@ -32,29 +32,29 @@ impl Assets {
         let palette: ColorPalette = TextDeserializer::from_str(&palette)
             .parse()
             .context("While parsing palette")?;
-        return Ok(Assets {
+        Ok(Assets {
             root_dir,
             palette,
             colored_emblems: Cell::new(HashMap::new()),
             patterns: Cell::new(HashMap::new()),
             textured_emblems: Cell::new(HashMap::new()),
-        });
+        })
     }
-    pub fn palette<'a>(&'a self) -> &'a ColorPalette {
-        return &self.palette;
+    pub fn palette(&self) -> &ColorPalette {
+        &self.palette
     }
     pub fn resolve_color_rgb(&self, color: &ColorValue) -> Option<image::Rgb<u8>> {
-        return match color {
-            ColorValue::Named(name) => self.get_rgb(&name),
+        match color {
+            ColorValue::Named(name) => self.get_rgb(name),
             ColorValue::Numeric(NumericColor::Rgb(common_deserialize::Rgb(color))) => {
                 Some(image::Rgb(*color))
             }
             ColorValue::Numeric(NumericColor::Hsv360(hsv)) => Some(image::Rgb(hsv.to_rgb().0)),
-        };
+        }
     }
     /// Gets the color from the palette, if it exists. Returns `image::Rgb` rather than `common_deserialize::Rgb`
     pub fn get_rgb(&self, name: &str) -> Option<image::Rgb<u8>> {
-        return self.palette.get_rgb(name).map(|rgb| image::Rgb(rgb.0));
+        self.palette.get_rgb(name).map(|rgb| image::Rgb(rgb.0))
     }
     /// In the files,
     /// - blue hue(240) -> color1
@@ -69,7 +69,7 @@ impl Assets {
         }
         let dds = self
             .root_dir
-            .moddable_open_file(&format!(
+            .moddable_open_file(format!(
                 "game/main_menu/gfx/coat_of_arms/colored_emblems/{name}"
             ))
             .with_context(|| format!("While opening colored emblem {name} from disk"))?;
@@ -82,7 +82,7 @@ impl Assets {
         colored_emblems.insert(name.to_string(), image.clone());
         self.colored_emblems.set(colored_emblems);
 
-        return Ok(image);
+        Ok(image)
     }
     pub fn get_pattern(&self, name: &str) -> anyhow::Result<RgbaImage> {
         let mut patterns = self.patterns.take();
@@ -91,7 +91,7 @@ impl Assets {
         }
         let dds = self
             .root_dir
-            .moddable_open_file(&format!("game/main_menu/gfx/coat_of_arms/patterns/{name}"))
+            .moddable_open_file(format!("game/main_menu/gfx/coat_of_arms/patterns/{name}"))
             .with_context(|| format!("While opening pattern {name} from disk"))?;
         let dds = ddsfile::Dds::read(dds)
             .with_context(|| format!("While reading DDS-format pattern {name} from disk"))?;
@@ -100,7 +100,7 @@ impl Assets {
         patterns.insert(name.to_string(), image.clone());
         self.patterns.set(patterns);
 
-        return Ok(image);
+        Ok(image)
     }
     /// In the files,
     /// - red (255, 0, 0) -> color1
@@ -114,7 +114,7 @@ impl Assets {
         }
         let dds = self
             .root_dir
-            .moddable_open_file(&format!(
+            .moddable_open_file(format!(
                 "game/main_menu/gfx/coat_of_arms/textured_emblems/{name}"
             ))
             .with_context(|| format!("While opening textured emblem {name} from disk"))?;
@@ -127,7 +127,7 @@ impl Assets {
         textured_emblems.insert(name.to_string(), image.clone());
         self.textured_emblems.set(textured_emblems);
 
-        return Ok(image);
+        Ok(image)
     }
 }
 
@@ -154,14 +154,14 @@ impl CoatOfArms {
             .map(|component| COAComponent::from_parsed(component, &variables))
             .collect::<anyhow::Result<_>>()?;
 
-        return Ok(CoatOfArms {
+        Ok(CoatOfArms {
             pattern,
             colors,
             components,
-        });
+        })
     }
     fn colorize_pattern(colors: &[image::Rgb<u8>], pattern: &mut RgbaImage) {
-        let color1 = colors.get(0).unwrap_or(&image::Rgb([0, 0, 0]));
+        let color1 = colors.first().unwrap_or(&image::Rgb([0, 0, 0]));
         let color2 = colors.get(1).unwrap_or(&image::Rgb([0, 0, 0]));
         let color3 = colors.get(2).unwrap_or(&image::Rgb([0, 0, 0]));
         imageproc::map::map_colors_mut(pattern, |color| {
@@ -181,8 +181,8 @@ impl CoatOfArms {
             let blue = color1.0[2] as u32 * proportion1 / 255
                 + color2.0[2] as u32 * proportion2 / 255
                 + color3.0[2] as u32 * proportion3 / 255;
-            let color = image::Rgba([red as u8, green as u8, blue as u8, color.0[3]]);
-            color
+
+            image::Rgba([red as u8, green as u8, blue as u8, color.0[3]])
         });
     }
     /// Flags are rendered at 512 x 768 pixels, then scaled down when used.
@@ -243,7 +243,7 @@ impl COAComponent {
         raw: RawCOAComponent,
         parent_variables: &VariableResolver,
     ) -> anyhow::Result<Self> {
-        return match raw {
+        match raw {
             RawCOAComponent::ColoredEmblem(raw) => {
                 ColoredEmblem::from_parsed(raw, parent_variables).map(COAComponent::ColoredEmblem)
             }
@@ -253,7 +253,7 @@ impl COAComponent {
             RawCOAComponent::Sub(raw) => {
                 Sub::from_parsed(raw, parent_variables).map(COAComponent::Sub)
             }
-        };
+        }
     }
 }
 
@@ -283,14 +283,14 @@ impl ColoredEmblem {
             .with_context(|| format!("In colored_emblem with texture {texture}"))?;
         let mask = raw.mask;
 
-        return Ok(ColoredEmblem {
+        Ok(ColoredEmblem {
             texture,
             color1,
             color2,
             color3,
             instance,
             mask,
-        });
+        })
     }
 
     fn colorize_emblem(colors: &[image::Rgb<u8>; 3], emblem: &mut RgbaImage) {
@@ -324,8 +324,8 @@ impl ColoredEmblem {
             let blue = color1.0[2] as f64 * proportions[0]
                 + color2.0[2] as f64 * proportions[1]
                 + color3.0[2] as f64 * proportions[2];
-            let color = image::Rgba([red as u8, green as u8, blue as u8, a]);
-            color
+
+            image::Rgba([red as u8, green as u8, blue as u8, a])
         });
     }
 
@@ -381,7 +381,7 @@ impl ColoredEmblem {
         for instance in &self.instance {
             instance.overlay_instance(img, &emblem);
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -402,7 +402,7 @@ impl TexturedEmblem {
             .map(|instance| Instance::from_parsed(instance, parent_variables))
             .collect::<anyhow::Result<_>>()?;
 
-        return Ok(TexturedEmblem { texture, instance });
+        Ok(TexturedEmblem { texture, instance })
     }
     fn render(
         &self,
@@ -428,7 +428,7 @@ impl TexturedEmblem {
         for instance in &self.instance {
             instance.overlay_instance(img, &texture);
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -455,12 +455,12 @@ impl Sub {
             .collect::<anyhow::Result<_>>()?;
         let mask = raw.mask;
 
-        return Ok(Sub {
+        Ok(Sub {
             parent,
             colors,
             instance,
             mask,
-        });
+        })
     }
     fn render(
         &self,
@@ -472,7 +472,7 @@ impl Sub {
         let override_colors: Vec<ColorValue> = self
             .colors
             .iter()
-            .map(|color_ref| color_ref.resolve_color_value(&parent_colors))
+            .map(|color_ref| color_ref.resolve_color_value(parent_colors))
             .collect::<anyhow::Result<_>>()?;
 
         let sub_coa = all_coa.get(&self.parent).ok_or(anyhow::anyhow!(
@@ -489,7 +489,7 @@ impl Sub {
         for instance in &self.instance {
             instance.overlay_instance(img, &sub);
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -577,7 +577,7 @@ fn resolve_color_references(
             }
         }
     }
-    return Ok(out);
+    Ok(out)
 }
 
 fn options_to_full_vec<T>(
@@ -592,5 +592,5 @@ fn options_to_full_vec<T>(
             out.push(item);
         }
     }
-    return Ok(out);
+    Ok(out)
 }

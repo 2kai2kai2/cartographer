@@ -26,22 +26,22 @@ pub enum GameSaveType {
 impl GameSaveType {
     /// String representation of the game (e.g. `eu4` or `stellaris`)
     pub fn id(&self) -> &'static str {
-        return match self {
-            &GameSaveType::EU4 => "eu4",
-            &GameSaveType::EU5 => "eu5",
-            &GameSaveType::Stellaris => "stellaris",
-        };
+        match *self {
+            GameSaveType::EU4 => "eu4",
+            GameSaveType::EU5 => "eu5",
+            GameSaveType::Stellaris => "stellaris",
+        }
     }
     pub fn determine_from_filename(filename: &str) -> Option<Self> {
         let filename_lower = filename.to_ascii_lowercase();
         if filename_lower.ends_with(".eu4") {
-            return Some(GameSaveType::EU4);
+            Some(GameSaveType::EU4)
         } else if filename_lower.ends_with(".eu5") {
-            return Some(GameSaveType::EU5);
+            Some(GameSaveType::EU5)
         } else if filename_lower.ends_with(".sav") {
-            return Some(GameSaveType::Stellaris);
+            Some(GameSaveType::Stellaris)
         } else {
-            return None;
+            None
         }
     }
 }
@@ -54,10 +54,10 @@ pub enum SomeSaveGame {
 impl SomeSaveGame {
     /// String representation of the game (e.g. `eu4` or `stellaris`)
     pub fn id(&self) -> &'static str {
-        return match self {
+        match self {
             SomeSaveGame::EU4(_) => "eu4",
             SomeSaveGame::EU5(_) => "eu5",
             SomeSaveGame::Stellaris(_) => "stellaris",
-        };
+        }
     }
 }

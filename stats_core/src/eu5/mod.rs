@@ -39,10 +39,10 @@ impl EU5ParserStepGamestate {
         drop(gamestate_zip);
         drop(archive);
 
-        return Ok(EU5ParserStepGamestate {
+        Ok(EU5ParserStepGamestate {
             string_lookup: string_lookup.into(),
             gamestate: gamestate.into(),
-        });
+        })
     }
 
     pub fn parse(self) -> anyhow::Result<RawGamestate> {
@@ -52,6 +52,6 @@ impl EU5ParserStepGamestate {
         let gamestate = deserializer
             .parse()
             .map_err(|err| anyhow!("Failed to parse save file (at step 1): {err}"))?;
-        return Ok(gamestate);
+        Ok(gamestate)
     }
 }

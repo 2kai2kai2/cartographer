@@ -21,16 +21,16 @@ impl MapAssets {
                     "colors.csv line had an unexpected number of elements."
                 ));
             };
-            return Ok((
+            Ok((
                 name.to_string(),
                 (
                     [r1.parse()?, g1.parse()?, b1.parse()?],
                     [r2.parse()?, g2.parse()?, b2.parse()?],
                     [r3.parse()?, g3.parse()?, b3.parse()?],
                 ),
-            ));
+            ))
         }
-        return csv.lines().map(do_entry).collect();
+        csv.lines().map(do_entry).collect()
     }
 
     /// `game_mod_dir` is, for example, "vanilla"
@@ -39,7 +39,7 @@ impl MapAssets {
         let colors = fetcher.get_utf8(&url_colors).await?;
         let colors = MapAssets::parse_colors_csv(&colors)?;
 
-        return Ok(MapAssets { colors });
+        Ok(MapAssets { colors })
     }
 }
 
@@ -69,8 +69,8 @@ impl StatsImageAssets {
         let url_flag_parts_txt = format!("stellaris/{game_mod_dir}/flag_parts.txt");
         let url_flag_frames_png = format!("stellaris/{game_mod_dir}/flag_frames.png");
 
-        let screen_bg = fetcher.get_image(&url_screen_bg).await?.to_rgba8();
-        let resource_icons = fetcher.get_image(&url_resource_icons).await?.to_rgba8();
+        let screen_bg = fetcher.get_image(url_screen_bg).await?.to_rgba8();
+        let resource_icons = fetcher.get_image(url_resource_icons).await?.to_rgba8();
         let flag_parts_png = fetcher.get_image(&url_flag_parts_png).await?.to_rgba8();
         let flag_parts_txt = fetcher.get_utf8(&url_flag_parts_txt).await?;
         let flag_parts = FlagParts::new(
@@ -80,11 +80,11 @@ impl StatsImageAssets {
         let flag_frames_png = fetcher.get_image(&url_flag_frames_png).await?.to_rgba8();
         let flag_frames = FlagFrames::new(flag_frames_png);
 
-        return Ok(StatsImageAssets {
+        Ok(StatsImageAssets {
             screen_bg,
             resource_icons,
             flag_parts,
             flag_frames,
-        });
+        })
     }
 }
