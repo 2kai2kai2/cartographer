@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::{cmp::min, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{
-    raw_parser::{RawPDXExtractError, RawPDXObject, RawPDXScalar, RawPDXValue},
+    raw_parser::{RawPDXObject, RawPDXValue},
     stellaris_date::StellarisDate,
 };
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mod {

@@ -250,6 +250,7 @@ impl<'a> RawPDXObject<'a> {
         });
     }
 
+    #[allow(non_snake_case)]
     pub fn iter_all_KVs(&self) -> impl Iterator<Item = (&RawPDXScalar<'a>, &RawPDXValue<'a>)> {
         return self.0.iter().filter_map(|v| match v {
             RawPDXObjectItem::KV(key, value) => Some((key, value)),

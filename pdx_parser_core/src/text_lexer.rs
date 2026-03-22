@@ -235,7 +235,7 @@ impl<'a> Iterator for TextLexer<'a> {
             .0
             .trim_ascii_start()
             .split_at_first_inclusive(char_ends_token)
-            .unwrap_or(rest.split_at(rest.len()));
+            .unwrap_or((self.0.trim_ascii_start(), &self.0[self.0.len()..]));
 
         if value == "yes" {
             self.0 = rest;

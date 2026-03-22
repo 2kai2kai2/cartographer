@@ -88,7 +88,10 @@ pub fn eu5_token(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// ## Generics
 /// If the struct needs a lifetime repesenting the original text, it must be named `de`.
-#[proc_macro_derive(TextDeserialize, attributes(multiple, no_brackets, default, enum_key))]
+#[proc_macro_derive(
+    TextDeserialize,
+    attributes(name, multiple, no_brackets, default, enum_key, other_keys)
+)]
 pub fn derive_text_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     text_deserialize::derive_text_deserialize(stream)
 }

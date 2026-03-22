@@ -2,13 +2,19 @@ use crate::common::*;
 use proc_macro;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{FieldsNamed, Ident, PathArguments, Type, Variant};
+use syn::{FieldsNamed, GenericArgument, Ident, PathArguments, Type, Variant};
 
 struct DeserNamedField {
+    name: Option<String>,
     ident: Ident,
     ty: Type,
     quantifier: Quantifier,
     default: Option<syn::Expr>,
+    /// If set, all unknown KV pairs will be included in it.
+    /// - `Vec<(K, Operator, V)>` -> (true, K, V)
+    /// - `HashMap<K, (Operator, V)>` -> (false, K, V)
+    /// where the `Operator` is `pdx_parser_core::common_deserialize::Operator`.
+    other_keys: Option<(bool, Type, Type)>,
 }
 impl DeserNamedField {
     fn get_quantifier<'a>(
@@ -28,7 +34,7 @@ impl DeserNamedField {
                 return Err(syn::Error::new_spanned(
                     ty,
                     "The multiple attribute can only be applied to a Vec type",
-                ))
+                ));
             }
             "Option" => Quantifier::Optional,
             _ => return Ok((ty, Quantifier::Single)),
@@ -55,17 +61,23 @@ impl DeserNamedField {
             ));
         };
 
+        let mut name = None;
         let mut is_multiple = false;
         let mut default = None;
+        let mut other_keys = false;
         for attr in &field.attrs {
             let Some(attr_ident) = attr.path().get_ident() else {
                 continue; // not our attribute
             };
             match attr_ident.to_string().as_str() {
+                "name" => {
+                    name = Some(attr.parse_args::<syn::LitStr>()?.value());
+                }
                 "multiple" => is_multiple = true,
                 "default" => {
                     default = Some(attr.parse_args::<syn::Expr>()?);
                 }
+                "other_keys" => other_keys = true,
                 _ => continue, // not our attribute
             }
         }
@@ -77,11 +89,59 @@ impl DeserNamedField {
                 "The `default` attribute is applied, but the type was not found to be a single field.",
             ));
         }
+
+        // validate other_keys
+        if other_keys && quantifier != Quantifier::Single {
+            return Err(syn::Error::new_spanned(
+                field,
+                "The `other_keys` attribute is applied, but the type was not found to be a single field.",
+            ));
+        }
+        let other_keys = if other_keys {
+            if let Type::Path(tp) = &ty
+                && tp.qself.is_none()
+                && tp.path.segments.len() == 1
+                && tp.path.segments[0].ident == "HashMap"
+                && let PathArguments::AngleBracketed(args) = &tp.path.segments[0].arguments
+                && args.args.len() == 2
+                && let GenericArgument::Type(k) = &args.args[0]
+                && let GenericArgument::Type(Type::Tuple(v)) = &args.args[1]
+                && v.elems.len() == 2
+                && let Type::Path(op) = &v.elems[0]
+                && op.qself.is_none()
+                && op.path.is_ident("Operator")
+            {
+                Some((false, k.clone(), v.elems[1].clone()))
+            } else if let Type::Path(tp) = &ty
+                && tp.qself.is_none()
+                && tp.path.segments.len() == 1
+                && tp.path.segments[0].ident == "Vec"
+                && let PathArguments::AngleBracketed(args) = &tp.path.segments[0].arguments
+                && args.args.len() == 1
+                && let GenericArgument::Type(Type::Tuple(args)) = &args.args[0]
+                && args.elems.len() == 3
+                && let Type::Path(op) = &args.elems[1]
+                && op.qself.is_none()
+                && op.path.is_ident("Operator")
+            {
+                Some((true, args.elems[0].clone(), args.elems[2].clone()))
+            } else {
+                return Err(syn::Error::new_spanned(
+                    field,
+                    "The `other_keys` attribute is applied, but the type was not a `HashMap`.",
+                ));
+            }
+        } else {
+            None
+        };
+
         return Ok(DeserNamedField {
+            name,
             ident: ident.clone(),
             ty: ty.clone(),
             quantifier,
             default,
+            other_keys,
         });
     }
 }
@@ -100,16 +160,45 @@ fn derive_text_deserialize_struct_named(
         .map(DeserNamedField::new)
         .collect::<Result<Vec<_>, syn::Error>>()?;
 
+    let other_keys = fields.iter().find(|field| field.other_keys.is_some());
+    if other_keys.is_some()
+        && fields
+            .iter()
+            .filter(|field| field.other_keys.is_some())
+            .count()
+            > 1
+    {
+        return Err(syn::Error::new(
+            Span::call_site(),
+            "Only one field can have the `other_keys` attribute.",
+        ));
+    }
+
     let define_field_captures = fields.iter().map(|field| {
         let DeserNamedField {
             ident,
             ty,
             quantifier,
+            other_keys,
             ..
         } = field;
         if let Quantifier::Multiple = quantifier {
             return quote! {
                 let mut #ident: ::std::vec::Vec<#ty> = ::std::vec::Vec::new();
+            };
+        } else if let Some((is_vec, k, v)) = other_keys {
+            return if *is_vec {
+                quote! {
+                    let mut #ident: ::std::vec::Vec<(#k, #pdx_parser_core::common_deserialize::Operator, #v)> =
+                        ::std::vec::Vec::new();
+                }
+            } else {
+                quote! {
+                    let mut #ident: ::std::collections::HashMap<
+                        #k,
+                        (#pdx_parser_core::common_deserialize::Operator, #v)
+                    > = ::std::collections::HashMap::new();
+                }
             };
         } else {
             return quote! {
@@ -118,33 +207,43 @@ fn derive_text_deserialize_struct_named(
         }
     });
 
-    let match_cases = fields.iter().map(|field| {
-        let DeserNamedField {
-            ident,
-            ty,
-            quantifier,
-            ..
-        } = field;
-        let add_value = if let Quantifier::Multiple = *quantifier {
-            quote! { #ident.push(value); }
-        } else {
-            quote! { #ident = ::std::option::Option::Some(value); }
-        };
+    let match_cases = fields
+        .iter()
+        .filter(|field| field.other_keys.is_none())
+        .map(|field| {
+            let DeserNamedField {
+                name,
+                ident,
+                ty,
+                quantifier,
+                ..
+            } = field;
+            let add_value = if let Quantifier::Multiple = *quantifier {
+                quote! { #ident.push(value); }
+            } else {
+                quote! { #ident = ::std::option::Option::Some(value); }
+            };
 
-        let key = ident.to_string();
-        return quote! {
-            #key => {
-                let (value, rest) = <#ty>::take_text(stream)
-                    .map_err(|err| err.context(format!("While parsing value for {}", #key)))?;
-                stream = rest;
-                #add_value
-            }
-        };
-    });
+            let key = name.clone().unwrap_or_else(|| ident.to_string());
+            return quote! {
+                Some(TextToken::StringQuoted(key) | TextToken::StringUnquoted(key)) if key == #key => {
+                    stream.eat_token();
+                    #pdx_parser_core::Context::with_context(
+                        stream.parse_token(TextToken::Equal),
+                        || format!("While parsing '=' for {}", #key)
+                    )?;
+                    let value = #pdx_parser_core::Context::with_context(
+                        stream.parse::<#ty>(),
+                        || format!("While parsing value for {}", #key)
+                    )?;
+                    #add_value
+                }
+            };
+        });
 
     let normalize_single = fields
         .iter()
-        .filter(|field| matches!(field.quantifier, Quantifier::Single))
+        .filter(|field| matches!(field.quantifier, Quantifier::Single) && field.other_keys.is_none())
         .map(|field| {
             let DeserNamedField { ident, default, .. } = field;
 
@@ -195,6 +294,47 @@ fn derive_text_deserialize_struct_named(
         _generics_add_de.split_for_impl().0
     };
 
+    // Handling of other_keys
+
+    let handle_other_keys = if let Some(field) = other_keys {
+        let Some((is_vec, k, v)) = &field.other_keys else {
+            unreachable!("We just checked there is one");
+        };
+        let ident = &field.ident;
+        let add = if *is_vec {
+            quote! { #ident.push((key, __op, value)); }
+        } else {
+            quote! { #ident.insert(key, (__op, value)); }
+        };
+        quote! {
+            _ => {
+                let key = #pdx_parser_core::Context::context(
+                    stream.parse::<#k>(),
+                    "While parsing arbitrary key"
+                )?;
+                let Ok(__op) = stream.parse::<Operator>() else {
+                    continue;
+                };
+                let value = #pdx_parser_core::Context::with_context(
+                    stream.parse::<#v>(),
+                    || format!("While parsing value for {}", key)
+                )?;
+                #add
+            }
+        }
+    } else {
+        quote! {
+            _ => {
+                let _ = stream.parse::<SkipValue>()?;
+                if let Some(TextToken::Equal) = stream.peek_token() {
+                    stream.eat_token();
+                    let _ = stream.parse::<SkipValue>()?;
+                }
+            }
+        }
+    };
+
+    // impl
     let impl_block = quote! {
         impl #impl_generics #pdx_parser_core::text_deserialize::TextDeserialize<'de> for #ident #ty_generics #where_clause {
             fn take_text(
@@ -205,12 +345,12 @@ fn derive_text_deserialize_struct_named(
             > {
                 #handle_open_bracket
                 use #pdx_parser_core::{
+                    common_deserialize::{Operator, SkipValue},
                     text_deserialize::{
                         TextDeserializer,
                         TextDeserialize,
                         TextError,
                     },
-                    common_deserialize::SkipValue,
                     text_lexer::TextToken,
                 };
                 use ::std::result::Result::{self, Err, Ok};
@@ -227,26 +367,8 @@ fn derive_text_deserialize_struct_named(
                         Some(TextToken::CloseBracket) => {
                             #handle_close_bracket
                         }
-                        Some(TextToken::StringQuoted(key)) | Some(TextToken::StringUnquoted(key)) => {
-                            stream.eat_token();
-                            let Some(TextToken::Equal) = stream.peek_token() else {
-                                continue;
-                            };
-                            stream.eat_token();
-                            match key {
-                                #(#match_cases)*
-                                _ => {
-                                    stream = SkipValue::take_text(stream)?.1;
-                                }
-                            }
-                        }
-                        Some(_) => {
-                            stream = SkipValue::take_text(stream)?.1;
-                            if let Some(TextToken::Equal) = stream.peek_token() {
-                                stream.eat_token();
-                                stream = SkipValue::take_text(stream)?.1;
-                            }
-                        }
+                        #(#match_cases)*
+                        #handle_other_keys
                     }
                 }
 

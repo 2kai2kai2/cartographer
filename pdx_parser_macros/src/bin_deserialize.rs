@@ -123,7 +123,7 @@ impl DeserNamedField {
                 return Err(syn::Error::new_spanned(
                     ty,
                     "The multiple attribute can only be applied to a Vec type",
-                ))
+                ));
             }
             "Option" => Quantifier::Optional,
             _ => return Ok((ty, Quantifier::Single)),

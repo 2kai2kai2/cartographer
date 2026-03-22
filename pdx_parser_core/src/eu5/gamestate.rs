@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::eu5::{Countries, DiplomacyManager, RawMeta, SubunitManager, UnitManager, WarManager};
+use crate::eu5::{Countries, DiplomacyManager, RawMeta, SubunitManager, UnitManager};
 use pdx_parser_macros::BinDeserialize;
 use serde::{Deserialize, Serialize};
 

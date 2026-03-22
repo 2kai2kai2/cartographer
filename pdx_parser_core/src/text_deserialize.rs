@@ -1,6 +1,9 @@
 use std::{borrow::Cow, collections::HashMap, hash::Hash, iter::Peekable};
 
-use crate::text_lexer::{TextLexer, TextToken};
+use crate::{
+    Context,
+    text_lexer::{TextLexer, TextToken},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TextError {
@@ -247,7 +250,9 @@ impl<'de, K: TextDeserialize<'de> + Eq + Hash, V: TextDeserialize<'de>> TextDese
     fn take_text(
         mut stream: TextDeserializer<'de>,
     ) -> Result<(Self, TextDeserializer<'de>), TextError> {
-        stream.parse_token(TextToken::OpenBracket)?;
+        stream
+            .parse_token(TextToken::OpenBracket)
+            .context("While parsing map open bracket")?;
         let mut out: Vec<(K, V)> = Vec::new();
 
         loop {
@@ -255,9 +260,10 @@ impl<'de, K: TextDeserialize<'de> + Eq + Hash, V: TextDeserialize<'de>> TextDese
                 stream.eat_token();
                 return Ok((HashMap::from_iter(out), stream));
             }
-            let (key, mut rest) = K::take_text(stream)?;
-            rest.parse_token(TextToken::Equal)?;
-            let (value, rest) = V::take_text(rest)?;
+            let (key, mut rest) = K::take_text(stream).context("While parsing map key")?;
+            rest.parse_token(TextToken::Equal)
+                .context("While parsing map equals")?;
+            let (value, rest) = V::take_text(rest).context("While parsing map value")?;
             out.push((key, value));
             stream = rest;
         }
