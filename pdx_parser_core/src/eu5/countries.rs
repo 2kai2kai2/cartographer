@@ -9,48 +9,24 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(pdx_parser_macros::BinDeserialize, Debug, Serialize, Deserialize)]
 pub enum CountryBasisType {
     Location,
     Building,
     Army,
     Navy,
     Pop,
+    #[fallback]
     Unknown(Box<str>),
 }
-impl<'de> BinDeserialize<'de> for CountryBasisType {
-    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        let text: &'de str = stream.parse()?;
-        let out = match text {
-            "location" => CountryBasisType::Location,
-            "building" => CountryBasisType::Building,
-            "army" => CountryBasisType::Army,
-            "navy" => CountryBasisType::Navy,
-            "pop" => CountryBasisType::Pop,
-            other => CountryBasisType::Unknown(other.into()),
-        };
-        return Ok((out, stream));
-    }
-}
 
-#[derive(Serialize, Deserialize)]
+#[derive(pdx_parser_macros::BinDeserialize, Serialize, Deserialize)]
 pub enum CountryType {
     Pirates,
     Mercenaries,
     Real,
+    #[fallback]
     Unknown(Box<str>),
-}
-impl<'de> BinDeserialize<'de> for CountryType {
-    fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        let text: &'de str = stream.parse()?;
-        let out = match text {
-            "pirates" => CountryType::Pirates,
-            "mercenaries" => CountryType::Mercenaries,
-            "real" => CountryType::Real,
-            other => CountryType::Unknown(other.into()),
-        };
-        return Ok((out, stream));
-    }
 }
 
 #[derive(BinDeserialize, Serialize, Deserialize)]
@@ -203,7 +179,7 @@ pub struct RawCountry {
     #[bin_token("eu5")]
     pub definition: Option<Box<str>>,
     #[bin_token("eu5", "type")]
-    pub country_basis_type: CountryBasisType,
+    pub country_basis_type: Option<CountryBasisType>,
     #[cfg(any())]
     #[bin_token("eu5")]
     pub historical: SkipValue,

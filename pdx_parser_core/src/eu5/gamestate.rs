@@ -9,6 +9,9 @@ pub enum LocationRank {
     RuralSettlement,
     Town,
     City,
+    Megalopolis,
+    #[fallback]
+    Unknown(Box<str>),
 }
 
 #[derive(BinDeserialize, Serialize, Deserialize)]

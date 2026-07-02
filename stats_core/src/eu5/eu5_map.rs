@@ -147,7 +147,7 @@ pub fn compute_country_map_color(
     };
     let mut overlord_id = owner_id;
     while let Some(dep) = gamestate.diplomacy_manager.overlords.get(&overlord_id) {
-        if dep.subject_type.as_ref() == "tributary" {
+        if dep.subject_type() == Some("tributary") {
             // TODO: this currently hard codes vanilla subject types, where tributary is the only
             // type that does not blend. We should dynamically determine which subject types to blend on.
             break;

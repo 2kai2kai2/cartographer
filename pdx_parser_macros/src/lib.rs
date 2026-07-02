@@ -33,12 +33,14 @@ impl syn::parse::Parse for GameId {
 /// - the `default(value: T)` attribute means the field will be initialized to the given value if it is not present in the file.
 ///   The field should be single, so not an `Option` or using the `multiple` attribute.
 /// - the `enum_key` attribute overrides the string key for enums.
+/// - the `fallback` attribute marks a single-unnamed-field enum variant (e.g. `Unknown(Box<str>)`)
+///   as a catch-all that captures any unmatched string.
 ///
 /// ## Generics
 /// If the struct needs a lifetime repesenting the original text, it must be named `de`.
 #[proc_macro_derive(
     BinDeserialize,
-    attributes(multiple, bin_token, no_brackets, default, enum_key)
+    attributes(multiple, bin_token, no_brackets, default, enum_key, fallback)
 )]
 pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     bin_deserialize::derive_bin_deserialize(stream)

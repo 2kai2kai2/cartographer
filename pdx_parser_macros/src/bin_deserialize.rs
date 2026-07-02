@@ -438,7 +438,9 @@ fn pascal_case_to_snake_case(s: &str) -> String {
     out
 }
 
-/// For enums that have no fields
+/// For enums whose variants have no fields, plus optionally one variant marked
+/// `#[fallback]` with a single unnamed field (e.g. `Unknown(Box<str>)`) which
+/// captures any unmatched string.
 fn derive_bin_deserialize_enum_plain(
     ident: Ident,
     generics: syn::Generics,
@@ -447,31 +449,79 @@ fn derive_bin_deserialize_enum_plain(
     let pdx_parser_core = core_crate_ref();
     let enum_name = ident.to_string();
 
-    let match_arms = variants.into_iter().map(|variant| {
+    let mut match_arms: Vec<TokenStream> = Vec::new();
+    let mut fallback_arm: Option<TokenStream> = None;
+    for variant in variants {
         let mut enum_key = None;
+        let mut is_fallback = false;
         for attr in &variant.attrs {
             let Some(attr_ident) = attr.path().get_ident() else {
                 continue; // not our attribute
             };
             match attr_ident.to_string().as_str() {
                 "enum_key" => {
-                    let attr_value = match attr.parse_args::<syn::LitStr>() {
-                        Ok(value) => value,
-                        Err(err) => {
-                            return err.to_compile_error();
-                        }
-                    };
+                    let attr_value = attr.parse_args::<syn::LitStr>()?;
                     enum_key = Some(attr_value.value());
                 }
+                "fallback" => is_fallback = true,
                 _ => continue, // not our attribute
             }
         }
 
         let variant_ident = &variant.ident;
-        let enum_key =
-            enum_key.unwrap_or_else(|| pascal_case_to_snake_case(&variant_ident.to_string()));
+        if is_fallback {
+            if fallback_arm.is_some() {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "Only one variant may be marked #[fallback]",
+                ));
+            }
+            if enum_key.is_some() {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "A #[fallback] variant cannot have an enum_key attribute",
+                ));
+            }
+            let syn::Fields::Unnamed(fields) = &variant.fields else {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "A #[fallback] variant must have exactly one unnamed field (e.g. `Unknown(Box<str>)`)",
+                ));
+            };
+            if fields.unnamed.len() != 1 {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "A #[fallback] variant must have exactly one unnamed field (e.g. `Unknown(Box<str>)`)",
+                ));
+            }
+            fallback_arm = Some(quote! {
+                other => Ok((#ident::#variant_ident(other.into()), stream)),
+            });
+            continue;
+        }
+        match &variant.fields {
+            syn::Fields::Unit => {
+                let enum_key = enum_key
+                    .unwrap_or_else(|| pascal_case_to_snake_case(&variant_ident.to_string()));
+                match_arms.push(quote! {
+                    #enum_key => Ok((#ident::#variant_ident, stream)),
+                });
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "Enum variants must be unit variants, \
+                    or a single #[fallback] variant with one unnamed field (e.g. `Unknown(Box<str>)`)",
+                ));
+            }
+        }
+    }
+
+    let fallback_arm = fallback_arm.unwrap_or_else(|| {
         quote! {
-            #enum_key => Ok((#ident::#variant_ident, stream)),
+            _ => ::std::result::Result::Err(
+                #pdx_parser_core::bin_deserialize::BinError::Custom(format!("Invalid enum value \"{text}\" for {}", #enum_name))
+            ),
         }
     });
 
@@ -502,9 +552,7 @@ fn derive_bin_deserialize_enum_plain(
                     .map_err(|err| err.context(format!("While parsing string value for enum {}", #enum_name)))?;
                 return match text {
                     #(#match_arms)*
-                    _ => ::std::result::Result::Err(
-                        #pdx_parser_core::bin_deserialize::BinError::Custom(format!("Invalid enum value \"{text}\" for {}", #enum_name))
-                    ),
+                    #fallback_arm
                 };
             }
         }
@@ -557,20 +605,7 @@ pub fn derive_bin_deserialize(stream: proc_macro::TokenStream) -> proc_macro::To
             }
         },
         syn::Data::Enum(data_enum) => {
-            if data_enum
-                .variants
-                .iter()
-                .all(|variant| variant.fields.is_empty())
-            {
-                derive_bin_deserialize_enum_plain(ident, generics, data_enum.variants)
-            } else {
-                return syn::Error::new(
-                    Span::call_site(),
-                    "Non-plain enums are not currently supported",
-                )
-                .into_compile_error()
-                .into();
-            }
+            derive_bin_deserialize_enum_plain(ident, generics, data_enum.variants)
         }
         syn::Data::Union(_) => {
             return syn::Error::new(Span::call_site(), "Unions are not currently supported")

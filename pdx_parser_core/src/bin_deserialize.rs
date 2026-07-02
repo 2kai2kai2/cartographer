@@ -138,7 +138,7 @@ impl<'de> BinDeserializer<'de> {
     pub fn current_index(&self) -> usize {
         let start_addr = core::ptr::from_ref(self.original).addr();
         let curr_addr = core::ptr::from_ref(self.input).addr();
-        if curr_addr < start_addr || start_addr + self.input.len() < curr_addr {
+        if curr_addr < start_addr || start_addr + self.original.len() < curr_addr {
             return usize::MAX;
         }
         return curr_addr - start_addr;
@@ -279,9 +279,10 @@ impl<'de> BinDeserialize<'de> for &'de str {
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
         match stream.expect_token()? {
             BinToken::ID_LOOKUP_U24 => {
-                let lookup_id = stream
-                    .expect_token()
+                let &[b0, b1, b2] = stream
+                    .expect_bytes_const::<3>()
                     .context("While getting u24 string lookup id")?;
+                let lookup_id = u32::from_le_bytes([b0, b1, b2, 0]);
                 let string = stream
                     .strings
                     .get(lookup_id as usize)

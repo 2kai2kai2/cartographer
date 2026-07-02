@@ -72,6 +72,24 @@ pub struct CountryDiplomacy {
     pub relations: HashMap<u32, CountryRelation>,
 }
 
+/// The `target` object within a [`DependencyNamedTarget`].
+/// Note that its `type` field's value is a bare token (e.g. `subject_type`), so we skip it.
+#[derive(BinDeserialize, Debug, Serialize, Deserialize)]
+pub struct DependencyNamedTargetObject {
+    #[bin_token("eu5")]
+    pub object: Option<Box<str>>,
+}
+
+/// An entry in a dependency's `named_targets` list, e.g.
+/// `{ flag="subject_type" target={ type=subject_type object="vassal" } }`
+#[derive(BinDeserialize, Debug, Serialize, Deserialize)]
+pub struct DependencyNamedTarget {
+    #[bin_token("eu5")]
+    pub flag: Box<str>,
+    #[bin_token("eu5")]
+    pub target: DependencyNamedTargetObject,
+}
+
 #[derive(BinDeserialize, Debug, Serialize, Deserialize)]
 pub struct Dependency {
     /// Overlord
@@ -80,14 +98,32 @@ pub struct Dependency {
     /// Subject
     #[bin_token("eu5")]
     pub second: u32,
+    /// Direct field in older save versions; newer versions store it in `named_targets`.
+    /// Prefer [`Dependency::subject_type`].
     #[bin_token("eu5")]
-    pub subject_type: Box<str>,
+    pub subject_type: Option<Box<str>>,
+    #[bin_token("eu5")]
+    #[default(Vec::new())]
+    pub named_targets: Vec<DependencyNamedTarget>,
     #[cfg(any())]
     #[bin_token("eu5")]
     pub start_date: Option<EU5Date>,
     #[cfg(any())]
     #[bin_token("eu5")]
     pub seed: Option<u32>,
+}
+impl Dependency {
+    /// The subject type (e.g. `vassal`, `dominion`, `tributary`), wherever the save stores it.
+    pub fn subject_type(&self) -> Option<&str> {
+        if let Some(subject_type) = &self.subject_type {
+            return Some(subject_type);
+        }
+        return self
+            .named_targets
+            .iter()
+            .find(|named| &*named.flag == "subject_type")
+            .and_then(|named| named.target.object.as_deref());
+    }
 }
 
 /// Contains both `u32` keys which are a map of country ids, as well as token-based keys
