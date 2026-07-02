@@ -605,7 +605,6 @@ builth
 swansea
 neath
 penllyn
-dyfi_estuary
 newport
 caerphilly
 aberystwyth
@@ -2322,19 +2321,15 @@ lebsko_lake
 dniester_liman
 sasyk_lagoon
 alibey_lagoon
-tylihul_liman
-molochnyi_liman
 khadzhibey_liman
 kuialnyk_liman
 lake_yalpuh
 lake_kahul
 lake_katlabukh
 lake_kitai
-berezan_liman
 syvash_lagoon
 syvash_sand_bar
 lake_sasyk_syvash
-mius_liman
 lake_lubans
 lake_razna
 lake_narach
