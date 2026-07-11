@@ -40,13 +40,9 @@ pub fn make_image_top(
         let y = (38 + 128 * (i % 8)) as i32;
 
         // x+0: flag
-        out.copy_from(
-            &*flag_images
-                .get_normal_flag(&nation.tag)
-                .ok_or(anyhow!("Couldn't find flag for {}", nation.tag))?,
-            x as u32,
-            y as u32,
-        )?;
+        if let Some(flag) = flag_images.get_normal_flag(&nation.tag) {
+            out.copy_from(&*flag, x as u32, y as u32)?;
+        }
 
         // x+128: player
         let mut player_name = (*player).clone();
