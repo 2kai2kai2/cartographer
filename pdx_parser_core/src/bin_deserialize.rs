@@ -158,8 +158,14 @@ impl<'de> BinDeserialize<'de> for bool {
 }
 
 impl<'de> BinDeserialize<'de> for i32 {
+    /// Accepts either the i32 or u32 token, since the game is inconsistent
+    /// about which it uses for the same field across versions.
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_I32)?;
+        let token = stream.peek_token().ok_or(BinError::EOF)?;
+        if !matches!(token, BinToken::ID_I32 | BinToken::ID_U32) {
+            return Err(BinError::UnexpectedToken(token));
+        }
+        stream.eat_token();
         let value = stream.expect_bytes_const::<{ size_of::<i32>() }>()?;
         let value = i32::from_le_bytes(*value);
         return Ok((value, stream));
@@ -176,8 +182,14 @@ impl<'de> BinDeserialize<'de> for i64 {
 }
 
 impl<'de> BinDeserialize<'de> for u32 {
+    /// Accepts either the u32 or i32 token, since the game is inconsistent
+    /// about which it uses for the same field across versions.
     fn take(mut stream: BinDeserializer<'de>) -> Result<(Self, BinDeserializer<'de>), BinError> {
-        stream.parse_token(BinToken::ID_U32)?;
+        let token = stream.peek_token().ok_or(BinError::EOF)?;
+        if !matches!(token, BinToken::ID_U32 | BinToken::ID_I32) {
+            return Err(BinError::UnexpectedToken(token));
+        }
+        stream.eat_token();
         let value = stream.expect_bytes_const::<{ size_of::<u32>() }>()?;
         let value = u32::from_le_bytes(*value);
         return Ok((value, stream));
